@@ -13,6 +13,7 @@ import { nodeAssetPlugin } from "./node-asset/manifest";
 import { nodeExporterPlugin } from "./node-exporter/manifest";
 import { uiNodeGraphPlugin } from "./ui-node-graph/manifest";
 import { uiJobsPlugin } from "./ui-jobs/manifest";
+import { uiLineagePlugin } from "./ui-lineage/manifest";
 
 // Static list of builtin plugins loaded at boot.
 export const builtinPlugins: PluginManifest[] = [
@@ -30,4 +31,5 @@ export const builtinPlugins: PluginManifest[] = [
   nodeExporterPlugin,
   uiNodeGraphPlugin,
   uiJobsPlugin,
+  uiLineagePlugin,
 ];

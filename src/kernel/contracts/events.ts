@@ -48,6 +48,12 @@ export type GraphNodeExecuted = EventBase & {
   nodeId: string;
   status: "ok" | "error";
 };
+export type GraphNodeStarting = EventBase & {
+  type: "GraphNodeStarting";
+  graphRunId: string;
+  nodeId: string;
+  startedAt: number;
+};
 export type GraphCompleted = EventBase & {
   type: "GraphCompleted";
   graphRunId: string;
@@ -87,6 +93,7 @@ export type LiliumEvent =
   | JobProgress
   | JobFinished
   | JobFailed
+  | GraphNodeStarting
   | GraphNodeExecuted
   | GraphCompleted
   | ConnectorRegistered

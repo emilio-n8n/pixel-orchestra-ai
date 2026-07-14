@@ -108,6 +108,7 @@ export async function executeCompiled(
         }
         statuses.set(nodeId, "running");
         const t0 = Date.now();
+        opts.events.emit({ type: "GraphNodeStarting", graphRunId, nodeId, startedAt: t0 });
         try {
           const input = resolveInputs(nodeId);
           inputs.set(nodeId, input);

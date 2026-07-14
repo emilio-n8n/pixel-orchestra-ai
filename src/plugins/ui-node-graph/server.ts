@@ -27,7 +27,14 @@ interface GraphRunRow {
   stats_json: string;
 }
 
-export type { GraphRunRow };
+export interface GraphRunView {
+  id: string;
+  graphId: string;
+  status: string;
+  startedAt: number;
+  finishedAt: number | null;
+  stats: Record<string, JsonValue>;
+}
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
@@ -47,12 +54,9 @@ export const saveGraph = createServerFn({ method: "POST" })
     const id = data.id ?? uid("gph");
     const now = Date.now();
     if (data.id) {
-      db.prepare("UPDATE graphs SET name = ?, doc_json = ?, updated_at = ? WHERE id = ?").run(
-        data.name,
-        JSON.stringify(data.doc),
-        now,
-        id,
-      );
+      db.prepare(
+        "UPDATE graphs SET name = ?, doc_json = ?, updated_at = ? WHERE id = ?",
+      ).run(data.name, JSON.stringify(data.doc), now, id);
     } else {
       db.prepare(
         `INSERT INTO graphs (id, project_id, name, doc_json, is_template, created_at, updated_at)
@@ -68,9 +72,7 @@ export const listGraphs = createServerFn({ method: "GET" })
     const db = getDb();
     const rows = data.projectId
       ? db
-          .prepare(
-            "SELECT * FROM graphs WHERE project_id = ? OR project_id IS NULL ORDER BY updated_at DESC",
-          )
+          .prepare("SELECT * FROM graphs WHERE project_id = ? OR project_id IS NULL ORDER BY updated_at DESC")
           .all<GraphRow>(data.projectId)
       : db.prepare("SELECT * FROM graphs ORDER BY updated_at DESC").all<GraphRow>();
     return {
@@ -134,10 +136,8 @@ export const runGraphFn = createServerFn({ method: "POST" })
     if (!doc.inputs) doc.inputs = [];
     if (!doc.outputs) doc.outputs = [];
 
-    // Persist a graph_run row up front for the Jobs panel to show.
     const db = getDb();
     const graphId = doc.id;
-    // Ensure the graph row exists (upsert minimal).
     const existing = db.prepare("SELECT id FROM graphs WHERE id = ?").get<{ id: string }>(graphId);
     if (!existing) {
       db.prepare(
@@ -151,30 +151,61 @@ export const runGraphFn = createServerFn({ method: "POST" })
        VALUES (?, ?, 'running', ?, NULL, '{}')`,
     ).run(runId, graphId, Date.now());
 
+    // Subscribe to per-node events to persist node_runs rows.
+    const nodeRunsToInsert: Array<{
+      id: string;
+      graph_run_id: string;
+      node_id: string;
+      status: "ok" | "error";
+      input_json: string;
+      output_json: string;
+      started_at: number;
+      finished_at: number;
+    }> = [];
+    const nodeStarts = new Map<string, number>();
+
+    function onNodeStart(e: unknown) {
+      const ev = e as { type: string; nodeId: string };
+      if (ev.type === "GraphNodeStarting") {
+        nodeStarts.set(ev.nodeId, Date.now());
+      }
+    }
+    function onNodeExecuted(e: unknown) {
+      const ev = e as { type: string; graphRunId: string; nodeId: string; status: "ok" | "error" };
+      if (ev.graphRunId !== runId) return;
+      const id = uid("nr");
+      const startedAt = nodeStarts.get(ev.nodeId) ?? Date.now();
+      nodeRunsToInsert.push({
+        id,
+        graph_run_id: runId,
+        node_id: ev.nodeId,
+        status: ev.status,
+        input_json: "{}",
+        output_json: ev.status === "ok" ? "{}" : "{}",
+        started_at: startedAt,
+        finished_at: Date.now(),
+      });
+      // Persist immediately so lineage queries see the node run.
+      db.prepare(
+        `INSERT INTO node_runs (id, graph_run_id, node_id, status, input_json, output_json, logs, capability_id)
+         VALUES (?, ?, ?, ?, '{}', '{}', NULL, NULL)`,
+      ).run(id, runId, ev.nodeId, ev.status);
+    }
+    const offStart = kernel.events.on("GraphNodeStarting" as never, onNodeStart as never);
+    const offDone = kernel.events.on("GraphNodeExecuted", onNodeExecuted);
+
     kernel.events.emit({ type: "JobQueued", jobId: runId });
     kernel.events.emit({ type: "JobStarted", jobId: runId });
 
+    let result: { status: "ok" | "error"; okCount: number; errorCount: number; totalMs: number; graphRunId: string; outputs: Map<string, Record<string, unknown>>; errors: Map<string, string> };
     try {
-      const result = await kernel.scheduler.runGraph(doc, {
+      result = await kernel.scheduler.runGraph(doc, {
         env: { db, storage: kernel.storage, http: kernel.host["http" as never] as never },
         events: kernel.events,
       });
-      db.prepare(
-        "UPDATE graph_runs SET status = ?, finished_at = ?, stats_json = ? WHERE id = ?",
-      ).run(result.status, Date.now(), JSON.stringify(result), runId);
-      kernel.events.emit({
-        type: "JobFinished",
-        jobId: runId,
-        resultAssetIds: [],
-      });
-      return {
-        graphRunId: result.graphRunId,
-        status: result.status,
-        okCount: result.okCount,
-        errorCount: result.errorCount,
-        totalMs: result.totalMs,
-      };
     } catch (err) {
+      offStart();
+      offDone();
       const msg = err instanceof Error ? err.message : String(err);
       db.prepare(
         "UPDATE graph_runs SET status = ?, finished_at = ?, stats_json = ? WHERE id = ?",
@@ -182,6 +213,23 @@ export const runGraphFn = createServerFn({ method: "POST" })
       kernel.events.emit({ type: "JobFailed", jobId: runId, error: msg });
       return { graphRunId: runId, status: "error" as const, error: msg };
     }
+    offStart();
+    offDone();
+    db.prepare(
+      "UPDATE graph_runs SET status = ?, finished_at = ?, stats_json = ? WHERE id = ?",
+    ).run(result.status, Date.now(), JSON.stringify(result), runId);
+    kernel.events.emit({
+      type: "JobFinished",
+      jobId: runId,
+      resultAssetIds: [],
+    });
+    return {
+      graphRunId: result.graphRunId,
+      status: result.status,
+      okCount: result.okCount,
+      errorCount: result.errorCount,
+      totalMs: result.totalMs,
+    };
   });
 
 export const listGraphRuns = createServerFn({ method: "GET" })
@@ -193,7 +241,7 @@ export const listGraphRuns = createServerFn({ method: "GET" })
       .prepare("SELECT * FROM graph_runs ORDER BY started_at DESC LIMIT ?")
       .all<GraphRunRow>(limit);
     return {
-      runs: rows.map((r) => {
+      runs: rows.map<GraphRunView>((r) => {
         let stats: Record<string, JsonValue> = {};
         try {
           stats = JSON.parse(r.stats_json) as Record<string, JsonValue>;

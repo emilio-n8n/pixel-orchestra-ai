@@ -23,7 +23,7 @@ function mkExec(
 
 function eventCollector(events: EventBus) {
   const seen: string[] = [];
-  events.on("*", (e) => seen.push(e.type));
+  events.on("*", (e) => { seen.push(e.type); });
   return seen;
 }
 
