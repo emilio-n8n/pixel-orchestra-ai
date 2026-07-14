@@ -4,26 +4,40 @@ import type { LiliumEvent } from "./contracts/events";
 
 const KernelContext = createContext<Kernel | null>(null);
 
+/**
+ * Renders its children inside a KernelContext.Provider once the kernel
+ * singleton is ready. The kernel is built by bootstrapKernel() in
+ * __root.tsx — this component never builds it, it just waits.
+ *
+ * We force a re-render every 50ms until getKernel() stops throwing (the
+ * singleton was set by bootstrapKernel). Once set, we stop polling.
+ * This avoids the race where __root.tsx sets `ready = true` before
+ * KernelProvider has picked up the singleton.
+ */
 export function KernelProvider({ children }: { children: ReactNode }) {
-  const [kernel, setKernel] = useState<Kernel | null>(() => {
-    // If the kernel was already initialized server-side, reuse it. Otherwise
-    // getKernelAsync() will build it lazily.
-    try {
-      return getKernel();
-    } catch {
-      return null;
-    }
-  });
+  const [, tick] = useState(0);
+  const [stopped, setStopped] = useState(false);
+
   useEffect(() => {
-    if (kernel) return;
-    let cancelled = false;
-    getKernelAsync().then((k) => {
-      if (!cancelled) setKernel(k);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [kernel]);
+    if (stopped) return;
+    const iv = setInterval(() => {
+      try {
+        getKernel();
+        setStopped(true);
+        clearInterval(iv);
+      } catch {
+        tick((n) => n + 1);
+      }
+    }, 50);
+    return () => clearInterval(iv);
+  }, [stopped]);
+
+  let kernel: Kernel | null = null;
+  try {
+    kernel = getKernel();
+  } catch {
+    /* not ready */
+  }
   if (!kernel) return null;
   return <KernelContext.Provider value={kernel}>{children}</KernelContext.Provider>;
 }
