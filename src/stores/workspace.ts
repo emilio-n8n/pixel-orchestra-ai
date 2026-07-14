@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 export type UUID = string;
 
@@ -67,6 +67,18 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       getProject: (id) => get().projects.find((p) => p.id === id),
       projectsIn: (workspaceId) => get().projects.filter((p) => p.workspaceId === workspaceId),
     }),
-    { name: "lilium.workspaces.v1" },
+    {
+      name: "lilium.workspaces.v1",
+      storage: createJSONStorage(() =>
+        typeof window === "undefined"
+          ? ({
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {},
+            } as Storage)
+          : window.localStorage,
+      ),
+      skipHydration: false,
+    },
   ),
 );
