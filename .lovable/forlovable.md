@@ -11,7 +11,7 @@
 
 **Statut global** : ✅ livré
 **Date de fin** : 2026-07-14
-**Branche** : `main` (poussée)
+**Branche** : `main` (commit local `3af6c32`, push bloqué — voir note)
 **Référence** : `.lovable/plan.md` §15.1
 
 ### Vue d'ensemble
@@ -210,6 +210,20 @@ les **tests Bun** sur le kernel (event-bus, registry, db, plugin-host).
   `react-refresh/only-export-components` sur shadcn components)
 - `bun test src/kernel` : ✅ 22/22 tests passent
 - `bun run dev` : ✅ démarre sur port 8081, 5.5s
+
+### Note sur le push
+
+Le sandbox de cet agent n'a pas de credentials GitHub configurés
+(`git push origin main` → `fatal: could not read Username for
+'https://github.com'`). Le commit `3af6c32` est prêt localement ;
+**l'utilisateur doit le push depuis sa machine** pour que Lovable
+sync la preview. Le remote pointe sur
+`https://github.com/emilio-n8n/pixel-orchestra-ai`.
+
+```sh
+git pull --rebase   # si nécessaire
+git push origin main
+```
 
 ### Erreurs rencontrées (consolidé)
 
