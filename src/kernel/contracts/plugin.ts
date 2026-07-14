@@ -1,6 +1,7 @@
 import type { EventBus } from "../event-bus";
 import type { Registry } from "../registry";
 import type { ComponentType, ReactNode } from "react";
+import type { DBAdapter } from "../db/types";
 
 export type Permission =
   | "net"
@@ -26,6 +27,8 @@ export interface PluginManifest {
   deactivate?: (ctx: PluginContext) => void | Promise<void>;
 }
 
+export type PanelSlot = "sidebar" | "inspector" | "bottom" | "center";
+
 export interface PluginContributions {
   panels?: PanelContribution[];
   commands?: CommandContribution[];
@@ -39,7 +42,7 @@ export interface PanelContribution {
   id: string;
   title: string;
   icon?: string;
-  slot: "sidebar" | "inspector" | "bottom" | "center";
+  slot: PanelSlot;
   component: ComponentType;
   order?: number;
 }
@@ -117,6 +120,17 @@ export interface Logger {
   error: (msg: string, meta?: unknown) => void;
 }
 
+export interface SecretsStore {
+  get(name: string): string | undefined;
+  set(name: string, value: string): void;
+  delete(name: string): void;
+  list(): string[];
+}
+
+export interface HttpClient {
+  fetch(input: string | URL, init?: RequestInit): Promise<Response>;
+}
+
 export interface PluginContext {
   pluginId: string;
   events: EventBus;
@@ -126,4 +140,24 @@ export interface PluginContext {
     notify: (message: string, kind?: "info" | "success" | "warn" | "error") => void;
     render?: (node: ReactNode) => void;
   };
+  /**
+   * Database adapter. Server-only — the browser kernel exposes an
+   * in-memory event bus and no DB. Plugins that need persistence should
+   * detect this and degrade gracefully.
+   */
+  db?: DBAdapter;
+  /**
+   * Blob storage. Wired in phase 2 (Storage + DB + Asset model). For now
+   * it is undefined; plugins must not call it before then.
+   */
+  storage?: never;
+  /**
+   * HTTP client with allowlist enforcement. Wired in phase 3 alongside
+   * the Gradio connector.
+   */
+  http?: HttpClient;
+  /**
+   * Secrets store. Phase 3+.
+   */
+  secrets?: SecretsStore;
 }

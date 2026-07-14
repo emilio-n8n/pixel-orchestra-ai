@@ -33,7 +33,9 @@ function Home() {
             }}
           />
           <div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-dim)]">Lilium</div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-dim)]">
+              Lilium
+            </div>
             <div className="text-[22px] font-semibold tracking-tight">Studio</div>
           </div>
         </div>
@@ -43,8 +45,8 @@ function Home() {
         </h1>
         <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-[var(--text-muted)]">
           Organize projects, characters, scenes and assets in a single canvas. Orchestrate Gradio,
-          ComfyUI, OpenAI, MCP and anything else you plug in. Every generation is a graph, every asset
-          keeps its lineage, everything is scriptable.
+          ComfyUI, OpenAI, MCP and anything else you plug in. Every generation is a graph, every
+          asset keeps its lineage, everything is scriptable.
         </p>
 
         <div className="mt-12">

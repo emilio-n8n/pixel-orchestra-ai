@@ -36,7 +36,11 @@ export function WorkspaceShell({
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--surface-0)] text-[var(--text)]">
-      <TopBar workspaceId={workspaceId} projectId={projectId} onOpenCommand={() => setPaletteOpen(true)} />
+      <TopBar
+        workspaceId={workspaceId}
+        projectId={projectId}
+        onOpenCommand={() => setPaletteOpen(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />

@@ -13,7 +13,9 @@ export interface Registry {
   viewers: ReadonlyArray<ViewerContribution & { pluginId: string }>;
   nodes: ReadonlyArray<NodeContribution & { pluginId: string }>;
 
-  panelsForSlot(slot: PanelContribution["slot"]): ReadonlyArray<PanelContribution & { pluginId: string }>;
+  panelsForSlot(
+    slot: PanelContribution["slot"],
+  ): ReadonlyArray<PanelContribution & { pluginId: string }>;
   viewerFor(kind: string): (ViewerContribution & { pluginId: string }) | undefined;
   commandById(id: string): (CommandContribution & { pluginId: string }) | undefined;
 
@@ -37,11 +39,21 @@ export function createRegistry(): Registry {
   const notify = () => listeners.forEach((l) => l());
 
   return {
-    get panels() { return panels; },
-    get commands() { return commands; },
-    get connectors() { return connectors; },
-    get viewers() { return viewers; },
-    get nodes() { return nodes; },
+    get panels() {
+      return panels;
+    },
+    get commands() {
+      return commands;
+    },
+    get connectors() {
+      return connectors;
+    },
+    get viewers() {
+      return viewers;
+    },
+    get nodes() {
+      return nodes;
+    },
 
     panelsForSlot(slot) {
       return panels
@@ -58,15 +70,31 @@ export function createRegistry(): Registry {
       return commands.find((c) => c.id === id);
     },
 
-    addPanel(pluginId, c) { panels.push({ ...c, pluginId }); notify(); },
-    addCommand(pluginId, c) { commands.push({ ...c, pluginId }); notify(); },
-    addConnector(pluginId, c) { connectors.push({ ...c, pluginId }); notify(); },
-    addViewer(pluginId, c) { viewers.push({ ...c, pluginId }); notify(); },
-    addNode(pluginId, c) { nodes.push({ ...c, pluginId }); notify(); },
+    addPanel(pluginId, c) {
+      panels.push({ ...c, pluginId });
+      notify();
+    },
+    addCommand(pluginId, c) {
+      commands.push({ ...c, pluginId });
+      notify();
+    },
+    addConnector(pluginId, c) {
+      connectors.push({ ...c, pluginId });
+      notify();
+    },
+    addViewer(pluginId, c) {
+      viewers.push({ ...c, pluginId });
+      notify();
+    },
+    addNode(pluginId, c) {
+      nodes.push({ ...c, pluginId });
+      notify();
+    },
 
     removeByPlugin(pluginId) {
       for (const arr of [panels, commands, connectors, viewers, nodes]) {
-        for (let i = arr.length - 1; i >= 0; i--) if (arr[i].pluginId === pluginId) arr.splice(i, 1);
+        for (let i = arr.length - 1; i >= 0; i--)
+          if (arr[i].pluginId === pluginId) arr.splice(i, 1);
       }
       notify();
     },

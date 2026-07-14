@@ -45,7 +45,9 @@ export function TopBar({
         {project ? (
           <>
             <Crumb>/</Crumb>
-            <span className="rounded-md px-2 py-1 text-[13px] text-[var(--text)]">{project.name}</span>
+            <span className="rounded-md px-2 py-1 text-[13px] text-[var(--text)]">
+              {project.name}
+            </span>
           </>
         ) : null}
       </div>
@@ -56,7 +58,9 @@ export function TopBar({
           className="flex h-7 items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-2 text-[12px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)]"
         >
           <span>Search or run…</span>
-          <kbd className="mono rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">⌘K</kbd>
+          <kbd className="mono rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+            ⌘K
+          </kbd>
         </button>
       </div>
     </div>

@@ -23,7 +23,10 @@ function WorkspaceView() {
   if (!workspace) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-0)] text-[var(--text-muted)]">
-        Workspace not found. <Link to="/" className="ml-2 text-[var(--accent)] underline">Go home</Link>
+        Workspace not found.{" "}
+        <Link to="/" className="ml-2 text-[var(--accent)] underline">
+          Go home
+        </Link>
       </div>
     );
   }
@@ -42,7 +45,9 @@ function WorkspaceView() {
         </Link>
         <div className="mt-6 flex items-end justify-between">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-dim)]">Workspace</div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--text-dim)]">
+              Workspace
+            </div>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight">{workspace.name}</h1>
           </div>
         </div>

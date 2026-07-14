@@ -7,6 +7,26 @@ export interface PluginHost {
   unregister(pluginId: string): Promise<void>;
   list(): PluginManifest[];
   isActive(pluginId: string): boolean;
+  count(): number;
+}
+
+const KERNEL_VERSION = "0.1.0";
+
+/** Tiny semver check: accepts "^x.y.z" or "x.y.z". Returns true if compatible. */
+function engineMatches(engineRange: string | undefined, kernelVersion: string): boolean {
+  if (!engineRange) return true;
+  const range = engineRange.trim();
+  if (range.startsWith("^")) {
+    const [maj, min] = range
+      .slice(1)
+      .split(".")
+      .map((n) => parseInt(n, 10));
+    const [kmaj, kmin] = kernelVersion.split(".").map((n) => parseInt(n, 10));
+    if (Number.isNaN(maj) || Number.isNaN(kmaj)) return true;
+    if (kmaj !== maj) return false;
+    return Number.isNaN(min) || Number.isNaN(kmin) || kmin >= min;
+  }
+  return true;
 }
 
 export function createPluginHost(deps: {
@@ -39,6 +59,22 @@ export function createPluginHost(deps: {
         console.warn(`[plugin-host] ${manifest.id} already registered — skipping`);
         return;
       }
+
+      // Engine compatibility check.
+      if (!engineMatches(manifest.engines?.lilium, KERNEL_VERSION)) {
+        console.warn(
+          `[plugin-host] ${manifest.id} declares engines.lilium=${manifest.engines?.lilium}, kernel is ${KERNEL_VERSION} — registering anyway`,
+        );
+      }
+
+      // Surface declared permissions so users can audit the active set.
+      if (manifest.permissions?.length) {
+        console.info(
+          `[plugin-host] ${manifest.id} requests permissions:`,
+          manifest.permissions.join(", "),
+        );
+      }
+
       manifests.set(manifest.id, manifest);
       const ctx = contextFor(manifest);
 
@@ -74,7 +110,16 @@ export function createPluginHost(deps: {
       active.delete(pluginId);
     },
 
-    list() { return Array.from(manifests.values()); },
-    isActive(pluginId) { return active.has(pluginId); },
+    list() {
+      return Array.from(manifests.values());
+    },
+    isActive(pluginId) {
+      return active.has(pluginId);
+    },
+    count() {
+      return active.size;
+    },
   };
 }
+
+export { KERNEL_VERSION };

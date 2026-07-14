@@ -1,11 +1,30 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getKernel, type Kernel } from "./index";
+import { getKernel, getKernelAsync, type Kernel } from "./index";
 import type { LiliumEvent } from "./contracts/events";
 
 const KernelContext = createContext<Kernel | null>(null);
 
 export function KernelProvider({ children }: { children: ReactNode }) {
-  const [kernel] = useState(() => getKernel());
+  const [kernel, setKernel] = useState<Kernel | null>(() => {
+    // If the kernel was already initialized server-side, reuse it. Otherwise
+    // getKernelAsync() will build it lazily.
+    try {
+      return getKernel();
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    if (kernel) return;
+    let cancelled = false;
+    getKernelAsync().then((k) => {
+      if (!cancelled) setKernel(k);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [kernel]);
+  if (!kernel) return null;
   return <KernelContext.Provider value={kernel}>{children}</KernelContext.Provider>;
 }
 

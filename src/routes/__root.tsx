@@ -8,8 +8,10 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { KernelProvider } from "@/kernel/react";
 import { bootstrapKernel } from "@/kernel/bootstrap";
+import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -74,29 +76,50 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+function liliumNotify(message: string, kind: "info" | "success" | "warn" | "error" = "info") {
+  switch (kind) {
+    case "success":
+      toast.success(message);
+      break;
+    case "warn":
+      toast.warning(message);
+      break;
+    case "error":
+      toast.error(message);
+      break;
+    default:
+      toast(message);
+      break;
+  }
+}
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Lilium Studio" },
-      { name: "description", content: "Lilium Studio — a plugin-first AI content production workspace." },
+      {
+        name: "description",
+        content: "Lilium Studio — a plugin-first AI content production workspace.",
+      },
       { name: "author", content: "Lilium" },
       { property: "og:title", content: "Lilium Studio" },
-      { property: "og:description", content: "Lilium Studio — a plugin-first AI content production workspace." },
+      {
+        property: "og:description",
+        content: "Lilium Studio — a plugin-first AI content production workspace.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lilium" },
       { name: "twitter:title", content: "Lilium Studio" },
-      { name: "twitter:description", content: "Lilium Studio — a plugin-first AI content production workspace." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/dc416927-cca4-4f3d-87fe-b83191c9207a/id-preview-94c3ac7e--82271bee-89d8-4be4-97b6-ce4b316ba1e0.lovable.app-1784031798789.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/dc416927-cca4-4f3d-87fe-b83191c9207a/id-preview-94c3ac7e--82271bee-89d8-4be4-97b6-ce4b316ba1e0.lovable.app-1784031798789.png" },
+      {
+        name: "twitter:description",
+        content: "Lilium Studio — a plugin-first AI content production workspace.",
+      },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
@@ -114,6 +137,17 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <Toaster
+          position="bottom-right"
+          theme="dark"
+          toastOptions={{
+            classNames: {
+              toast:
+                "bg-[var(--surface-3)] text-[var(--text)] border border-[var(--line)] shadow-[var(--shadow-pop)]",
+              description: "text-[var(--text-muted)]",
+            },
+          }}
+        />
         <Scripts />
       </body>
     </html>
@@ -123,7 +157,9 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [ready, setReady] = useState(false);
-  useEffect(() => { bootstrapKernel().then(() => setReady(true)); }, []);
+  useEffect(() => {
+    bootstrapKernel({ notify: liliumNotify }).then(() => setReady(true));
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -6,11 +6,14 @@ export function HelloPanel() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-[var(--line)] px-6 py-5">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-dim)]">Lilium Studio</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-dim)]">
+          Lilium Studio
+        </div>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Welcome to your workspace</h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--text-muted)]">
-          Everything here is a plugin. This panel, the sidebar, the viewers, the connectors — the kernel only
-          orchestrates contracts. Open the command palette (⌘K) to see what's wired in so far.
+          Everything here is a plugin. This panel, the sidebar, the viewers, the connectors — the
+          kernel only orchestrates contracts. Open the command palette (⌘K) to see what's wired in
+          so far.
         </p>
       </div>
       <div className="grid flex-1 grid-cols-2 gap-px overflow-hidden bg-[var(--line)]">
@@ -20,15 +23,25 @@ export function HelloPanel() {
           </div>
           <div className="flex-1 overflow-auto px-4 pb-4">
             {events.length === 0 ? (
-              <div className="mono text-xs text-[var(--text-dim)]">no events yet — try ⌘K → Hello: Ping</div>
+              <div className="mono text-xs text-[var(--text-dim)]">
+                no events yet — try ⌘K → Hello: Ping
+              </div>
             ) : (
               <ul className="space-y-1">
-                {events.slice().reverse().map((e) => (
-                  <li key={e.id} className="mono text-[11px] leading-relaxed text-[var(--text-muted)]">
-                    <span className="text-[var(--text-dim)]">{new Date(e.ts).toLocaleTimeString()}</span>{" "}
-                    <span className="text-[var(--accent)]">{e.type}</span>
-                  </li>
-                ))}
+                {events
+                  .slice()
+                  .reverse()
+                  .map((e) => (
+                    <li
+                      key={e.id}
+                      className="mono text-[11px] leading-relaxed text-[var(--text-muted)]"
+                    >
+                      <span className="text-[var(--text-dim)]">
+                        {new Date(e.ts).toLocaleTimeString()}
+                      </span>{" "}
+                      <span className="text-[var(--accent)]">{e.type}</span>
+                    </li>
+                  ))}
               </ul>
             )}
           </div>
@@ -58,7 +71,17 @@ export function HelloPanel() {
   );
 }
 
-function Step({ n, title, done, children }: { n: number; title: string; done?: boolean; children?: ReactNode }) {
+function Step({
+  n,
+  title,
+  done,
+  children,
+}: {
+  n: number;
+  title: string;
+  done?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <div className="flex gap-3">
       <div

@@ -60,7 +60,9 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       },
       renameProject: (id, name) =>
         set({
-          projects: get().projects.map((p) => (p.id === id ? { ...p, name, updatedAt: Date.now() } : p)),
+          projects: get().projects.map((p) =>
+            p.id === id ? { ...p, name, updatedAt: Date.now() } : p,
+          ),
         }),
       deleteProject: (id) => set({ projects: get().projects.filter((p) => p.id !== id) }),
       getWorkspace: (id) => get().workspaces.find((w) => w.id === id),

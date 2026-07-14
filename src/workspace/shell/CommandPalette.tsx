@@ -38,7 +38,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       events: kernel.events,
       registry: kernel.registry,
       logger: { info: console.info, warn: console.warn, error: console.error },
-      ui: { notify: (m) => console.log(`[notify] ${m}`) },
+      ui: {
+        notify: (message, kind) => kernel.notify?.(message, kind),
+      },
     });
   }
 
@@ -62,9 +64,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             setI(0);
           }}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setI((v) => Math.min(v + 1, items.length - 1)); }
-            if (e.key === "ArrowUp") { e.preventDefault(); setI((v) => Math.max(v - 1, 0)); }
-            if (e.key === "Enter" && items[i]) { e.preventDefault(); exec(items[i]); }
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setI((v) => Math.min(v + 1, items.length - 1));
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setI((v) => Math.max(v - 1, 0));
+            }
+            if (e.key === "Enter" && items[i]) {
+              e.preventDefault();
+              exec(items[i]);
+            }
             if (e.key === "Escape") onClose();
           }}
           placeholder="Search commands…"
@@ -80,7 +91,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                 onMouseEnter={() => setI(idx)}
                 onClick={() => exec(c)}
                 className={`flex w-full items-center justify-between px-4 py-2 text-left text-[13px] ${
-                  idx === i ? "bg-[var(--accent-quiet)] text-[var(--text)]" : "text-[var(--text-muted)]"
+                  idx === i
+                    ? "bg-[var(--accent-quiet)] text-[var(--text)]"
+                    : "text-[var(--text-muted)]"
                 }`}
               >
                 <span>{c.title}</span>

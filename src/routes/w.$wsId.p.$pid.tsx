@@ -15,7 +15,10 @@ function ProjectWorkspace() {
   if (!project || !workspace) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-0)] text-[var(--text-muted)]">
-        Project not found. <Link to="/" className="ml-2 text-[var(--accent)] underline">Go home</Link>
+        Project not found.{" "}
+        <Link to="/" className="ml-2 text-[var(--accent)] underline">
+          Go home
+        </Link>
       </div>
     );
   }

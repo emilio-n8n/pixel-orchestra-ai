@@ -20,11 +20,24 @@ export type AssetDeleted = EventBase & { type: "AssetDeleted"; assetId: string }
 
 export type JobQueued = EventBase & { type: "JobQueued"; jobId: string };
 export type JobStarted = EventBase & { type: "JobStarted"; jobId: string };
-export type JobProgress = EventBase & { type: "JobProgress"; jobId: string; progress: number; note?: string };
-export type JobFinished = EventBase & { type: "JobFinished"; jobId: string; resultAssetIds: string[] };
+export type JobProgress = EventBase & {
+  type: "JobProgress";
+  jobId: string;
+  progress: number;
+  note?: string;
+};
+export type JobFinished = EventBase & {
+  type: "JobFinished";
+  jobId: string;
+  resultAssetIds: string[];
+};
 export type JobFailed = EventBase & { type: "JobFailed"; jobId: string; error: string };
 
-export type ConnectorRegistered = EventBase & { type: "ConnectorRegistered"; connectorId: string; kind: string };
+export type ConnectorRegistered = EventBase & {
+  type: "ConnectorRegistered";
+  connectorId: string;
+  kind: string;
+};
 export type ConnectorOnline = EventBase & { type: "ConnectorOnline"; connectorId: string };
 export type ConnectorOffline = EventBase & { type: "ConnectorOffline"; connectorId: string };
 
@@ -38,15 +51,27 @@ export type PluginError = EventBase & { type: "PluginError"; pluginId: string; e
 export type CustomEvent = EventBase & { type: `Custom.${string}`; payload?: unknown };
 
 export type LiliumEvent =
-  | AssetCreated | AssetUpdated | AssetDeleted
-  | JobQueued | JobStarted | JobProgress | JobFinished | JobFailed
-  | ConnectorRegistered | ConnectorOnline | ConnectorOffline
-  | WorkspaceChanged | ProjectOpened
-  | PluginActivated | PluginError
+  | AssetCreated
+  | AssetUpdated
+  | AssetDeleted
+  | JobQueued
+  | JobStarted
+  | JobProgress
+  | JobFinished
+  | JobFailed
+  | ConnectorRegistered
+  | ConnectorOnline
+  | ConnectorOffline
+  | WorkspaceChanged
+  | ProjectOpened
+  | PluginActivated
+  | PluginError
   | CustomEvent;
 
 export type EventType = LiliumEvent["type"];
 export type EventOf<T extends EventType> = Extract<LiliumEvent, { type: T }>;
 
-export type EventHandler<T extends EventType = EventType> = (event: EventOf<T>) => void | Promise<void>;
+export type EventHandler<T extends EventType = EventType> = (
+  event: EventOf<T>,
+) => void | Promise<void>;
 export type EventPattern = EventType | "*" | `${string}.*` | `*.${string}`;

@@ -1,7 +1,8 @@
-import { useKernelEvents } from "@/kernel/react";
+import { useKernel, useKernelEvents } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
 
 export function StatusBar() {
+  const { host } = useKernel();
   const events = useKernelEvents(1);
   const last = events[events.length - 1];
   const toggle = usePanelStore((s) => s.toggle);
@@ -15,13 +16,18 @@ export function StatusBar() {
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--status-ok)]" />
           Kernel ready
         </span>
+        <span className="mono">Plugins: {host.count()}</span>
         <span className="mono">
           {last ? `${new Date(last.ts).toLocaleTimeString()} · ${last.type}` : "no events"}
         </span>
       </div>
       <div className="flex items-center gap-1">
         <StatusToggle label="Bottom" on={!bottomCollapsed} onClick={() => toggle("bottom")} />
-        <StatusToggle label="Inspector" on={!inspectorCollapsed} onClick={() => toggle("inspector")} />
+        <StatusToggle
+          label="Inspector"
+          on={!inspectorCollapsed}
+          onClick={() => toggle("inspector")}
+        />
       </div>
     </div>
   );
