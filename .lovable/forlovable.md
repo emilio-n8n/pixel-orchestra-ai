@@ -264,11 +264,192 @@ git push origin main
 ### Prochaine phase
 
 - Phase 2 — Storage + DB Asset model + Library plugin + Viewers
+
+---
+
+## Phase 2 — Storage + Asset model + Library plugin + Viewers
+
+**Statut global** : ✅ livré
+**Date de fin** : 2026-07-14
+**Branche** : `main` (commit local, push bloqué — voir note Phase 1)
+**Référence** : `.lovable/plan.md` §15.2
+
+### Vue d'ensemble
+
+Phase 2 branche la couche storage et le modèle d'asset sur l'event
+bus et le DB posés en phase 1. On peut maintenant importer un fichier
+par drag & drop, le voir apparaître dans une grille, le sélectionner
+pour l'ouvrir dans le bon viewer (image / video / audio / html), et
+voir ses métadonnées dans l'inspector. Tout transite par l'event
+bus et la DB.
+
+### Tâches
+
+#### 2.1 — `BlobStore` interface (`kernel/storage/types.ts`)
+- **Livré** : `BlobStore` avec `put(bytes) → { hash, size }`,
+  `get(hash)`, `has(hash)`, `uri(hash)`. Content-addressed, immutable,
+  déduplication automatique.
+- **Décision** : `uri()` rend `lilium-blob://<hash>` (scheme
+  virtuel). Les viewers résolvent l'URI via `getAssetBytes` (server
+  fn) qui tape dans le `FsBlobStore`. Phase 9+ branchera un
+  `S3BlobStore` qui rendra des URLs S3 signées.
+
+#### 2.2 — `FsBlobStore` (`kernel/storage/adapters/fs.ts`)
+- **Livré** : `createFsBlobStore(root)` par défaut
+  `~/.lilium/blobs/`. Sharding par les 2 premiers chars du hash pour
+  éviter les flat directories. `put()` est idempotent : si le fichier
+  existe déjà (même hash = même contenu), on ne réécrit pas. `get()`
+  throw si absent.
+- **Note** : utilisation de `node:fs/promises` (Bun-compatible).
+  Pas de pré-calcul d'un cache d'existants — `access()` à chaque
+  `has()` est OK pour les volumes de phase 2.
+
+#### 2.3 — `src/kernel/storage/index.ts` (singleton)
+- **Livré** : `initStorage()` async, `getStorage()` sync. Throw
+  explicite si appelé côté client. `__setStorageForTests` pour
+  l'injection. Browser-safe (import dynamique).
+- **Décision** : pattern identique à `db/index.ts` pour la
+  cohérence. `bootstrap.ts` init le storage après la DB.
+
+#### 2.4 — `PluginContext.storage` (kernel/contracts/plugin.ts)
+- **Livré** : `ctx.storage?: BlobStore` (server-only, optionnel).
+  Le `plugin-host` le passe au `PluginContext` quand le kernel a un
+  storage initialisé.
+- **Décision** : les plugins doivent toujours tester
+  `if (ctx.storage) { ... }` avant d'appeler, pour ne pas casser
+  en environnement sans (tests, browser).
+
+#### 2.5 — Server functions (`plugins/library/server.ts`)
+- **Livré** : 3 server fns via `createServerFn` de TanStack Start :
+  `importAsset` (POST, zod-validé : projectId, name, mime, bytesBase64),
+  `listAssets` (GET, projectId), `getAssetBytes` (GET, hash). Le
+  server fn `importAsset` :
+  1. Décode le base64 → `Uint8Array`
+  2. `storage.put(bytes)` → hash sha256
+  3. INSERT dans `assets` avec `kind` inféré du MIME
+  4. Émet `AssetImported` sur le kernel event bus
+  5. Retourne `{ asset }`
+- **Problème 1** : `Record<string, unknown>` n'est pas sérialisable
+  par `createServerFn` (TanStack Start refuse). Fix : `meta` retiré
+  de la réponse wire. Sera réintroduit en phase 9 avec un type JSON
+  strict.
+- **Problème 2** : `useParams` du TanStack Router appelé
+  conditionnellement (try/catch) viole les rules of hooks. Fix :
+  parsing d'URL direct sans hook.
+
+#### 2.6 — `ViewerContribution` reçoit l'asset complet
+- **Livré** : la signature passe de
+  `ComponentType<{ assetId: string }>` à
+  `ComponentType<{ asset: ViewerAsset }>`. Plus simple : pas besoin
+  d'un `getAssetById` server fn, le CenterView passe l'asset déjà
+  chargé.
+- **Décision** : `ViewerAsset` est un sous-type dans `contracts/`
+  (id, kind, name, mime, sizeBytes, blobHash, meta?). Le library
+  plugin reste la source canonique de l'asset complet ; les viewers
+  ne dépendent que du contrat minimal.
+
+#### 2.7 — Plugin `library` (`plugins/library/`)
+- **Livré** : `libraryPlugin` builtin avec un panel center
+  (`order: 5`, après le hello panel). `LibraryPanel` :
+  - Drop zone + file input caché (drag & drop, click pour browse)
+  - Multi-file import (séquentiel via `importAsset` calls)
+  - Grille responsive de vignettes (2 à 6 colonnes selon viewport)
+  - Thumbnails : image → data URL (via `getAssetBytes`), autres
+    → glyphe (▢ ▶ ♪ </>)
+  - Refetch automatique sur event `AssetImported` (event-sourced
+    refetch plutôt que polling)
+  - Click sur un asset → `useLibrary.setSelected(a)` → CenterView
+    bascule en mode viewer
+- **Décision** : refetch sur event plutôt que SSE/polling. Plus
+  simple, suffit pour 1 user. Phase 9 remplacera par SSE pour le
+  multi-user.
+
+#### 2.8 — Plugins viewers (`plugins/viewer-{image,video,audio,html}/`)
+- **Livré** : 4 plugins builtin, chacun un `ViewerContribution`
+  avec `priority: 10`. Tous chargent les bytes via `getAssetBytes`
+  puis :
+  - **image** → `<img src="data:..." />`
+  - **video** → `<video controls src={blobUrl} />` (object URL
+    révoqué au cleanup via `useRef` pour gérer correctement le
+    unmount)
+  - **audio** → `<audio controls src={blobUrl} />` (idem cleanup)
+  - **html** → `<iframe sandbox="" src={blobUrl} />` (sandbox vide =
+    forbid scripts, allow same-origin only via attribute)
+- **Décision** : video/audio/html utilisent `URL.createObjectURL`
+  (plus efficace que data URL pour >100KB). Cleanup via ref pour
+  éviter le warning react-hooks/exhaustive-deps.
+
+#### 2.9 — `CenterView` : mode viewer vs mode panel
+- **Livré** : si `useLibrary.selected` est set → lookup
+  `registry.viewerFor(asset.kind)` → rend le viewer avec un header
+  "← Back" pour clear la sélection. Sinon → résolution normale du
+  panel center (id match, prefix, fallback welcome).
+- **Problème** : `useMemo` était appelé après un early return →
+  violation des rules of hooks. Fix : `useMemo` toujours en premier
+  dans le composant, le early return vient après.
+
+#### 2.10 — `Inspector` : asset sélectionné
+- **Livré** : si un asset est sélectionné, un bloc en haut affiche
+  id, name, kind, mime, size, hash, created. Un bouton "clear" en
+  haut à droite. En dessous, les panels inspector plugins (Hello
+  par défaut) restent rendus.
+- **Décision** : ne pas remplacer les panels plugins — l'inspector
+  est cumulatif. Phase 5 (lineage) ajoutera son propre panel.
+
+#### 2.11 — Events : `AssetImported` ajouté
+- **Livré** : nouveau type d'event avec `assetId, projectId, kind,
+  name, sizeBytes, blobHash`. Émis par `importAsset` server fn. La
+  LibraryPanel s'y abonne via `useKernelEvents` et refetch.
+
+#### 2.12 — Tests
+- **Livré** : `src/kernel/storage/adapters/fs.test.ts` (7 tests) :
+  put/get roundtrip, idempotence, sharding, has(), get missing
+  throw, uri scheme, binary roundtrip 1024 bytes.
+- **Total tests** : 29/29 passent (22 phase 1 + 7 phase 2).
+- **Note** : pas de test pour les server fns `importAsset`/
+  `listAssets` — ils dépendent de l'infra TanStack Start SSR. Sera
+  testable en phase 9 (API publique) via des tests d'intégration
+  HTTP.
+
+### Erreurs rencontrées (consolidé)
+
+| Quand | Erreur | Cause | Résolution |
+|---|---|---|---|
+| 2.5 | `Record<string, unknown>` non sérialisable | TanStack Start refuse les types trop larges | `meta` retiré du wire ; sera réintroduit en phase 9 avec un JSON schema strict |
+| 2.5 | `useParams` conditionnel → rules of hooks | try/catch autour d'un hook | Parsing d'URL direct sans hook |
+| 2.9 | `useMemo` après early return | rules of hooks | `useMemo` toujours en premier |
+| 2.8 | `useEffect` warning deps `[src]` | `src` est dérivé dans le callback, pas une dep | `useRef` pour tracker l'URL actuelle, revoké au cleanup |
+
+### Dette technique connue
+
+- Le library panel fait N+1 requêtes pour N images (1 `listAssets`
+  + 1 `getAssetBytes` par image pour le thumbnail). Phase 9 ajoutera
+  un endpoint batch + cache.
+- Pas de pagination. Au-delà de ~100 assets, la grille rame. À
+  ajouter quand l'usage le demande.
+- `meta` n'est pas exposé sur le wire. Pas critique en phase 2 ;
+  les viewers n'en ont pas besoin.
+- L'asset est sélectionné globalement (zustand store). Si on ouvre
+  un autre onglet projet, la sélection persiste. Phase 9 le rendra
+  scopé par projet.
+- Pas de thumbnails générés automatiquement pour video/audio. La
+  vignette est un glyphe. Phase 5 ajoutera un processor thumbnail
+  plugin.
+- Les viewers ne sont pas testés unitairement (composants React
+  avec useEffect asynchrone). Phase 9 testera via Testing Library.
+
+### Prochaine phase
+
+- Phase 3 — Connector abstraction + Gradio connector + Capability
+  introspection + SchemaForm
 - Tâches planifiées :
-  - `BlobStore` interface + `FsBlobStore` (content-addressed)
-  - Migration `004_assets.sql`
-  - Plugin builtin `library-panel` (slot `center`, drop zone, grille)
-  - Plugins viewers (image, video, audio, html)
-  - Sélection d'asset → ouverture dans le bon viewer
-  - Inspector contextual sur un asset sélectionné
-  - Tests storage + library
+  - `PluginContext.http` (fetch scopé par permissions) +
+    `PluginContext.secrets`
+  - Plugin `connector-gradio` : `probe()` via `/config`,
+    `listCapabilities()`, `invoke()` via `/predict` (SSE)
+  - Plugin `connectors-panel` (slot `center`) : liste des
+    connectors + bouton "Add Gradio"
+  - Form dynamique piloté par JSON Schema
+  - Events `ConnectorRegistered`, `ConnectorOnline/Offline`,
+    `CapabilityAdded`
+  - Tests connector-gradio (mock fetch)

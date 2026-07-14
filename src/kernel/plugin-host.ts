@@ -33,12 +33,13 @@ export function createPluginHost(deps: {
   events: EventBus;
   registry: Registry;
   notify?: (message: string, kind?: "info" | "success" | "warn" | "error") => void;
+  storage?: import("./storage/types").BlobStore;
 }): PluginHost {
   const manifests = new Map<string, PluginManifest>();
   const active = new Set<string>();
 
   function contextFor(manifest: PluginManifest): PluginContext {
-    return {
+    const ctx: PluginContext = {
       pluginId: manifest.id,
       events: deps.events,
       registry: deps.registry,
@@ -51,6 +52,8 @@ export function createPluginHost(deps: {
         notify: (message, kind) => deps.notify?.(message, kind),
       },
     };
+    if (deps.storage) ctx.storage = deps.storage;
+    return ctx;
   }
 
   return {

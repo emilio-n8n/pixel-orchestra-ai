@@ -2,6 +2,23 @@ import type { EventBus } from "../event-bus";
 import type { Registry } from "../registry";
 import type { ComponentType, ReactNode } from "react";
 import type { DBAdapter } from "../db/types";
+import type { BlobStore } from "../storage/types";
+
+/**
+ * What viewers receive as their `asset` prop. The library plugin owns the
+ * canonical row shape; viewers only need the minimum to fetch and render.
+ * Declared in contracts/ so the kernel has zero coupling to the library
+ * plugin's exact row type.
+ */
+export interface ViewerAsset {
+  id: string;
+  kind: string;
+  name: string;
+  mime: string | null;
+  sizeBytes: number;
+  blobHash: string | null;
+  meta?: Record<string, unknown>;
+}
 
 export type Permission =
   | "net"
@@ -65,7 +82,7 @@ export interface ConnectorContribution {
 export interface ViewerContribution {
   id: string;
   accepts: string[]; // asset kinds: "image" | "video" | ...
-  component: ComponentType<{ assetId: string }>;
+  component: ComponentType<{ asset: ViewerAsset }>;
   priority?: number;
 }
 
@@ -147,10 +164,10 @@ export interface PluginContext {
    */
   db?: DBAdapter;
   /**
-   * Blob storage. Wired in phase 2 (Storage + DB + Asset model). For now
-   * it is undefined; plugins must not call it before then.
+   * Blob storage. Server-only. Content-addressed, dedup by hash. Wired
+   * in phase 2; plugins should check `ctx.storage` before using.
    */
-  storage?: never;
+  storage?: BlobStore;
   /**
    * HTTP client with allowlist enforcement. Wired in phase 3 alongside
    * the Gradio connector.

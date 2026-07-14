@@ -17,6 +17,15 @@ export type AssetCreated = EventBase & {
 };
 export type AssetUpdated = EventBase & { type: "AssetUpdated"; assetId: string };
 export type AssetDeleted = EventBase & { type: "AssetDeleted"; assetId: string };
+export type AssetImported = EventBase & {
+  type: "AssetImported";
+  assetId: string;
+  projectId: string;
+  kind: string;
+  name: string;
+  sizeBytes: number;
+  blobHash: string;
+};
 
 export type JobQueued = EventBase & { type: "JobQueued"; jobId: string };
 export type JobStarted = EventBase & { type: "JobStarted"; jobId: string };
@@ -54,6 +63,7 @@ export type LiliumEvent =
   | AssetCreated
   | AssetUpdated
   | AssetDeleted
+  | AssetImported
   | JobQueued
   | JobStarted
   | JobProgress
