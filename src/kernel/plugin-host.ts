@@ -53,6 +53,24 @@ export function createPluginHost(deps: {
       },
     };
     if (deps.storage) ctx.storage = deps.storage;
+    // HTTP and secrets are scoped per-plugin (phase 3). Built here, not at
+    // host construction, so each plugin gets a fresh client bound to its
+    // own declared `net:` permissions.
+    try {
+      // Lazy require — keeps the kernel's static import surface tight.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { httpForPlugin } = require("./http") as typeof import("./http");
+      ctx.http = httpForPlugin(manifest);
+    } catch {
+      /* http subsystem not available */
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createFsSecrets } = require("./secrets/fs") as typeof import("./secrets/fs");
+      ctx.secrets = createFsSecrets(manifest.id);
+    } catch {
+      /* secrets subsystem not available (e.g. browser) */
+    }
     return ctx;
   }
 

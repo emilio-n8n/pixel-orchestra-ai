@@ -63,3 +63,4 @@ export function getKernel(): Kernel {
 export type { EventBus, Registry, PluginHost };
 export * from "./contracts/plugin";
 export * from "./contracts/events";
+export type { ScopedHttp } from "./http/scoped";

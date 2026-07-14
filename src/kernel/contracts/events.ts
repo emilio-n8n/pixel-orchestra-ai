@@ -49,6 +49,11 @@ export type ConnectorRegistered = EventBase & {
 };
 export type ConnectorOnline = EventBase & { type: "ConnectorOnline"; connectorId: string };
 export type ConnectorOffline = EventBase & { type: "ConnectorOffline"; connectorId: string };
+export type CapabilityAdded = EventBase & {
+  type: "CapabilityAdded";
+  connectorId: string;
+  capId?: string;
+};
 
 export type WorkspaceChanged = EventBase & { type: "WorkspaceChanged"; workspaceId: string };
 export type ProjectOpened = EventBase & { type: "ProjectOpened"; projectId: string };
@@ -72,6 +77,7 @@ export type LiliumEvent =
   | ConnectorRegistered
   | ConnectorOnline
   | ConnectorOffline
+  | CapabilityAdded
   | WorkspaceChanged
   | ProjectOpened
   | PluginActivated

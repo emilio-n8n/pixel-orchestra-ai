@@ -442,14 +442,206 @@ bus et la DB.
 
 - Phase 3 — Connector abstraction + Gradio connector + Capability
   introspection + SchemaForm
+
+---
+
+## Phase 3 — Connector abstraction + Gradio connector + Capability introspection + SchemaForm
+
+**Statut global** : ✅ livré
+**Date de fin** : 2026-07-14
+**Branche** : `main` (commit local, push bloqué — voir note Phase 1)
+**Référence** : `.lovable/plan.md` §15.3
+
+### Vue d'ensemble
+
+Phase 3 branche la première incarnation concrète de l'abstraction
+Connector : Gradio. L'utilisateur peut ajouter un endpoint Gradio
+(URL), voir son statut (online/offline), découvrir automatiquement
+ses capabilities, et invoquer chacune via un formulaire
+auto-généré depuis le JSON Schema introspecté. L'abstraction
+`net:` dans les permissions du plugin garantit qu'un plugin tiers
+ne peut pas faire de fetch en dehors de son allowlist.
+
+### Tâches
+
+#### 3.1 — `kernel/http/scoped.ts` + `http/index.ts`
+- **Livré** : `createScopedHttp(perms)` retourne un `ScopedHttp`
+  qui :
+  1. Filtre les permissions pour ne garder que les `net:`
+  2. Pour chaque `fetch()`, matche l'URL contre le pattern via un
+     glob → regex (`*` → `[^/]*`)
+  3. Rejette avec un message explicite si aucun pattern ne match
+  4. Délègue à `globalThis.fetch` sinon
+- **Décision** : le matcher est **prefix-based** : `net:https://api.example.com/v1`
+  matche toute URL qui commence par ce préfixe (utile pour les APIs
+  versionnées). Le trailing `/` est optionnel. Le wildcard `*` ne
+  traverse jamais un `/` (sécurité).
+- **Tests** : 7 tests (permissions list, forbidden, wildcard host,
+  exact prefix + sibling rejection, `net` global, no-net rules,
+  empty scope forbidden).
+
+#### 3.2 — `kernel/secrets/fs.ts`
+- **Livré** : `createFsSecrets(pluginId)` retourne un `SecretsStore`
+  namespaced par plugin id. Backed par `~/.lilium/secrets.json`
+  (override `LILIUM_SECRETS_PATH`). Plaintext pour l'instant ;
+  phase 12 ajoutera chiffrement via keychain OS.
+- **Décision** : chaque plugin a son propre namespace, donc
+  `connector.openai.get("api_key")` lit
+  `secrets["com.lilium.builtin.connector-openai"].api_key`. Pas
+  de leak entre plugins.
+
+#### 3.3 — `kernel/plugin-host.ts` : `http` + `secrets` dans PluginContext
+- **Livré** : `contextFor()` construit un `http` scopé selon les
+  permissions du manifest, et un `secrets` namespaced. Requiert
+  lazy (require) pour ne pas casser les builds SSR qui n'ont pas
+  besoin de ces subsystems.
+- **Problème 1** : les types `HttpClient` et `HttpRequest` étaient
+  dupliqués entre `contracts/plugin.ts` et `http/scoped.ts`. Fix :
+  tout vit dans `contracts/`, `http/scoped.ts` importe le contrat.
+- **Problème 2** : le barrel `@/kernel` n'exportait pas `ScopedHttp`.
+  Ajouté. Tous les plugins peuvent typer leurs
+  `http: ScopedHttp` via l'import barrel.
+
+#### 3.4 — Plugin `connector-gradio`
+- **Livré** :
+  - `GradioConnector` class implémente le contrat `Connector`
+    (probe / listCapabilities / invoke / dispose).
+  - `probe()` : GET `<base>/config` → `{ ok, latencyMs, message }`.
+  - `listCapabilities()` : parse `/config` → 1 Capability par
+    `dependency` exposé (filtre `show_api !== false`). Construit
+    un JSON Schema pour les inputs à partir des component types
+    (Textbox → string, Slider/Number → number, Checkbox → boolean,
+    Dropdown → enum, Image/Video/Audio → uri-reference). Inféré
+    `kind` (generate si output media, transform si text-only,
+    tool sinon) et `media`. Cache agressif (1 fetch /config par
+    instance).
+  - `invoke(capId, input, ctrl)` :
+    1. POST `<base>/gradio_api/call/<capId>` body `{ data: [...] }`
+       → `{ event_id }`
+    2. GET `<base>/gradio_api/call/<capId>/<event_id>` (SSE brut
+       lu comme text)
+    3. Extrait la dernière ligne `data:` et parse → `outputs: unknown[]`
+    4. Yield progress → output → done (ou error)
+  - `gradioConnectorContribution` enregistré via
+    `PluginContributions.connectors` avec `factory` qui wire
+    `ctx.http` dans le connector.
+  - Manifest permissions : `net`, `net:https://*`,
+    `net:http://localhost:*`, `net:http://127.0.0.1:*` (couvre
+    HF Spaces + serveurs locaux de dev).
+- **Tests** : 7 tests (probe ok/error, listCapabilities returns
+  one, caching 1 fetch pour N calls, kind inference text-only vs
+  media, invoke flow complet config→call→stream→done, unknown
+  capability yields error).
+- **Problème 1** : `inferKind` comparait `c.type` à `"image"`
+  (lowercase) mais les Gradio components viennent en PascalCase
+  (`"Image"`). Fix : `isMediaOutput(c)` qui passe par
+  `GRADIO_MEDIA[c.type]` puis check le media type.
+- **Problème 2** : `new Set(Object.values(GRADIO_MEDIA).filter(...))`
+  avait un problème de type narrowing TS (Set attend `string`,
+  filter retournait `string | undefined`). Fix : Set littéral
+  `new Set<string>(["image", "video", "audio"])` + helper
+  `isMediaOutput`.
+
+#### 3.5 — Plugin `connectors-panel` (slot `center`)
+- **Livré** :
+  - 5 server fns via `createServerFn` : `listConnectors`,
+    `addConnector`, `deleteConnector`, `probeConnector`,
+    `listCapabilities`, `invokeCapability`.
+  - Persistance dans la table `connectors` (créée par
+    `003_skeletons.sql`) + table `capabilities`.
+  - Events émis : `ConnectorRegistered`, `ConnectorOnline`,
+    `ConnectorOffline`, `CapabilityAdded`.
+  - UI : liste de connector cards. Chaque card a Probe / Caps /
+    Del. Capabilities expandables avec un form auto-généré
+    (`SchemaForm`) + bouton Run.
+  - `localHttp()` fallback pour les server fns (le `ctx.http` du
+    plugin n'est pas dispo dans le contexte server fn direct,
+    donc on construit un `ScopedHttp` avec permission `net`).
+- **Décision** : l'invoke est non-streaming (retourne `{ ok,
+  outputs, error }` après collecte de tous les events). Le
+  streaming SSE vers le client viendra en phase 4 (scheduler +
+  jobs) où on aura un vrai système de progression.
+- **Problème 1** : `createServerFn` n'accepte pas les
+  `Record<string, unknown>` comme return type. Fix : wire
+  type strict `ConnectorView.config: { [k: string]: string |
+  number | boolean | null }` + coercion défensive.
+- **Problème 2** : `CapabilityView.inputsSchema` même problème.
+  Fix : nouveau type `JsonValue` (string|number|boolean|null|
+  array|object récursif) — JSON-safe, validé par TanStack Start.
+
+#### 3.6 — `SchemaForm` (mini JSON Schema form)
+- **Livré** : composant React qui prend un JSON Schema
+  (`{ properties, required }`) et rend un form pour les
+  primitives courants :
+  - `string` → input text
+  - `string` + `enum` → select
+  - `string` + `format: uri-reference` → input text avec placeholder
+  - `number`/`integer` → input number
+  - `boolean` → checkbox
+- **Décision** : uncontrolled state (ref interne, pas de re-render
+  parent à chaque frappe). `onChange(values)` n'est appelé que
+  quand la valeur change réellement. Le caller mappe vers son
+  propre type (string dans le cas de ConnectorPanel, qui envoie
+  tout en `z.record(z.string())` côté server).
+
+#### 3.7 — Events `ConnectorRegistered` / `Online` / `Offline` / `CapabilityAdded`
+- **Livré** : `CapabilityAdded` ajouté à `LiliumEvent` union
+  (les 3 autres existaient déjà depuis la phase 1).
+  Émis par les server fns `addConnector`, `probeConnector`,
+  `listCapabilities`.
+- **Effet** : la `ConnectorsPanel` s'abonne via `useKernelEvents`
+  et refetch automatiquement à chaque event lié.
+
+#### 3.8 — Verifications
+- `bunx tsc --noEmit` : ✅ 0 erreur
+- `bun run lint` : ✅ 0 erreur (9 warnings, tous pre-existants)
+- `bun test` : ✅ 43/43 (22 phase 1 + 7 phase 2 + 7 phase 3
+  scoped http + 7 phase 3 Gradio)
+- `bun run dev` : ✅ démarre en 7.5s, port 8081
+
+### Erreurs rencontrées (consolidé)
+
+| Quand | Erreur | Cause | Résolution |
+|---|---|---|---|
+| 3.1 | `https://x.gradio.live/` ne matchait pas `net:https://*.gradio.live` | regex terminait sur `$` strict, slash trailing cassait | Allow optional trailing slash + match query/fragment |
+| 3.1 | `https://api.example.com/v1/chat` ne matchait pas `net:https://api.example.com/v1` | idem — `$` strict | Passer en prefix-match (anchor start only) |
+| 3.3 | `ScopedHttp` non exporté du barrel `@/kernel` | barrel n'exportait que `contracts` | Ajouté `export type { ScopedHttp } from "./http/scoped"` |
+| 3.4 | `inferKind` retournait `tool` au lieu de `generate` pour outputs Image | comparaison `c.type === "image"` mais Gradio envoie `"Image"` PascalCase | Helper `isMediaOutput` qui passe par `GRADIO_MEDIA` |
+| 3.4 | `new Set(Object.values(GRADIO_MEDIA).filter(...))` erreur de type | Set attend `string` mais filter laisse `string \| undefined` | Set littéral typé |
+| 3.5 | `Record<string, unknown>` non serializable par `createServerFn` | TanStack Start rejette `unknown` (trop large, peut être non-JSON) | Wire type strict `string \| number \| boolean \| null` + coercion ; `JsonValue` pour les schemas |
+
+### Dette technique connue
+
+- L'invoke Gradio n'est pas streaming : on attend toute la
+  réponse puis on renvoie. Pour les générations longues (image
+  → 30s), c'est OK avec un timeout HTTP standard. Phase 4 (jobs)
+  remplacera par un vrai stream `GraphRun` + `JobProgress` events.
+- Pas d'auth OAuth / API key via `secrets.get()` encore — Gradio
+  supporte juste un `Authorization` header, passé en clair dans
+  le form d'ajout. Phase 11 (OpenAI, Anthropic) introduira le
+  pattern `secrets.get("api_key")`.
+- Le `SchemaForm` minimal ne couvre pas les types complexes
+  (nested objects, arrays, oneOf, anyOf). Sera étendu quand
+  les capabilities OpenAI/MCP les utiliseront (phase 11).
+- Le `probe` ne respecte pas de timeout (peut bloquer 30s sur
+  un endpoint dead). Phase 9 ajoutera un `AbortController`
+  standardisé.
+
+### Prochaine phase
+
+- Phase 4 — Scheduler + Node Graph engine + UI Node Graph + Jobs panel + StatusBar
 - Tâches planifiées :
-  - `PluginContext.http` (fetch scopé par permissions) +
-    `PluginContext.secrets`
-  - Plugin `connector-gradio` : `probe()` via `/config`,
-    `listCapabilities()`, `invoke()` via `/predict` (SSE)
-  - Plugin `connectors-panel` (slot `center`) : liste des
-    connectors + bouton "Add Gradio"
-  - Form dynamique piloté par JSON Schema
-  - Events `ConnectorRegistered`, `ConnectorOnline/Offline`,
-    `CapabilityAdded`
-  - Tests connector-gradio (mock fetch)
+  - `kernel/scheduler/` : compile GraphDocument → DAG, top-sort,
+    exécute (parallèle quand sans dépendance), stream via
+    `GraphNodeExecuted`, `JobProgress`
+  - Plugins `node-primitives` (string, number, prompt-template)
+  - Plugin `node-capability` (rend une capability en node
+    auto-généré)
+  - Plugin `node-asset` (référence un asset)
+  - Plugin `node-exporter` (envoie vers Library ou File)
+  - Plugin `ui-node-graph` (React Flow, drag&drop, edges typés)
+  - Plugin `ui-jobs` (liste jobs, cancel, logs, re-run)
+  - StatusBar : "Scheduler: N running" + dernier `JobProgress`
+  - Bouton "Generate" (panel Inspector quand un node capability
+    est sélectionné) → enqueue graph 1-node
+  - Tests scheduler (DAG, parallelisme, échec partial)

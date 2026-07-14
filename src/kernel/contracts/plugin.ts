@@ -3,6 +3,7 @@ import type { Registry } from "../registry";
 import type { ComponentType, ReactNode } from "react";
 import type { DBAdapter } from "../db/types";
 import type { BlobStore } from "../storage/types";
+import type { ScopedHttp } from "../http/scoped";
 
 /**
  * What viewers receive as their `asset` prop. The library plugin owns the
@@ -144,8 +145,11 @@ export interface SecretsStore {
   list(): string[];
 }
 
-export interface HttpClient {
-  fetch(input: string | URL, init?: RequestInit): Promise<Response>;
+export interface HttpRequest {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: BodyInit | null;
 }
 
 export interface PluginContext {
@@ -172,7 +176,7 @@ export interface PluginContext {
    * HTTP client with allowlist enforcement. Wired in phase 3 alongside
    * the Gradio connector.
    */
-  http?: HttpClient;
+  http?: ScopedHttp;
   /**
    * Secrets store. Phase 3+.
    */
