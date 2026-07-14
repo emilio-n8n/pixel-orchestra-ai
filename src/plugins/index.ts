@@ -14,8 +14,13 @@ import { nodeExporterPlugin } from "./node-exporter/manifest";
 import { uiNodeGraphPlugin } from "./ui-node-graph/manifest";
 import { uiJobsPlugin } from "./ui-jobs/manifest";
 import { uiLineagePlugin } from "./ui-lineage/manifest";
+import { uiCharactersPlugin } from "./ui-characters/manifest";
+import { uiStoryboardPlugin } from "./ui-storyboard/manifest";
+import { uiTimelinePlugin } from "./ui-timeline/manifest";
+import { uiVersionsPlugin } from "./ui-versions/manifest";
+import { agentCopilotPlugin } from "./agent-copilot/manifest";
+import { connectorComfyuiPlugin } from "./connector-comfyui";
 
-// Static list of builtin plugins loaded at boot.
 export const builtinPlugins: PluginManifest[] = [
   helloPlugin,
   libraryPlugin,
@@ -32,4 +37,10 @@ export const builtinPlugins: PluginManifest[] = [
   uiNodeGraphPlugin,
   uiJobsPlugin,
   uiLineagePlugin,
+  uiCharactersPlugin,
+  uiStoryboardPlugin,
+  uiTimelinePlugin,
+  uiVersionsPlugin,
+  agentCopilotPlugin,
+  connectorComfyuiPlugin,
 ];

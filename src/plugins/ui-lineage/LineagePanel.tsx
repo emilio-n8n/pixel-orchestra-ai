@@ -95,10 +95,7 @@ export function LineagePanel() {
             Ancestors
           </div>
           {lineage.ancestors.slice(0, 10).map((a) => (
-            <div
-              key={a.id}
-              className="mono flex justify-between gap-1 text-[var(--text-muted)]"
-            >
+            <div key={a.id} className="mono flex justify-between gap-1 text-[var(--text-muted)]">
               <span className="truncate" title={a.id}>
                 ↗ {a.name}
               </span>
@@ -114,10 +111,7 @@ export function LineagePanel() {
             Descendants
           </div>
           {lineage.descendants.slice(0, 10).map((d) => (
-            <div
-              key={d.id}
-              className="mono flex justify-between gap-1 text-[var(--text-muted)]"
-            >
+            <div key={d.id} className="mono flex justify-between gap-1 text-[var(--text-muted)]">
               <span className="truncate" title={d.id}>
                 ↘ {d.name}
               </span>

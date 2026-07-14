@@ -54,9 +54,12 @@ export const saveGraph = createServerFn({ method: "POST" })
     const id = data.id ?? uid("gph");
     const now = Date.now();
     if (data.id) {
-      db.prepare(
-        "UPDATE graphs SET name = ?, doc_json = ?, updated_at = ? WHERE id = ?",
-      ).run(data.name, JSON.stringify(data.doc), now, id);
+      db.prepare("UPDATE graphs SET name = ?, doc_json = ?, updated_at = ? WHERE id = ?").run(
+        data.name,
+        JSON.stringify(data.doc),
+        now,
+        id,
+      );
     } else {
       db.prepare(
         `INSERT INTO graphs (id, project_id, name, doc_json, is_template, created_at, updated_at)
@@ -72,7 +75,9 @@ export const listGraphs = createServerFn({ method: "GET" })
     const db = getDb();
     const rows = data.projectId
       ? db
-          .prepare("SELECT * FROM graphs WHERE project_id = ? OR project_id IS NULL ORDER BY updated_at DESC")
+          .prepare(
+            "SELECT * FROM graphs WHERE project_id = ? OR project_id IS NULL ORDER BY updated_at DESC",
+          )
           .all<GraphRow>(data.projectId)
       : db.prepare("SELECT * FROM graphs ORDER BY updated_at DESC").all<GraphRow>();
     return {
@@ -197,7 +202,15 @@ export const runGraphFn = createServerFn({ method: "POST" })
     kernel.events.emit({ type: "JobQueued", jobId: runId });
     kernel.events.emit({ type: "JobStarted", jobId: runId });
 
-    let result: { status: "ok" | "error"; okCount: number; errorCount: number; totalMs: number; graphRunId: string; outputs: Map<string, Record<string, unknown>>; errors: Map<string, string> };
+    let result: {
+      status: "ok" | "error";
+      okCount: number;
+      errorCount: number;
+      totalMs: number;
+      graphRunId: string;
+      outputs: Map<string, Record<string, unknown>>;
+      errors: Map<string, string>;
+    };
     try {
       result = await kernel.scheduler.runGraph(doc, {
         env: { db, storage: kernel.storage, http: kernel.host["http" as never] as never },

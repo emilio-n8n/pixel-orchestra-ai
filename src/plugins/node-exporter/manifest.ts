@@ -26,10 +26,12 @@ const exporterExec: NodeExecutor = {
     const size = Number(input.size ?? 0);
     const id = uid("ast");
     const now = Date.now();
-    ctx.env.db.prepare(
-      `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, thumbnail_hash, meta_json, created_at, updated_at)
+    ctx.env.db
+      .prepare(
+        `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, thumbnail_hash, meta_json, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '{}', ?, ?)`,
-    ).run(id, projectId, kind, name, mime, size, blobHash, now, now);
+      )
+      .run(id, projectId, kind, name, mime, size, blobHash, now, now);
 
     // Capture source assets (any input that looks like an asset reference)
     // for the lineage view. We look at every input value whose key ends
@@ -49,9 +51,7 @@ const exporterExec: NodeExecutor = {
     if (Array.isArray(input.sources)) {
       for (const s of input.sources) {
         if (typeof s !== "string") continue;
-        const row = ctx.env.db
-          .prepare("SELECT id FROM assets WHERE id = ?")
-          .get<{ id: string }>(s);
+        const row = ctx.env.db.prepare("SELECT id FROM assets WHERE id = ?").get<{ id: string }>(s);
         if (row && !sourceAssetIds.includes(s)) sourceAssetIds.push(s);
       }
     }

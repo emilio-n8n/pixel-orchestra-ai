@@ -64,8 +64,9 @@ export interface LineageView {
 function readAsset(id: string): AssetRowLite | null {
   const db = getDb();
   return (
-    (db.prepare("SELECT id, name, kind, created_at FROM assets WHERE id = ?").get<AssetRowLite>(id) ??
-      null)
+    db
+      .prepare("SELECT id, name, kind, created_at FROM assets WHERE id = ?")
+      .get<AssetRowLite>(id) ?? null
   );
 }
 
@@ -98,9 +99,7 @@ function listAssetsByProvenanceSource(id: string, maxDepth: number): LineageAsse
     // Find all provenance rows whose source_asset_ids_json contains cur.
     // (Cheap because the table is small in phase 5. For a real prod
     // scale, add a real join table or a JSON1 index.)
-    const candidates = db
-      .prepare("SELECT * FROM asset_provenance")
-      .all<ProvenanceRow>();
+    const candidates = db.prepare("SELECT * FROM asset_provenance").all<ProvenanceRow>();
     for (const p of candidates) {
       let sourceIds: string[] = [];
       try {
@@ -122,7 +121,11 @@ function listAssetsByProvenanceSource(id: string, maxDepth: number): LineageAsse
         depth: depth + 1,
         path: [...path, p.node_run_id ?? p.asset_id],
       });
-      queue.push({ id: p.asset_id, depth: depth + 1, path: [...path, p.node_run_id ?? p.asset_id] });
+      queue.push({
+        id: p.asset_id,
+        depth: depth + 1,
+        path: [...path, p.node_run_id ?? p.asset_id],
+      });
     }
   }
   return out;
@@ -194,9 +197,7 @@ export const getLineage = createServerFn({ method: "GET" })
       directSources = listAssetsBySourceIds(sourceIds).map((a) => ({ id: a.id, name: a.name }));
       try {
         const params = JSON.parse(prov.params_json) as Record<string, JsonValue>;
-        capabilities = prov.capability_id
-          ? [{ id: prov.capability_id, params }]
-          : [];
+        capabilities = prov.capability_id ? [{ id: prov.capability_id, params }] : [];
       } catch {
         /* empty */
       }
