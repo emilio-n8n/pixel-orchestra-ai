@@ -630,6 +630,161 @@ ne peut pas faire de fetch en dehors de son allowlist.
 ### Prochaine phase
 
 - Phase 4 — Scheduler + Node Graph engine + UI Node Graph + Jobs panel + StatusBar
+
+---
+
+## Phase 4 — Scheduler + Node Graph engine + UI Node Graph + Jobs panel + StatusBar
+
+**Statut global** : ✅ livré
+**Date de fin** : 2026-07-14
+**Branche** : `main` (commit local, push bloqué — voir note Phase 1)
+**Référence** : `.lovable/plan.md` §15.4
+
+### Vue d'ensemble
+
+Phase 4 pose le cœur d'exécution de la plateforme : un scheduler qui
+compile et exécute des graphes DAG, un set de node types builtin
+(primitives, capability, asset, exporter), et une UI de node graph
++ jobs panel. Le `Generate` passe désormais par le scheduler : un
+clic = un graph 1-node = un run enregistré, persisté, visible dans
+le Jobs panel.
+
+### Tâches
+
+#### 4.1 — `kernel/scheduler/types.ts` + `compile.ts` + `run.ts` + `index.ts`
+- **Livré** : types (GraphDocument, NodeSpec, EdgeSpec, PortSpec,
+  NodeExecutor, GraphRunEvent) + compileur (Kahn's algorithm avec
+  détection de cycle) + exécuteur (Promise.all par couche
+  topologique) + singleton `Scheduler` avec `registerExecutor` /
+  `runGraph` / `compile` / `executeCompiled` / `count`.
+- **Décision** : le scheduler est dans le **kernel** (pas un plugin)
+  — c'est le moteur d'exécution de la plateforme, pas une capability
+  métier. Les plugins contribuent des `NodeExecutor` via
+  `addNodeExecutor(id, executor, pluginId)` enregistré globalement,
+  puis hydratés dans le scheduler au boot.
+- **Décision** : un node sans executor fait échouer ce node (pas tout
+  le run) — les downstream nodes reçoivent `undefined` et continuent.
+  C'est moins strict que `fail-fast` mais plus utilisable pour
+  explorer un graph en construction.
+- **Tests** : 8 tests (topo-sort linear, cycle detection, unknown
+  edge, 1-node run, threaded outputs, parallel fanout timing,
+  error capture + downstream continues, missing executor).
+
+#### 4.2 — Plugin `node-primitives`
+- **Livré** : 3 NodeExecutors : `primitives.string` (sortie `out: string`),
+  `primitives.number` (sortie `out: number`), `primitives.prompt-template`
+  (template `{{key}}` substitué par `input[key]`).
+- **Décision** : le `prompt-template` est volontairement minimal (regex
+  `{{key}}`). Phase 6 introduira les vrais context bindings AI.
+
+#### 4.3 — Plugin `node-capability`
+- **Livré** : `capability.run` — wrappe une `Connector.invoke` en node.
+  Params : `capability = { connectorId, capId }`, `endpoint`,
+  `auth` (optionnel). Construit un `GradioConnector` à la volée,
+  consomme l'async iterable, yield `done` / `error` → outputs + ok.
+- **Décision** : lazy import du GradioConnector pour éviter la
+  dépendance circulaire (connector-gradio → kernel).
+
+#### 4.4 — Plugin `node-asset`
+- **Livré** : `asset.reference` — passe l'assetId/blobHash à
+  downstream (utile pour piping asset → exporter).
+
+#### 4.5 — Plugin `node-exporter`
+- **Livré** : `exporter.library` — INSERT dans `assets` table + emit
+  `AssetImported`. Params : `projectId`, `blobHash`, `name`, `kind`,
+  `mime`, `size`. Vérifie que `db` est dispo côté serveur, throw
+  sinon.
+- **Décision** : c'est le sink final du graph. Combiné avec un node
+  `capability.run` en amont, on a un pipeline `capability → library`
+  fonctionnel.
+
+#### 4.6 — Plugin `ui-node-graph`
+- **Livré** : `NodeGraphPanel` :
+  - **Palette** (gauche) : liste les node types groupés par catégorie
+    (`primitives`, `capability`, `asset`, `exporter`).
+  - **Canvas** (centre) : vertical stack de NodeCards, chaque card
+    a : type, params (auto-form via SchemaForm), connect-to dropdown
+    pour ajouter une edge vers un autre node, list des edges sortantes.
+  - **Jobs sidebar** (droite) : 20 derniers runs avec status + timestamp.
+  - **Run button** : envoie le doc au server fn `runGraphFn` qui
+    persiste + execute + retourne les stats.
+- **5 server fns** : `listNodeTypes` (snapshot du registry), `runGraphFn`
+  (le path chaud), `listGraphRuns` (pour la sidebar et JobsPanel),
+  `saveGraph`, `loadGraph` (préparation phase 8 versioning).
+- **Décision** : éditeur **linear-first** (stack verticale, edges
+  encodées par dropdown) plutôt qu'un canvas drag-and-drop. C'est
+  80% de la valeur, 20% du code. Le canvas drag/drop viendra phase 5+
+  (asset graph) ou phase 6 (AI Context bindings).
+- **Problème** : `runGraphFn` lit `kernel.host["http" as never] as never`
+  pour passer le http au scheduler. C'est un hack parce que
+  `PluginContext.http` n'est pas exposé sur le `Kernel` lui-même
+  (seulement sur le `ctx` de chaque plugin). À refactor en phase 9 :
+  ajouter `Kernel.http` quand un plugin a des permissions `net:*`.
+
+#### 4.7 — Plugin `ui-jobs`
+- **Livré** : `JobsPanel` — liste des 50 derniers graph runs, chacun
+  avec status pill, id tronqué, stats JSON pretty-printed. Refetch
+  sur tout event `Graph*` / `Job*`.
+- **Décision** : c'est une version "log view" du jobs panel. La
+  version "live queue" (avec cancel + progress streaming) viendra
+  phase 9 quand on aura SSE.
+
+#### 4.8 — `StatusBar` : `Plugins: N` + `Executors: M` + dernier event
+- **Livré** : ajoute `Executors: {count}` à côté de `Plugins:`.
+  Détecte les events `Job*` et les highlight en accent.
+- **Décision** : le badge "Scheduler: N running" est implicite —
+  chaque `JobStarted` l'incrémente visuellement, `JobFinished` /
+  `JobFailed` le décrémente (l'œil fait le travail). Phase 9 aura
+  un vrai compteur live.
+
+#### 4.9 — Events `GraphNodeExecuted` + `GraphCompleted`
+- **Livré** : ajoutés à `LiliumEvent` union. Émis par
+  `executeCompiled`. Le Jobs panel et le status bar s'y abonnent.
+
+#### 4.10 — Verifications
+- `bunx tsc --noEmit` : ✅ 0 erreur
+- `bun run lint` : ✅ 0 erreur (9 warnings, tous pre-existants)
+- `bun test` : ✅ 51/51 (43 phase 3 + 8 phase 4)
+- `bun run dev` : ✅ démarre en 4.5s, port 8081
+
+### Erreurs rencontrées (consolidé)
+
+| Quand | Erreur | Cause | Résolution |
+|---|---|---|---|
+| 4.6 | `host["http" as never] as never` dans server fn | `Kernel.http` n'existe pas, seul `ctx.http` per-plugin | Cast + eslint disable. Refactor en phase 9 : exposer `Kernel.http` quand un plugin déclare des `net:*` |
+| 4.6 | `Property 'startedAt' does not exist on GraphRunRow` | J'ai exposé le row type (snake_case DB) au lieu du view type (camelCase) | Renommé en `GraphRunView` (camelCase) côté consumer ; row reste interne au server.ts |
+| 4.x | `Property 'contributes' is missing in type` | Les plugins node-* n'ont aucune contribution visible (que des side-effects dans `activate`) | Ajouté `contributes: {}` explicitement |
+
+### Dette technique connue
+
+- L'éditeur de graph est linear-first (stack verticale). Pas de
+  drag/drop sur canvas, pas de positions libres. Phase 5+ remplacera.
+- Pas de streaming live de la progression d'un node long (image gen
+  ~30s). L'UI affiche le résultat après coup. Phase 9 (SSE) +
+  phase 10 (agent) ajouteront le streaming.
+- Le `prompt-template` est regex-only. Phase 6 introduira les vrais
+  context bindings (`@context.characters[name].portrait`).
+- Le scheduler n'a pas de cache de plans compilés. Pour un graph
+  "live" (timeline re-run à chaque modif) il faudra cacher. Pas
+  critique en phase 4.
+- Pas de cancellation réelle : le signal AbortController est créé
+  par node mais jamais déclenché. À brancher en phase 9.
+- Le `Capability run` node n'enrobe pas un `ConnectorHealth` check
+  pre-run. Si l'endpoint est down, on le découvre au moment du
+  `invoke`. Phase 9 ajoutera un pre-check.
+- Le status bar n'a pas de compteur live de jobs running (juste un
+  highlight du dernier event). OK pour la phase.
+
+### Prochaine phase
+
+- Phase 5 — Asset Graph (lineage) + Provenance UI
+- Tâches planifiées :
+  - Migration `005_provenance.sql` (déjà dans 003_skeletons)
+  - À chaque job fini : INSERT asset_provenance avec sources
+  - Plugin `ui-lineage` : DAG des ancêtres/descendants (lit
+    asset_provenance + graph_runs + node_runs)
+  - Actions Inspector sur un asset : "Re-run this branch",
+    "Fork from here", "Diff with parent"
 - Tâches planifiées :
   - `kernel/scheduler/` : compile GraphDocument → DAG, top-sort,
     exécute (parallèle quand sans dépendance), stream via

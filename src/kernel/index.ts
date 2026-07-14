@@ -2,11 +2,14 @@ import { createEventBus, type EventBus } from "./event-bus";
 import { createRegistry, type Registry } from "./registry";
 import { createPluginHost, type PluginHost } from "./plugin-host";
 import type { BlobStore } from "./storage/types";
+import { createScheduler, listNodeExecutors, type Scheduler } from "./scheduler";
+import type { NodeExecutor } from "./scheduler/types";
 
 export interface Kernel {
   events: EventBus;
   registry: Registry;
   host: PluginHost;
+  scheduler: Scheduler;
   /** Server-only — undefined on the client. */
   db?: import("./db/types").DBAdapter;
   /** Server-only — undefined on the client. */
@@ -35,7 +38,12 @@ async function build(options: KernelOptions = {}): Promise<Kernel> {
     notify: options.notify,
     storage: options.storage,
   });
-  const kernel: Kernel = { events, registry, host };
+  const scheduler = createScheduler({ events, registry });
+  // Hydrate scheduler with executors that plugins have already pushed.
+  for (const [id, exec] of listNodeExecutors()) {
+    scheduler.registerExecutor(exec);
+  }
+  const kernel: Kernel = { events, registry, host, scheduler };
   if (options.db) kernel.db = options.db;
   if (options.storage) kernel.storage = options.storage;
   if (options.notify) kernel.notify = options.notify;
@@ -60,7 +68,10 @@ export function getKernel(): Kernel {
   );
 }
 
-export type { EventBus, Registry, PluginHost };
+export type { EventBus, Registry, PluginHost, Scheduler };
 export * from "./contracts/plugin";
 export * from "./contracts/events";
 export type { ScopedHttp } from "./http/scoped";
+export * from "./scheduler/types";
+export { addNodeExecutor, listNodeExecutors, createScheduler } from "./scheduler";
+export type { NodeExecutor };

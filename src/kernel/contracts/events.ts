@@ -42,6 +42,19 @@ export type JobFinished = EventBase & {
 };
 export type JobFailed = EventBase & { type: "JobFailed"; jobId: string; error: string };
 
+export type GraphNodeExecuted = EventBase & {
+  type: "GraphNodeExecuted";
+  graphRunId: string;
+  nodeId: string;
+  status: "ok" | "error";
+};
+export type GraphCompleted = EventBase & {
+  type: "GraphCompleted";
+  graphRunId: string;
+  status: "ok" | "error";
+  stats: { okCount: number; errorCount: number; totalMs: number };
+};
+
 export type ConnectorRegistered = EventBase & {
   type: "ConnectorRegistered";
   connectorId: string;
@@ -74,6 +87,8 @@ export type LiliumEvent =
   | JobProgress
   | JobFinished
   | JobFailed
+  | GraphNodeExecuted
+  | GraphCompleted
   | ConnectorRegistered
   | ConnectorOnline
   | ConnectorOffline

@@ -7,6 +7,12 @@ import { viewerAudioPlugin } from "./viewer-audio/manifest";
 import { viewerHtmlPlugin } from "./viewer-html/manifest";
 import { connectorGradioPlugin } from "./connector-gradio";
 import { connectorsPanelPlugin } from "./connectors-panel/manifest";
+import { nodePrimitivesPlugin } from "./node-primitives/manifest";
+import { nodeCapabilityPlugin } from "./node-capability/manifest";
+import { nodeAssetPlugin } from "./node-asset/manifest";
+import { nodeExporterPlugin } from "./node-exporter/manifest";
+import { uiNodeGraphPlugin } from "./ui-node-graph/manifest";
+import { uiJobsPlugin } from "./ui-jobs/manifest";
 
 // Static list of builtin plugins loaded at boot.
 export const builtinPlugins: PluginManifest[] = [
@@ -18,4 +24,10 @@ export const builtinPlugins: PluginManifest[] = [
   viewerHtmlPlugin,
   connectorGradioPlugin,
   connectorsPanelPlugin,
+  nodePrimitivesPlugin,
+  nodeCapabilityPlugin,
+  nodeAssetPlugin,
+  nodeExporterPlugin,
+  uiNodeGraphPlugin,
+  uiJobsPlugin,
 ];
