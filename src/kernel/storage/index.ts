@@ -2,7 +2,6 @@
 // Picks the right adapter for the runtime (FS for now, S3 in phase 9).
 
 import type { BlobStore } from "./types";
-import { createFsBlobStore } from "./adapters/fs";
 
 let _store: BlobStore | null = null;
 let _initPromise: Promise<BlobStore> | null = null;
@@ -32,4 +31,3 @@ export function __setStorageForTests(s: BlobStore | null): void {
 }
 
 export type { BlobStore, BlobRef } from "./types";
-export { createFsBlobStore } from "./adapters/fs";

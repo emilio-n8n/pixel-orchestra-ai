@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { createMemoryAdapter, runMigrations } from "./db";
+import { createMemoryAdapter } from "./db";
+import { runMigrations } from "./db/migrate";
 import { createBunSqliteAdapter } from "./db/adapters/bun-sqlite";
 
 describe("memory adapter", () => {
