@@ -7,7 +7,8 @@
 // module from a browser bundle does not touch the filesystem.
 
 import type { DBAdapter, DBConfig } from "./types";
-import { runMigrations } from "./migrate";
+// NOTE: `./migrate` and `./adapters/bun-sqlite` are imported lazily inside
+// `initAdapter()` so the client bundle never pulls in `node:fs` / `bun:sqlite`.
 
 let _db: DBAdapter | null = null;
 let _initPromise: Promise<DBAdapter> | null = null;
@@ -53,6 +54,7 @@ async function initAdapter(): Promise<DBAdapter> {
     mod as unknown as import("./adapters/bun-sqlite").BunSqliteModule,
     path,
   );
+  const { runMigrations } = await import("./migrate");
   runMigrations(adapter);
   return adapter;
 }
@@ -75,5 +77,4 @@ export function __setDbForTests(adapter: DBAdapter | null): void {
 }
 
 export type { DBAdapter, DBConfig } from "./types";
-export { runMigrations } from "./migrate";
 export { createMemoryAdapter } from "./adapters/memory";

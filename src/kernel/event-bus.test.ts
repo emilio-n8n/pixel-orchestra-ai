@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { createEventBus } from "./event-bus";
 import { createEventLogPersister } from "./db/event-log";
-import { createMemoryAdapter, runMigrations } from "./db";
+import { createMemoryAdapter } from "./db";
+import { runMigrations } from "./db/migrate";
 
 describe("event-bus", () => {
   it("emits to handlers matching the exact type", () => {

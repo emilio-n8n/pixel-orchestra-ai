@@ -64,12 +64,14 @@ export function createPluginHost(deps: {
     } catch {
       /* http subsystem not available */
     }
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createFsSecrets } = require("./secrets/fs") as typeof import("./secrets/fs");
-      ctx.secrets = createFsSecrets(manifest.id);
-    } catch {
-      /* secrets subsystem not available (e.g. browser) */
+    if (typeof window === "undefined") {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createFsSecrets } = require("./secrets/fs") as typeof import("./secrets/fs");
+        ctx.secrets = createFsSecrets(manifest.id);
+      } catch {
+        /* secrets subsystem not available */
+      }
     }
     return ctx;
   }
