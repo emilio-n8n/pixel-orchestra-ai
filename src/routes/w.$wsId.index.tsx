@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useWorkspaceStore } from "@/stores/workspace";
 
-export const Route = createFileRoute("/w/$wsId")({
+export const Route = createFileRoute("/w/$wsId/")({
   ssr: false,
   component: WorkspaceView,
 });

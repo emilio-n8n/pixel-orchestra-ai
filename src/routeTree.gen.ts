@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WWsIdRouteImport } from './routes/w.$wsId'
 import { Route as WWsIdIndexRouteImport } from './routes/w.$wsId.index'
 import { Route as WWsIdPPidRouteImport } from './routes/w.$wsId.p.$pid'
 
@@ -18,19 +19,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WWsIdIndexRoute = WWsIdIndexRouteImport.update({
-  id: '/w/$wsId/',
-  path: '/w/$wsId/',
+const WWsIdRoute = WWsIdRouteImport.update({
+  id: '/w/$wsId',
+  path: '/w/$wsId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WWsIdIndexRoute = WWsIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WWsIdRoute,
+} as any)
 const WWsIdPPidRoute = WWsIdPPidRouteImport.update({
-  id: '/w/$wsId/p/$pid',
-  path: '/w/$wsId/p/$pid',
-  getParentRoute: () => rootRouteImport,
+  id: '/p/$pid',
+  path: '/p/$pid',
+  getParentRoute: () => WWsIdRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/w/$wsId': typeof WWsIdRouteWithChildren
   '/w/$wsId/': typeof WWsIdIndexRoute
   '/w/$wsId/p/$pid': typeof WWsIdPPidRoute
 }
@@ -42,21 +49,21 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/w/$wsId': typeof WWsIdRouteWithChildren
   '/w/$wsId/': typeof WWsIdIndexRoute
   '/w/$wsId/p/$pid': typeof WWsIdPPidRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/w/$wsId/' | '/w/$wsId/p/$pid'
+  fullPaths: '/' | '/w/$wsId' | '/w/$wsId/' | '/w/$wsId/p/$pid'
   fileRoutesByTo: FileRoutesByTo
   to: '/' | '/w/$wsId' | '/w/$wsId/p/$pid'
-  id: '__root__' | '/' | '/w/$wsId/' | '/w/$wsId/p/$pid'
+  id: '__root__' | '/' | '/w/$wsId' | '/w/$wsId/' | '/w/$wsId/p/$pid'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  WWsIdIndexRoute: typeof WWsIdIndexRoute
-  WWsIdPPidRoute: typeof WWsIdPPidRoute
+  WWsIdRoute: typeof WWsIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -68,27 +75,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/w/$wsId': {
+      id: '/w/$wsId'
+      path: '/w/$wsId'
+      fullPath: '/w/$wsId'
+      preLoaderRoute: typeof WWsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/w/$wsId/': {
       id: '/w/$wsId/'
-      path: '/w/$wsId'
+      path: '/'
       fullPath: '/w/$wsId/'
       preLoaderRoute: typeof WWsIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof WWsIdRoute
     }
     '/w/$wsId/p/$pid': {
       id: '/w/$wsId/p/$pid'
-      path: '/w/$wsId/p/$pid'
+      path: '/p/$pid'
       fullPath: '/w/$wsId/p/$pid'
       preLoaderRoute: typeof WWsIdPPidRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof WWsIdRoute
     }
   }
 }
 
-const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+interface WWsIdRouteChildren {
+  WWsIdIndexRoute: typeof WWsIdIndexRoute
+  WWsIdPPidRoute: typeof WWsIdPPidRoute
+}
+
+const WWsIdRouteChildren: WWsIdRouteChildren = {
   WWsIdIndexRoute: WWsIdIndexRoute,
   WWsIdPPidRoute: WWsIdPPidRoute,
+}
+
+const WWsIdRouteWithChildren = WWsIdRoute._addFileChildren(WWsIdRouteChildren)
+
+const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
+  WWsIdRoute: WWsIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
