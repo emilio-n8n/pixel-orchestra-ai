@@ -4,10 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/auth")({ component: AuthPage, ssr: false });
+export const Route = createFileRoute("/auth")({
+  component: AuthPage,
+  ssr: false,
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : "",
+  }),
+});
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const nextPath = next && next.startsWith("/") ? next : "/";
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,9 +24,9 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+      if (data.session) window.location.href = nextPath;
     });
-  }, [navigate]);
+  }, [nextPath]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,12 +37,14 @@ function AuthPage() {
     const { error } = await fn;
     setBusy(false);
     if (error) return setErr(error.message);
-    navigate({ to: "/" });
+    window.location.href = nextPath;
   }
 
   async function google() {
     setErr(null);
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    const r = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + nextPath,
+    });
     if (r.error) setErr(r.error.message);
   }
 
