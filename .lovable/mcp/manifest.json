@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://krlmawwljhjwylvhscof.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "lilium-studio-mcp",
+      "version": "0.1.0",
+      "title": "Lilium Studio"
+    },
+    "tools": [
+      {
+        "name": "generate_image",
+        "title": "Generate image",
+        "description": "Generate an image from a text prompt into the given project.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string",
+              "description": "Project id to attach the asset to."
+            },
+            "prompt": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "project_id",
+            "prompt"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "generate_voice",
+        "title": "Generate voiceover",
+        "description": "Generate a TTS voiceover (mp3) for the given text.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "voice": {
+              "type": "string",
+              "enum": [
+                "alloy",
+                "echo",
+                "fable",
+                "onyx",
+                "nova",
+                "shimmer"
+              ]
+            }
+          },
+          "required": [
+            "project_id",
+            "text"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "generate_html_card",
+        "title": "Generate HTML title card",
+        "description": "Generate a styled HTML card (title, lower third, credits).",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "brief": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "project_id",
+            "brief"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "add_to_timeline",
+        "title": "Add asset to timeline",
+        "description": "Place an existing asset on a timeline track.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "asset_id": {
+              "type": "string"
+            },
+            "track": {
+              "type": "string",
+              "enum": [
+                "Video",
+                "Audio",
+                "Music",
+                "SFX",
+                "Subtitles"
+              ]
+            },
+            "start_ms": {
+              "type": "integer"
+            },
+            "duration_ms": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "project_id",
+            "asset_id",
+            "track"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_timeline",
+        "title": "List timeline clips",
+        "description": "Read the current timeline for a project.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "project_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_assets",
+        "title": "List assets",
+        "description": "List recent assets in a project.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "project_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

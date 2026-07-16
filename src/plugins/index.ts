@@ -20,6 +20,7 @@ import { uiTimelinePlugin } from "./ui-timeline/manifest";
 import { uiVersionsPlugin } from "./ui-versions/manifest";
 import { agentCopilotPlugin } from "./agent-copilot/manifest";
 import { connectorComfyuiPlugin } from "./connector-comfyui";
+import { directorPlugin } from "./director/manifest";
 
 export const builtinPlugins: PluginManifest[] = [
   helloPlugin,
@@ -43,4 +44,5 @@ export const builtinPlugins: PluginManifest[] = [
   uiVersionsPlugin,
   agentCopilotPlugin,
   connectorComfyuiPlugin,
+  directorPlugin,
 ];
