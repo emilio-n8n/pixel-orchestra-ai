@@ -9,11 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WWsIdRouteImport } from './routes/w.$wsId'
+import { Route as ApiDirectorRouteImport } from './routes/api/director'
 import { Route as WWsIdIndexRouteImport } from './routes/w.$wsId.index'
 import { Route as WWsIdPPidRouteImport } from './routes/w.$wsId.p.$pid'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -22,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const WWsIdRoute = WWsIdRouteImport.update({
   id: '/w/$wsId',
   path: '/w/$wsId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDirectorRoute = ApiDirectorRouteImport.update({
+  id: '/api/director',
+  path: '/api/director',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WWsIdIndexRoute = WWsIdIndexRouteImport.update({
@@ -37,37 +49,65 @@ const WWsIdPPidRoute = WWsIdPPidRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/api/director': typeof ApiDirectorRoute
   '/w/$wsId': typeof WWsIdRouteWithChildren
   '/w/$wsId/': typeof WWsIdIndexRoute
   '/w/$wsId/p/$pid': typeof WWsIdPPidRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/api/director': typeof ApiDirectorRoute
   '/w/$wsId': typeof WWsIdIndexRoute
   '/w/$wsId/p/$pid': typeof WWsIdPPidRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/api/director': typeof ApiDirectorRoute
   '/w/$wsId': typeof WWsIdRouteWithChildren
   '/w/$wsId/': typeof WWsIdIndexRoute
   '/w/$wsId/p/$pid': typeof WWsIdPPidRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/w/$wsId' | '/w/$wsId/' | '/w/$wsId/p/$pid'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/api/director'
+    | '/w/$wsId'
+    | '/w/$wsId/'
+    | '/w/$wsId/p/$pid'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/w/$wsId' | '/w/$wsId/p/$pid'
-  id: '__root__' | '/' | '/w/$wsId' | '/w/$wsId/' | '/w/$wsId/p/$pid'
+  to: '/' | '/auth' | '/api/director' | '/w/$wsId' | '/w/$wsId/p/$pid'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/api/director'
+    | '/w/$wsId'
+    | '/w/$wsId/'
+    | '/w/$wsId/p/$pid'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  ApiDirectorRoute: typeof ApiDirectorRoute
   WWsIdRoute: typeof WWsIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -80,6 +120,13 @@ declare module '@tanstack/react-router' {
       path: '/w/$wsId'
       fullPath: '/w/$wsId'
       preLoaderRoute: typeof WWsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/director': {
+      id: '/api/director'
+      path: '/api/director'
+      fullPath: '/api/director'
+      preLoaderRoute: typeof ApiDirectorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/w/$wsId/': {
@@ -113,8 +160,20 @@ const WWsIdRouteWithChildren = WWsIdRoute._addFileChildren(WWsIdRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  ApiDirectorRoute: ApiDirectorRoute,
   WWsIdRoute: WWsIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
