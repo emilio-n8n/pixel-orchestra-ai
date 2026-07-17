@@ -6,12 +6,17 @@ function Gate() {
   const nav = useNavigate();
   const [ok, setOk] = useState(false);
   useEffect(() => {
+    const next =
+      typeof window !== "undefined"
+        ? window.location.pathname + window.location.search
+        : "/";
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) nav({ to: "/auth" });
+      if (!data.session) nav({ to: "/auth", search: { next } });
       else setOk(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (!s) nav({ to: "/auth" });
+      if (!s) nav({ to: "/auth", search: { next } });
+      else setOk(true);
     });
     return () => sub.subscription.unsubscribe();
   }, [nav]);
