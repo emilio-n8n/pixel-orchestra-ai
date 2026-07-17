@@ -10,11 +10,14 @@ export const Route = createFileRoute("/api/director")({
         const token = auth.replace(/^Bearer\s+/i, "");
         if (!token) return new Response("Unauthorized", { status: 401 });
 
-        const body = (await request.json()) as { messages: UIMessage[]; projectId: string };
+        const body = (await request.json()) as {
+          messages: UIMessage[];
+          projectId: string;
+          apiKey: string;
+          model?: string;
+        };
         if (!body?.projectId) return new Response("projectId required", { status: 400 });
-
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) return new Response("LOVABLE_API_KEY missing", { status: 500 });
+        if (!body?.apiKey) return new Response("apiKey required", { status: 400 });
 
         const { createClient } = await import("@supabase/supabase-js");
         const supabase = createClient(
@@ -29,15 +32,19 @@ export const Route = createFileRoute("/api/director")({
         if (userErr || !userData.user) return new Response("Unauthorized", { status: 401 });
         const userId = userData.user.id;
         const projectId = body.projectId;
+        const modelId = body.model ?? "kimi-k2.7-code";
 
         const H = await import("@/lib/director/handlers.server");
         const ctx = { supabase, userId, projectId };
 
-        const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-        const gateway = createLovableAiGatewayProvider(key);
+        const { createOpenCodeGoProvider } = await import("@/lib/opencode-go-provider.server");
+        const provider = createOpenCodeGoProvider(body.apiKey);
+        const model = provider(modelId);
+
+        const { generateHtmlCard } = await import("@/lib/director/html-cards.server");
 
         const result = streamText({
-          model: gateway("openai/gpt-5.5"),
+          model,
           system:
             "You are the Director inside Lilium Studio — an AI video/creative producer. You can generate images, voiceovers, and HTML title cards, then place them on the timeline (tracks: Video, Audio, Music, SFX, Subtitles). After generating any asset, add it to the appropriate track so the user sees a live preview. Be concise; act, do not narrate.",
           messages: await convertToModelMessages(body.messages),
@@ -59,7 +66,7 @@ export const Route = createFileRoute("/api/director")({
             generate_html_card: tool({
               description: "Generate a styled HTML card (title, lower third, credits).",
               inputSchema: z.object({ brief: z.string() }),
-              execute: ({ brief }) => H.generateHtmlCard(ctx, brief),
+              execute: ({ brief }) => generateHtmlCard(ctx, model, brief),
             }),
             add_to_timeline: tool({
               description: "Place an existing asset on a timeline track.",

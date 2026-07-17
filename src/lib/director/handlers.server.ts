@@ -120,7 +120,7 @@ export async function generateVoice(
   });
 }
 
-// -------- html card ----------
+// -------- html card (MCP only — uses LOVABLE_API_KEY) ----------
 export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
   const res = await fetch(`${LOVABLE_AI_URL}/chat/completions`, {
     method: "POST",
