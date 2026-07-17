@@ -5,14 +5,11 @@ import { useLibrary } from "@/plugins/library/store";
 import type { ViewerAsset } from "@/kernel";
 
 const MODULE_TITLES: Record<string, string> = {
+  director: "Director",
   library: "Library",
-  storyboard: "Storyboard",
   timeline: "Timeline",
-  graph: "Node Graph",
-  characters: "Characters",
   connectors: "Connectors",
   jobs: "Jobs",
-  settings: "Project settings",
 };
 
 export function CenterView() {

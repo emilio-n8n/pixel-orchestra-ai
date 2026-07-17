@@ -10,14 +10,11 @@ interface RailItem {
 }
 
 const CORE_MODULES: Array<{ id: SidebarModule; label: string; glyph: string; order: number }> = [
+  { id: "director", label: "Director", glyph: "✦", order: 5 },
   { id: "library", label: "Library", glyph: "▤", order: 10 },
-  { id: "storyboard", label: "Storyboard", glyph: "▦", order: 20 },
   { id: "timeline", label: "Timeline", glyph: "▭", order: 30 },
-  { id: "graph", label: "Node Graph", glyph: "◇", order: 40 },
-  { id: "characters", label: "Characters", glyph: "◐", order: 50 },
   { id: "connectors", label: "Connectors", glyph: "◈", order: 60 },
   { id: "jobs", label: "Jobs", glyph: "≣", order: 70 },
-  { id: "settings", label: "Settings", glyph: "✱", order: 80 },
 ];
 
 export function Sidebar() {
