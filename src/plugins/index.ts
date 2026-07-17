@@ -1,5 +1,4 @@
 import type { PluginManifest } from "@/kernel";
-import { helloPlugin } from "./hello/manifest";
 import { libraryPlugin } from "./library/manifest";
 import { viewerImagePlugin } from "./viewer-image/manifest";
 import { viewerVideoPlugin } from "./viewer-video/manifest";
@@ -24,5 +23,4 @@ export const builtinPlugins: PluginManifest[] = [
   viewerHtmlPlugin,
   connectorGradioPlugin,
   connectorComfyuiPlugin,
-  helloPlugin,
 ];
