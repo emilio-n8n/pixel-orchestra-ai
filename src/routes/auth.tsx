@@ -25,6 +25,10 @@ function AuthPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) window.location.href = nextPath;
     });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (s) window.location.href = nextPath;
+    });
+    return () => sub.subscription.unsubscribe();
   }, [nextPath]);
 
   async function submit(e: React.FormEvent) {
