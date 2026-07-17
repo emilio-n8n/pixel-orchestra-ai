@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
 import { Play, Pause, Square, Download, Loader2 } from "lucide-react";
+import html2canvas from "html2canvas";
 
 const TRACKS = ["Video", "Audio", "Music", "SFX", "Subtitles"] as const;
 const AUDIO_TRACKS = new Set(["Audio", "Music", "SFX"]);
@@ -21,6 +22,10 @@ function fmt(ms: number) {
   return `${m.toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export function TimelinePanel() {
   const pid = useLibraryProject();
   const [clips, setClips] = useState<Clip[]>([]);
@@ -28,6 +33,7 @@ export function TimelinePanel() {
   const [playhead, setPlayhead] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportPct, setExportPct] = useState(0);
+  const [activeHtmlClip, setActiveHtmlClip] = useState<Clip | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -35,9 +41,12 @@ export function TimelinePanel() {
   const audiosRef = useRef<HTMLAudioElement[]>([]);
   const timersRef = useRef<number[]>([]);
   const clipsRef = useRef<Clip[]>([]);
+  const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
+  const prerenderedRef = useRef<Map<string, string>>(new Map());
+  const htmlVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   clipsRef.current = clips;
 
-  // load + subscribe
+  // --------------- load + subscribe clips ---------------
   useEffect(() => {
     if (!pid) return;
     const projectId = pid;
@@ -68,7 +77,7 @@ export function TimelinePanel() {
     [clips],
   );
 
-  // preload images
+  // --------------- preload images ---------------
   useEffect(() => {
     for (const c of clips) {
       const url = c.assets?.url;
@@ -81,47 +90,112 @@ export function TimelinePanel() {
     }
   }, [clips]);
 
-  const draw = useCallback((ms: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const list = clipsRef.current
-      .filter((c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms)
-      .sort((a, b) => b.start_ms - a.start_ms);
-    const active = list[0];
-    if (active?.assets?.kind === "image" && active.assets.url) {
-      const img = imgCacheRef.current.get(active.assets.url);
-      if (img && img.complete && img.naturalWidth) {
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        const cw = canvas.width, ch = canvas.height;
-        const scale = Math.min(cw / iw, ch / ih);
-        const w = iw * scale, h = ih * scale;
-        ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
-      }
-    }
-    const sub = clipsRef.current.find(
-      (c) => c.track === "Subtitles" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms,
+  // --------------- HTML overlay effect (preview) ---------------
+  const currentHtmlUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!playing && !exporting) return;
+    const active = clipsRef.current.find(
+      (c) =>
+        c.assets?.kind === "html" &&
+        playhead >= c.start_ms &&
+        playhead < c.start_ms + c.duration_ms,
     );
-    if (sub?.assets?.prompt) {
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.font = "28px system-ui, sans-serif";
-      const text = sub.assets.prompt.slice(0, 120);
-      const tw = ctx.measureText(text).width;
-      ctx.fillRect((canvas.width - tw) / 2 - 12, canvas.height - 70, tw + 24, 44);
-      ctx.fillStyle = "#fff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(text, canvas.width / 2, canvas.height - 34);
+    setActiveHtmlClip(active ?? null);
+
+    if (!active) {
+      currentHtmlUrlRef.current = null;
+      return;
     }
-  }, []);
+
+    const url = active.assets!.url;
+    if (url === currentHtmlUrlRef.current) return;
+    currentHtmlUrlRef.current = url;
+
+    fetch(url)
+      .then((r) => r.text())
+      .then((html) => {
+        const iframe = htmlOverlayRef.current;
+        if (iframe) {
+          iframe.srcdoc = html;
+        }
+      })
+      .catch(() => {});
+  }, [playhead, playing, exporting]);
+
+  // --------------- draw ---------------
+  const draw = useCallback(
+    (ms: number, htmlVideoMap?: Map<string, string>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw video / image clips
+      const vlist = clipsRef.current
+        .filter((c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms)
+        .sort((a, b) => b.start_ms - a.start_ms);
+      const active = vlist[0];
+      if (active?.assets?.kind === "image" && active.assets.url) {
+        const img = imgCacheRef.current.get(active.assets.url);
+        if (img && img.complete && img.naturalWidth) {
+          const iw = img.naturalWidth, ih = img.naturalHeight;
+          const cw = canvas.width, ch = canvas.height;
+          const scale = Math.min(cw / iw, ch / ih);
+          const w = iw * scale, h = ih * scale;
+          ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+        }
+      }
+
+      // Draw pre-rendered HTML video (during export)
+      if (active?.assets?.kind === "html" && htmlVideoMap) {
+        const vidUrl = htmlVideoMap.get(active.id);
+        if (vidUrl) {
+          let ve = htmlVideoElsRef.current.get(active.id);
+          if (!ve) {
+            ve = document.createElement("video");
+            ve.src = vidUrl;
+            ve.preload = "auto";
+            ve.muted = true;
+            htmlVideoElsRef.current.set(active.id, ve);
+          }
+          const offset = ms - active.start_ms;
+          const frames = Math.ceil(active.duration_ms / 33.33);
+          const frameDuration = active.duration_ms / frames;
+          const frame = Math.min(frames - 1, Math.floor(offset / frameDuration));
+          ve.currentTime = frame * (frameDuration / 1000);
+
+          const cw = canvas.width, ch = canvas.height;
+          ctx.drawImage(ve, (cw - 1280) / 2, (ch - 720) / 2, 1280, 720);
+        }
+      }
+
+      // Subtitles
+      const sub = clipsRef.current.find(
+        (c) => c.track === "Subtitles" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms,
+      );
+      if (sub?.assets?.prompt) {
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.font = "28px system-ui, sans-serif";
+        const text = sub.assets.prompt.slice(0, 120);
+        const tw = ctx.measureText(text).width;
+        ctx.fillRect((canvas.width - tw) / 2 - 12, canvas.height - 70, tw + 24, 44);
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(text, canvas.width / 2, canvas.height - 34);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     draw(playhead);
   }, [playhead, clips, draw]);
 
+  // --------------- playback controls ---------------
   const stopAudios = useCallback(() => {
     audiosRef.current.forEach((a) => { try { a.pause(); } catch { /* noop */ } });
     audiosRef.current = [];
@@ -141,7 +215,6 @@ export function TimelinePanel() {
     const startFrom = playhead >= totalMs ? 0 : playhead;
     const startedAt = performance.now();
 
-    // schedule audio playback
     for (const c of clipsRef.current) {
       if (!AUDIO_TRACKS.has(c.track) || !c.assets?.url) continue;
       const a = new Audio(c.assets.url);
@@ -180,13 +253,101 @@ export function TimelinePanel() {
 
   useEffect(() => () => stop(), [stop]);
 
+  // --------------- pre-render HTML clip to video ---------------
+  async function prerenderHtmlClip(clip: Clip): Promise<string | null> {
+    const url = clip.assets?.url;
+    if (!url) return null;
+
+    try {
+      const html = await fetch(url).then((r) => r.text());
+
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:absolute;left:-9999px;width:1280px;height:720px;border:none";
+      document.body.appendChild(iframe);
+
+      return new Promise((resolve) => {
+        iframe.onload = async () => {
+          try {
+            const offscreen = document.createElement("canvas");
+            offscreen.width = 1280;
+            offscreen.height = 720;
+            const octx = offscreen.getContext("2d")!;
+
+            const stream = offscreen.captureStream(30);
+            const rec = new MediaRecorder(stream, {
+              mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+                ? "video/webm;codecs=vp9"
+                : "video/webm",
+            });
+            const chunks: BlobPart[] = [];
+            rec.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
+            rec.onstop = () => {
+              document.body.removeChild(iframe);
+              const blob = new Blob(chunks, { type: "video/webm" });
+              resolve(URL.createObjectURL(blob));
+            };
+            rec.start();
+
+            const totalFrames = Math.max(1, Math.ceil(clip.duration_ms / 33.33));
+            const loopStart = performance.now();
+
+            (async () => {
+              for (let frame = 0; frame < totalFrames; frame++) {
+                const targetMs = frame * 33.33;
+                const elapsed = performance.now() - loopStart;
+                if (targetMs > elapsed) await sleep(targetMs - elapsed);
+
+                try {
+                  const captured = await html2canvas(iframe.contentDocument!.body, {
+                    width: 1280,
+                    height: 720,
+                    scale: 1,
+                    useCORS: true,
+                  });
+                  octx.clearRect(0, 0, 1280, 720);
+                  octx.drawImage(captured, 0, 0, 1280, 720);
+                } catch {
+                  /* skip dropped frame */
+                }
+              }
+              rec.stop();
+            })();
+
+            // timeout safety
+            setTimeout(() => { cancelled = true; rec.stop(); }, clip.duration_ms + 5000);
+          } catch {
+            document.body.removeChild(iframe);
+            resolve(null);
+          }
+        };
+        iframe.onerror = () => {
+          document.body.removeChild(iframe);
+          resolve(null);
+        };
+        iframe.srcdoc = html;
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // --------------- export ---------------
   async function exportVideo() {
     const canvas = canvasRef.current;
     if (!canvas || exporting) return;
     stop();
     setExporting(true);
     setExportPct(0);
+
     try {
+      // Pre-render all HTML clips to video
+      const htmlClips = clipsRef.current.filter((c) => c.assets?.kind === "html");
+      prerenderedRef.current.clear();
+      for (const clip of htmlClips) {
+        const blobUrl = await prerenderHtmlClip(clip);
+        if (blobUrl) prerenderedRef.current.set(clip.id, blobUrl);
+      }
+
       const stream = canvas.captureStream(30);
       const AC: typeof AudioContext = (window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
@@ -235,12 +396,26 @@ export function TimelinePanel() {
       });
       rec.start(100);
       const startedAt = performance.now();
+
+      // Pre-create video elements for pre-rendered HTML clips
+      htmlVideoElsRef.current.forEach((ve) => ve.remove());
+      htmlVideoElsRef.current.clear();
+      for (const [clipId, blobUrl] of prerenderedRef.current) {
+        const ve = document.createElement("video");
+        ve.src = blobUrl;
+        ve.preload = "auto";
+        ve.muted = true;
+        ve.style.display = "none";
+        document.body.appendChild(ve);
+        htmlVideoElsRef.current.set(clipId, ve);
+      }
+
       await new Promise<void>((res) => {
         function loop() {
           const p = performance.now() - startedAt;
           setPlayhead(Math.min(totalMs, p));
           setExportPct(Math.min(1, p / totalMs));
-          draw(p);
+          draw(p, prerenderedRef.current);
           if (p >= totalMs) return res();
           requestAnimationFrame(loop);
         }
@@ -257,9 +432,16 @@ export function TimelinePanel() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+
+      // Cleanup pre-rendered blobs
+      prerenderedRef.current.forEach((u) => URL.revokeObjectURL(u));
+      prerenderedRef.current.clear();
+      htmlVideoElsRef.current.forEach((ve) => ve.remove());
+      htmlVideoElsRef.current.clear();
     } finally {
       setExporting(false);
       setExportPct(0);
+      currentHtmlUrlRef.current = null;
     }
   }
 
@@ -283,6 +465,15 @@ export function TimelinePanel() {
           className="max-h-full max-w-full"
           style={{ aspectRatio: "16 / 9" }}
         />
+        {activeHtmlClip && (
+          <iframe
+            ref={htmlOverlayRef}
+            className="pointer-events-none absolute z-10"
+            style={{ aspectRatio: "16 / 9", width: "100%", maxHeight: "100%" }}
+            sandbox="allow-scripts"
+            title="html-preview"
+          />
+        )}
         {exporting && (
           <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-black/70 px-3 py-2 text-[11px] text-white">
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -368,6 +559,10 @@ export function TimelinePanel() {
                             alt=""
                             className="h-full w-full object-cover opacity-80"
                           />
+                        ) : c.assets?.kind === "html" ? (
+                          <div className="flex h-full items-center justify-center bg-white/10 p-1 text-[9px] uppercase tracking-wider text-white/70">
+                            HTML
+                          </div>
                         ) : (
                           <div className="truncate p-1">{c.assets?.kind ?? "?"}</div>
                         )}
