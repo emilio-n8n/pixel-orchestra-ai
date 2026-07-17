@@ -3,13 +3,10 @@ import { persist } from "zustand/middleware";
 
 export type SidebarModule =
   | "library"
-  | "storyboard"
   | "timeline"
-  | "graph"
-  | "characters"
   | "connectors"
   | "jobs"
-  | "settings";
+  | "director";
 
 interface PanelStore {
   activeModule: SidebarModule;
@@ -24,7 +21,7 @@ interface PanelStore {
 export const usePanelStore = create<PanelStore>()(
   persist(
     (set) => ({
-      activeModule: "library",
+      activeModule: "director",
       setActiveModule: (m) => set({ activeModule: m }),
       bottomCollapsed: false,
       inspectorCollapsed: false,
