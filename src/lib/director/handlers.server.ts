@@ -166,21 +166,30 @@ export async function addToTimeline(
   ctx: DirectorCtx,
   args: { asset_id: string; track: string; start_ms?: number; duration_ms?: number },
 ) {
-  const { data: max } = await ctx.supabase
+  const desiredDuration = args.duration_ms ?? 3000;
+  const desiredStart = args.start_ms ?? 0;
+
+  // Get all existing clips on this track to detect gaps
+  const { data: existing } = await ctx.supabase
     .from("timeline_clips")
     .select("start_ms,duration_ms")
     .eq("owner_id", ctx.userId)
     .eq("project_id", ctx.projectId)
     .eq("track", args.track)
-    .order("start_ms", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const start =
-    typeof args.start_ms === "number"
-      ? args.start_ms
-      : max
-        ? (max.start_ms ?? 0) + (max.duration_ms ?? 3000)
-        : 0;
+    .order("start_ms", { ascending: true });
+
+  // Compute an overlap-free start time
+  let start = desiredStart;
+  for (const clip of existing ?? []) {
+    const clipStart = clip.start_ms ?? 0;
+    const clipEnd = clipStart + (clip.duration_ms ?? 3000);
+    const candidateEnd = start + desiredDuration;
+    if (start < clipEnd && candidateEnd > clipStart) {
+      // Overlap detected — push start to after this clip
+      start = clipEnd;
+    }
+  }
+
   const { data, error } = await ctx.supabase
     .from("timeline_clips")
     .insert({
@@ -189,9 +198,22 @@ export async function addToTimeline(
       track: args.track,
       asset_id: args.asset_id,
       start_ms: start,
-      duration_ms: args.duration_ms ?? 3000,
+      duration_ms: desiredDuration,
     })
     .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function removeFromTimeline(ctx: DirectorCtx, clipId: string) {
+  const { data, error } = await ctx.supabase
+    .from("timeline_clips")
+    .delete()
+    .eq("id", clipId)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .select("id")
     .single();
   if (error) throw new Error(error.message);
   return data;

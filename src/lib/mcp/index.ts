@@ -3,6 +3,7 @@ import generateImageTool from "./tools/generate_image";
 import generateVoiceTool from "./tools/generate_voice";
 import generateHtmlCardTool from "./tools/generate_html_card";
 import addToTimelineTool from "./tools/add_to_timeline";
+import removeFromTimelineTool from "./tools/remove_from_timeline";
 import listTimelineTool from "./tools/list_timeline";
 import listAssetsTool from "./tools/list_assets";
 
@@ -23,6 +24,7 @@ export default defineMcp({
     generateVoiceTool,
     generateHtmlCardTool,
     addToTimelineTool,
+    removeFromTimelineTool,
     listTimelineTool,
     listAssetsTool,
   ],

@@ -69,7 +69,7 @@ export const Route = createFileRoute("/api/director")({
               execute: ({ brief }) => generateHtmlCard(ctx, model, brief),
             }),
             add_to_timeline: tool({
-              description: "Place an existing asset on a timeline track.",
+              description: "Place an existing asset on a timeline track. Audio clips (Audio, Music, SFX tracks) are automatically placed without overlap.",
               inputSchema: z.object({
                 asset_id: z.string(),
                 track: z.enum(["Video", "Audio", "Music", "SFX", "Subtitles"]),
@@ -77,6 +77,11 @@ export const Route = createFileRoute("/api/director")({
                 duration_ms: z.number().int().optional(),
               }),
               execute: (args) => H.addToTimeline(ctx, args),
+            }),
+            remove_from_timeline: tool({
+              description: "Remove a clip from the timeline by its id.",
+              inputSchema: z.object({ clip_id: z.string() }),
+              execute: ({ clip_id }) => H.removeFromTimeline(ctx, clip_id),
             }),
             list_timeline: tool({
               description: "List the current timeline clips.",
