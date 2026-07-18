@@ -290,6 +290,7 @@ export function TimelinePanel() {
 
             const totalFrames = Math.max(1, Math.ceil(clip.duration_ms / 33.33));
             const loopStart = performance.now();
+            const safetyTimeout = setTimeout(() => rec.stop(), clip.duration_ms + 10_000);
 
             (async () => {
               for (let frame = 0; frame < totalFrames; frame++) {
@@ -310,11 +311,9 @@ export function TimelinePanel() {
                   /* skip dropped frame */
                 }
               }
+              clearTimeout(safetyTimeout);
               rec.stop();
             })();
-
-            // timeout safety
-            setTimeout(() => { cancelled = true; rec.stop(); }, clip.duration_ms + 5000);
           } catch {
             document.body.removeChild(iframe);
             resolve(null);
