@@ -352,6 +352,7 @@ export function TimelinePanel() {
       const AC: typeof AudioContext = (window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
       const ac = new AC();
+      if (ac.state === "suspended") await ac.resume();
       const dest = ac.createMediaStreamDestination();
 
       const audioClips = clipsRef.current.filter(
@@ -388,11 +389,12 @@ export function TimelinePanel() {
       const mime =
         candidates.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) ??
         "video/webm";
+      const containerMime = mime.startsWith("video/mp4") ? "video/mp4" : "video/webm";
       const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
       const chunks: BlobPart[] = [];
       rec.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
       const done = new Promise<Blob>((res) => {
-        rec.onstop = () => res(new Blob(chunks, { type: mime }));
+        rec.onstop = () => res(new Blob(chunks, { type: containerMime }));
       });
       rec.start(100);
       const startedAt = performance.now();
@@ -424,10 +426,11 @@ export function TimelinePanel() {
       rec.stop();
       const blob = await done;
       await ac.close();
+      const ext = containerMime === "video/mp4" ? "mp4" : "webm";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `lilium-timeline.${mime.includes("mp4") ? "mp4" : "webm"}`;
+      a.download = `lilium-timeline.${ext}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
