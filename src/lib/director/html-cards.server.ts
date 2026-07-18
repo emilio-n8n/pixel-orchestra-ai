@@ -5,7 +5,14 @@ import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
 
 const HTML_SYSTEM =
-  "Return ONE complete HTML fragment (no <html> or <body>) styled inline for a 1920x1080 broadcast card. Bold typography, cinematic. No commentary, HTML only.";
+  "You are generating a SINGLE fullscreen HTML element to be embedded as a 1920x1080 video frame.\n" +
+  "Return ONE root element (e.g. <div>, <section>) with inline styles. " +
+  "Use vw/vh/% units (NEVER px for layout). " +
+  "display:flex; align-items:center; justify-content:center. " +
+  "Solid color or gradient background. " +
+  "Bold cinematic typography.\n" +
+  "Do NOT output <html>, <head>, <body>, <script>, or <style> tags. " +
+  "Do NOT output markdown, code fences, or commentary. Just the root element.";
 
 async function uploadBinaryAsset(
   supabase: SupabaseClient,
@@ -44,6 +51,20 @@ function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
 }
 
+function wrapFullscreen(html: string): string {
+  let cleaned = html
+    .replace(/^```html\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .replace(/<!DOCTYPE[^>]*>/gi, "")
+    .replace(/<\/?html[^>]*>/gi, "")
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+    .replace(/<\/?body[^>]*>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .trim();
+  return `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;
+}
+
 export async function generateHtmlCard(
   ctx: { supabase: SupabaseClient; userId: string; projectId: string },
   model: Parameters<typeof generateText>[0]["model"],
@@ -55,8 +76,8 @@ export async function generateHtmlCard(
     prompt: brief,
   });
 
-  const cleaned = text.replace(/^```html\n?/i, "").replace(/```\s*$/i, "").trim();
-  const bytes = new TextEncoder().encode(cleaned);
+  const wrapped = wrapFullscreen(text);
+  const bytes = new TextEncoder().encode(wrapped);
 
   // Store in Supabase (timeline / MCP)
   const storedUrl = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, "text/html", "html");
