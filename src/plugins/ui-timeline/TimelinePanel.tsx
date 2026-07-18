@@ -168,7 +168,7 @@ export function TimelinePanel() {
           ve.currentTime = frame * (frameDuration / 1000);
 
           const cw = canvas.width, ch = canvas.height;
-          ctx.drawImage(ve, (cw - 1280) / 2, (ch - 720) / 2, 1280, 720);
+          ctx.drawImage(ve, 0, 0, cw, ch);
         }
       }
 
@@ -262,15 +262,15 @@ export function TimelinePanel() {
       const html = await fetch(url).then((r) => r.text());
 
       const iframe = document.createElement("iframe");
-      iframe.style.cssText = "position:absolute;left:-9999px;width:1280px;height:720px;border:none";
+      iframe.style.cssText = "position:absolute;left:-9999px;width:1920px;height:1080px;border:none";
       document.body.appendChild(iframe);
 
       return new Promise((resolve) => {
         iframe.onload = async () => {
           try {
             const offscreen = document.createElement("canvas");
-            offscreen.width = 1280;
-            offscreen.height = 720;
+            offscreen.width = 1920;
+            offscreen.height = 1080;
             const octx = offscreen.getContext("2d")!;
 
             const stream = offscreen.captureStream(30);
@@ -300,13 +300,13 @@ export function TimelinePanel() {
 
                 try {
                   const captured = await html2canvas(iframe.contentDocument!.body, {
-                    width: 1280,
-                    height: 720,
+                    width: 1920,
+                    height: 1080,
                     scale: 1,
                     useCORS: true,
                   });
-                  octx.clearRect(0, 0, 1280, 720);
-                  octx.drawImage(captured, 0, 0, 1280, 720);
+                  octx.clearRect(0, 0, 1920, 1080);
+                  octx.drawImage(captured, 0, 0, 1920, 1080);
                 } catch {
                   /* skip dropped frame */
                 }
@@ -462,8 +462,8 @@ export function TimelinePanel() {
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black">
         <canvas
           ref={canvasRef}
-          width={1280}
-          height={720}
+          width={1920}
+          height={1080}
           className="max-h-full max-w-full"
           style={{ aspectRatio: "16 / 9" }}
         />

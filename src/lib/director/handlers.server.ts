@@ -3,6 +3,45 @@
 // bound to a specific user and their project id.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getStorage } from "@/kernel/storage";
+import { getDb } from "@/kernel/db";
+import { getKernel } from "@/kernel";
+
+function uid(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+}
+
+async function storeInLocalKernel(
+  projectId: string,
+  kind: string,
+  name: string,
+  mime: string | null,
+  bytes: Uint8Array,
+  prompt: string,
+) {
+  try {
+    const storage = getStorage();
+    const db = getDb();
+    const ref = await storage.put(bytes);
+    const id = uid(`dir_${kind}`);
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
+    ).run(id, projectId, kind, name, mime ?? "application/octet-stream", ref.size, ref.hash, now, now);
+    try {
+      getKernel().events.emit({
+        type: "AssetImported",
+        assetId: id,
+        projectId,
+        kind,
+        name,
+        sizeBytes: ref.size,
+        blobHash: ref.hash,
+      });
+    } catch { /* kernel not ready */ }
+  } catch { /* local kernel not available */ }
+}
 
 const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1";
 
@@ -74,12 +113,14 @@ export async function generateImage(ctx: DirectorCtx, prompt: string) {
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   const ext = mime.split("/")[1] ?? "png";
   const storedUrl = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, mime, ext);
-  return insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
     kind: "image",
     mime,
     url: storedUrl,
     prompt,
   });
+  storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt);
+  return row;
 }
 
 // -------- tts / voice ----------
@@ -111,13 +152,15 @@ export async function generateVoice(
     "audio/mpeg",
     "mp3",
   );
-  return insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
     kind: "audio",
     mime: "audio/mpeg",
     url: storedUrl,
     prompt: text,
     meta: { voice },
   });
+  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text);
+  return row;
 }
 
 // -------- html card (MCP only — uses LOVABLE_API_KEY) ----------
@@ -145,20 +188,24 @@ export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
   const html: string = data?.choices?.[0]?.message?.content ?? "";
   const cleaned = html.replace(/^```html\n?/i, "").replace(/```\s*$/i, "").trim();
   const bytes = new TextEncoder().encode(cleaned);
+  const wrapped = `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;
+  const wrappedBytes = new TextEncoder().encode(wrapped);
   const storedUrl = await uploadBinaryAsset(
     ctx.supabase,
     ctx.userId,
     ctx.projectId,
-    bytes,
+    wrappedBytes,
     "text/html",
     "html",
   );
-  return insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
     kind: "html",
     mime: "text/html",
     url: storedUrl,
     prompt: brief,
   });
+  storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief);
+  return row;
 }
 
 // -------- timeline ops ----------
