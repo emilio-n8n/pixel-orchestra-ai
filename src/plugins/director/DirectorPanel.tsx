@@ -12,13 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings } from "lucide-react";
+import { Settings, History, Plus, Trash2 } from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
 
 export function DirectorPanel() {
   const pid = useLibraryProject();
   const [input, setInput] = useState("");
   const [token, setToken] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const apiKey = useDirectorStore((s) => s.apiKey);
   const model = useDirectorStore((s) => s.model);
@@ -28,6 +29,13 @@ export function DirectorPanel() {
   const setModel = useDirectorStore((s) => s.setModel);
   const setShowSettings = useDirectorStore((s) => s.setShowSettings);
   const setCustomModel = useDirectorStore((s) => s.setCustomModel);
+
+  const conversations = useDirectorStore((s) => s.conversations);
+  const currentId = useDirectorStore((s) => s.currentId);
+  const setMessagesStore = useDirectorStore((s) => s.setMessages);
+  const createConversation = useDirectorStore((s) => s.createConversation);
+  const setCurrentConversation = useDirectorStore((s) => s.setCurrentConversation);
+  const deleteConversation = useDirectorStore((s) => s.deleteConversation);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token ?? null));
@@ -39,7 +47,8 @@ export function DirectorPanel() {
 
   const effectiveModel = model === "__custom__" ? customModel : model;
 
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, status, error, setMessages } = useChat({
+    id: currentId ?? "new",
     transport: new DefaultChatTransport({
       api: "/api/director",
       body: { projectId: pid, apiKey, model: effectiveModel },
@@ -48,6 +57,49 @@ export function DirectorPanel() {
   });
 
   const busy = status === "streaming" || status === "submitted";
+
+  // Ensure a conversation exists on first mount
+  useEffect(() => {
+    if (!currentId && conversations.length === 0) {
+      createConversation();
+    }
+  }, [currentId, conversations.length, createConversation]);
+
+  // Hydrate useChat when switching conversations
+  useEffect(() => {
+    if (!currentId) return;
+    const conv = useDirectorStore.getState().conversations.find((c) => c.id === currentId);
+    if (!conv) return;
+    setMessages(conv.messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
+  // Sync messages from useChat to the store
+  useEffect(() => {
+    if (!currentId) return;
+    setMessagesStore(messages);
+  }, [messages, currentId, setMessagesStore]);
+
+  function handleNewConversation() {
+    createConversation();
+    setMessages([]);
+    setShowHistory(false);
+  }
+
+  function handleSwitchConversation(id: string) {
+    if (id === currentId) {
+      setShowHistory(false);
+      return;
+    }
+    setCurrentConversation(id);
+    setShowHistory(false);
+  }
+
+  function handleDeleteConversation(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm("Delete this conversation?")) return;
+    deleteConversation(id);
+  }
 
   if (!pid) return <div className="p-6 text-sm text-[var(--text-muted)]">No project.</div>;
   if (!token)
@@ -63,14 +115,69 @@ export function DirectorPanel() {
         <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
           Director
         </span>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="rounded p-1 text-[var(--text-dim)] hover:text-[var(--text)] hover:bg-[var(--surface-3)]"
-          title="Settings"
-        >
-          <Settings size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => { setShowHistory(!showHistory); setShowSettings(false); }}
+            className={`rounded p-1 hover:bg-[var(--surface-3)] ${
+              showHistory ? "text-[var(--text)] bg-[var(--surface-3)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+            }`}
+            title="History"
+          >
+            <History size={14} />
+          </button>
+          <button
+            onClick={() => { setShowSettings(!showSettings); setShowHistory(false); }}
+            className={`rounded p-1 hover:bg-[var(--surface-3)] ${
+              showSettings ? "text-[var(--text)] bg-[var(--surface-3)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+            }`}
+            title="Settings"
+          >
+            <Settings size={14} />
+          </button>
+        </div>
       </div>
+
+      {showHistory && (
+        <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-2 text-xs">
+          <button
+            onClick={handleNewConversation}
+            className="mb-2 flex w-full items-center gap-1.5 rounded border border-dashed border-[var(--line)] px-2 py-1.5 text-[var(--text-dim)] hover:border-[var(--accent)] hover:text-[var(--text)]"
+          >
+            <Plus size={12} />
+            New chat
+          </button>
+          <div className="max-h-64 space-y-0.5 overflow-auto">
+            {conversations.length === 0 ? (
+              <div className="px-2 py-2 text-[11px] text-[var(--text-dim)]">
+                No conversations yet.
+              </div>
+            ) : (
+              conversations.map((c) => (
+                <div
+                  key={c.id}
+                  onClick={() => handleSwitchConversation(c.id)}
+                  className={`group flex cursor-pointer items-center justify-between gap-1 rounded px-2 py-1.5 ${
+                    c.id === currentId
+                      ? "bg-[var(--surface-3)] text-[var(--text)]"
+                      : "text-[var(--text-muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  <div className="flex-1 truncate text-[11px]">
+                    {c.title || "New conversation"}
+                  </div>
+                  <button
+                    onClick={(e) => handleDeleteConversation(c.id, e)}
+                    className="rounded p-0.5 text-[var(--text-dim)] opacity-0 hover:text-red-400 group-hover:opacity-100"
+                    title="Delete"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {showSettings && (
         <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-3 space-y-2 text-xs">
