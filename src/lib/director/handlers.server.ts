@@ -227,11 +227,15 @@ export async function addToTimeline(
 
   // Compute an overlap-free start time
   let start = desiredStart;
+  let overlapDetected = false;
+  let overlapCount = 0;
   for (const clip of existing ?? []) {
     const clipStart = clip.start_ms ?? 0;
     const clipEnd = clipStart + (clip.duration_ms ?? 3000);
     const candidateEnd = start + desiredDuration;
     if (start < clipEnd && candidateEnd > clipStart) {
+      overlapDetected = true;
+      overlapCount++;
       // Overlap detected — push start to after this clip
       start = clipEnd;
     }
@@ -250,7 +254,12 @@ export async function addToTimeline(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
-  return data;
+
+  const warning = overlapDetected
+    ? `⚠️ WARNING: clip overlapped with ${overlapCount} existing clip(s) on track "${args.track}". Start time was automatically shifted to ${start}ms (from requested ${desiredStart}ms). Consider using the remove_from_timeline tool to clear space, or use different tracks (Audio for voiceover, Music for background, SFX for effects) to layer sounds intentionally.`
+    : null;
+
+  return { ...data, _warning: warning };
 }
 
 export async function removeFromTimeline(ctx: DirectorCtx, clipId: string) {

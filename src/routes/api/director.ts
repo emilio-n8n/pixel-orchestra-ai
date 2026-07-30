@@ -46,7 +46,8 @@ export const Route = createFileRoute("/api/director")({
         const result = streamText({
           model,
           system:
-            "You are the Director inside Lilium Studio — an AI video/creative producer. You can generate images, voiceovers, and HTML title cards, then place them on the timeline (tracks: Video, Audio, Music, SFX, Subtitles). After generating any asset, add it to the appropriate track so the user sees a live preview. Be concise; act, do not narrate.",
+            "You are the Director inside Lilium Studio — an AI video/creative producer. You can generate images, voiceovers, and HTML title cards, then place them on the timeline (tracks: Video, Audio, Music, SFX, Subtitles). After generating any asset, add it to the appropriate track so the user sees a live preview. Be concise; act, do not narrate.\n\n" +
+            "AUDIO OVERLAP: Never let two audio clips overlap on the same track. The add_to_timeline tool will automatically shift overlapping clips, but pay attention to the _warning field it returns — it means the clip was moved and you may need to rearrange. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add.",
           messages: await convertToModelMessages(body.messages),
           stopWhen: stepCountIs(50),
           tools: {
@@ -69,7 +70,7 @@ export const Route = createFileRoute("/api/director")({
               execute: ({ brief }) => generateHtmlCard(ctx, model, brief),
             }),
             add_to_timeline: tool({
-              description: "Place an existing asset on a timeline track. Audio clips (Audio, Music, SFX tracks) are automatically placed without overlap.",
+              description: "Place an existing asset on a timeline track. If the clip would overlap existing clips on the same track, it is automatically shifted. Check the _warning field in the result — if present, the clip was moved. Audio clips (Audio, Music, SFX) should never overlap on the same track.",
               inputSchema: z.object({
                 asset_id: z.string(),
                 track: z.enum(["Video", "Audio", "Music", "SFX", "Subtitles"]),
