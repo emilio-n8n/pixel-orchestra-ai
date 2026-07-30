@@ -294,10 +294,6 @@ export function TimelinePanel() {
 
             (async () => {
               for (let frame = 0; frame < totalFrames; frame++) {
-                const targetMs = frame * 33.33;
-                const elapsed = performance.now() - loopStart;
-                if (targetMs > elapsed) await sleep(targetMs - elapsed);
-
                 try {
                   const captured = await html2canvas(iframe.contentDocument!.body, {
                     width: 1920,
@@ -389,12 +385,13 @@ export function TimelinePanel() {
         candidates.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) ??
         "video/webm";
       const containerMime = mime.startsWith("video/mp4") ? "video/mp4" : "video/webm";
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3_000_000 });
       const chunks: BlobPart[] = [];
       rec.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
       const done = new Promise<Blob>((res) => {
         rec.onstop = () => res(new Blob(chunks, { type: containerMime }));
       });
+      draw(0, prerenderedRef.current);
       rec.start(100);
       const startedAt = performance.now();
 
@@ -411,16 +408,19 @@ export function TimelinePanel() {
         htmlVideoElsRef.current.set(clipId, ve);
       }
 
+      const totalExportFrames = Math.max(1, Math.ceil(totalMs / 33.33));
       await new Promise<void>((res) => {
+        let frame = 0;
         function loop() {
-          const p = performance.now() - startedAt;
-          setPlayhead(Math.min(totalMs, p));
-          setExportPct(Math.min(1, p / totalMs));
+          const p = Math.min(totalMs, frame * 33.33);
+          setPlayhead(p);
+          setExportPct(frame / totalExportFrames);
           draw(p, prerenderedRef.current);
-          if (p >= totalMs) return res();
+          frame++;
+          if (frame >= totalExportFrames) return res();
           requestAnimationFrame(loop);
         }
-        loop();
+        requestAnimationFrame(loop);
       });
       rec.stop();
       const blob = await done;
