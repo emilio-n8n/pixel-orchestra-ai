@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStorage } from "@/kernel/storage";
 import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
+import { measureMp3DurationMs } from "./audio-duration";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
@@ -18,6 +19,7 @@ async function storeInLocalKernel(
   mime: string | null,
   bytes: Uint8Array,
   prompt: string,
+  meta?: Record<string, unknown>,
 ) {
   try {
     const storage = getStorage();
@@ -27,8 +29,8 @@ async function storeInLocalKernel(
     const now = Date.now();
     db.prepare(
       `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
-    ).run(id, projectId, kind, name, mime ?? "application/octet-stream", ref.size, ref.hash, now, now);
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, projectId, kind, name, mime ?? "application/octet-stream", ref.size, ref.hash, JSON.stringify(meta ?? {}), now, now);
     try {
       getKernel().events.emit({
         type: "AssetImported",
@@ -78,7 +80,7 @@ async function insertAsset(
   const { data, error } = await supabase
     .from("assets")
     .insert({ owner_id: userId, project_id: projectId, ...row, meta: row.meta ?? {} })
-    .select("id, kind, url, mime, prompt, created_at")
+    .select("id, kind, url, mime, prompt, created_at, meta")
     .single();
   if (error) throw new Error(error.message);
   return data;
@@ -144,6 +146,8 @@ export async function generateVoice(
   });
   if (!res.ok) throw new Error(`tts failed: ${res.status} ${await res.text()}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
+  const durationMs = measureMp3DurationMs(bytes);
+  const meta = { voice, duration_ms: durationMs };
   const storedUrl = await uploadBinaryAsset(
     ctx.supabase,
     ctx.userId,
@@ -157,9 +161,9 @@ export async function generateVoice(
     mime: "audio/mpeg",
     url: storedUrl,
     prompt: text,
-    meta: { voice },
+    meta,
   });
-  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text);
+  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, meta);
   return row;
 }
 
@@ -213,8 +217,38 @@ export async function addToTimeline(
   ctx: DirectorCtx,
   args: { asset_id: string; track: string; start_ms?: number; duration_ms?: number },
 ) {
-  const desiredDuration = args.duration_ms ?? 3000;
   const desiredStart = args.start_ms ?? 0;
+
+  // Fetch the asset's real duration from metadata (if it's an audio file)
+  let realDurationMs: number | null = null;
+  const { data: assetRow } = await ctx.supabase
+    .from("assets")
+    .select("kind, meta")
+    .eq("id", args.asset_id)
+    .maybeSingle();
+  if (assetRow) {
+    const meta = (assetRow.meta ?? {}) as Record<string, unknown>;
+    if (typeof meta.duration_ms === "number" && meta.duration_ms > 0) {
+      realDurationMs = meta.duration_ms;
+    }
+  }
+
+  // Use the real duration for overlap detection — never underestimate audio.
+  // If the caller provided a shorter duration, keep the real one (clip would be truncated).
+  let durationWarning: string | null = null;
+  let desiredDuration: number;
+  if (realDurationMs != null) {
+    if (args.duration_ms != null && args.duration_ms >= realDurationMs) {
+      desiredDuration = args.duration_ms;
+    } else {
+      desiredDuration = realDurationMs;
+      if (args.duration_ms != null && args.duration_ms < realDurationMs) {
+        durationWarning = `⚠️ The audio file is ${(realDurationMs / 1000).toFixed(1)}s long but you requested ${(args.duration_ms / 1000).toFixed(1)}s — the clip would be truncated. Using the real duration ${(realDurationMs / 1000).toFixed(1)}s instead.`;
+      }
+    }
+  } else {
+    desiredDuration = args.duration_ms ?? 3000;
+  }
 
   // Get all existing clips on this track to detect gaps
   const { data: existing } = await ctx.supabase
@@ -255,11 +289,13 @@ export async function addToTimeline(
     .single();
   if (error) throw new Error(error.message);
 
-  const warning = overlapDetected
+  const overlapWarning = overlapDetected
     ? `⚠️ WARNING: clip overlapped with ${overlapCount} existing clip(s) on track "${args.track}". Start time was automatically shifted to ${start}ms (from requested ${desiredStart}ms). Consider using the remove_from_timeline tool to clear space, or use different tracks (Audio for voiceover, Music for background, SFX for effects) to layer sounds intentionally.`
     : null;
 
-  return { ...data, _warning: warning };
+  const warning = [durationWarning, overlapWarning].filter(Boolean).join(" ") || null;
+
+  return { ...data, duration_ms: desiredDuration, _warning: warning };
 }
 
 export async function removeFromTimeline(ctx: DirectorCtx, clipId: string) {
@@ -290,7 +326,7 @@ export async function listTimeline(ctx: DirectorCtx) {
 export async function listAssets(ctx: DirectorCtx) {
   const { data, error } = await ctx.supabase
     .from("assets")
-    .select("id, kind, url, prompt, created_at")
+    .select("id, kind, url, prompt, created_at, meta")
     .eq("owner_id", ctx.userId)
     .eq("project_id", ctx.projectId)
     .order("created_at", { ascending: false })
