@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { usePanelStore, type SidebarModule } from "@/stores/panels";
+import { usePanelStore } from "@/stores/panels";
 import { useRegistrySnapshot } from "@/kernel/react";
 
 interface RailItem {
@@ -9,7 +9,7 @@ interface RailItem {
   order: number;
 }
 
-const CORE_MODULES: Array<{ id: SidebarModule; label: string; glyph: string; order: number }> = [
+const CORE_MODULES: Array<{ id: string; label: string; glyph: string; order: number }> = [
   { id: "director", label: "Director", glyph: "✦", order: 5 },
   { id: "library", label: "Library", glyph: "▤", order: 10 },
   { id: "timeline", label: "Timeline", glyph: "▭", order: 30 },
@@ -17,26 +17,42 @@ const CORE_MODULES: Array<{ id: SidebarModule; label: string; glyph: string; ord
   { id: "jobs", label: "Jobs", glyph: "≣", order: 70 },
 ];
 
+/** "storyboard.center" → "storyboard" */
+function moduleIdFromPanelId(panelId: string): string {
+  return panelId.split(".")[0] ?? panelId;
+}
+
 export function Sidebar() {
   const active = usePanelStore((s) => s.activeModule);
   const setActive = usePanelStore((s) => s.setActiveModule);
   const registry = useRegistrySnapshot();
 
-  const pluginItems = useMemo<RailItem[]>(
-    () =>
-      registry.panelsForSlot("sidebar").map((p) => ({
-        id: p.id,
-        label: p.title,
-        glyph: (p.icon ?? p.title).slice(0, 2),
-        order: p.order ?? 1000,
-      })),
-    [registry],
-  );
+  const items = useMemo<RailItem[]>(() => {
+    const pluginSidebar: RailItem[] = registry.panelsForSlot("sidebar").map((p) => ({
+      id: p.id,
+      label: p.title,
+      glyph: (p.icon ?? p.title).slice(0, 2),
+      order: p.order ?? 1000,
+    }));
 
-  const items: RailItem[] = [
-    ...CORE_MODULES,
-    ...pluginItems.filter((pi) => !CORE_MODULES.some((cm) => cm.id === pi.id)),
-  ];
+    // Every center panel becomes a rail entry keyed by its module prefix.
+    const pluginCenter: RailItem[] = registry.panelsForSlot("center").map((p) => ({
+      id: moduleIdFromPanelId(p.id),
+      label: p.title,
+      glyph: (p.icon ?? p.title).slice(0, 2),
+      order: p.order ?? 1000,
+    }));
+
+    const known = new Set(CORE_MODULES.map((cm) => cm.id));
+    const merged: RailItem[] = [...CORE_MODULES];
+    for (const item of [...pluginSidebar, ...pluginCenter]) {
+      if (!known.has(item.id)) {
+        known.add(item.id);
+        merged.push(item);
+      }
+    }
+    return merged.sort((a, b) => a.order - b.order);
+  }, [registry]);
 
   return (
     <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-1 border-r border-[var(--line)] bg-[var(--rail)] py-2">
@@ -46,7 +62,7 @@ export function Sidebar() {
           <button
             key={it.id}
             title={it.label}
-            onClick={() => setActive(it.id as SidebarModule)}
+            onClick={() => setActive(it.id)}
             className={`group relative flex h-9 w-9 items-center justify-center rounded-md text-[15px] transition-colors ${
               isActive
                 ? "bg-[var(--accent-quiet)] text-[var(--accent-strong)]"

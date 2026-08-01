@@ -10,6 +10,15 @@ import { uiJobsPlugin } from "./ui-jobs/manifest";
 import { uiTimelinePlugin } from "./ui-timeline/manifest";
 import { connectorComfyuiPlugin } from "./connector-comfyui";
 import { directorPlugin } from "./director/manifest";
+import { nodePrimitivesPlugin } from "./node-primitives/manifest";
+import { nodeAssetPlugin } from "./node-asset/manifest";
+import { nodeCapabilityPlugin } from "./node-capability/manifest";
+import { nodeExporterPlugin } from "./node-exporter/manifest";
+import { uiStoryboardPlugin } from "./ui-storyboard/manifest";
+import { uiNodeGraphPlugin } from "./ui-node-graph/manifest";
+import { uiCharactersPlugin } from "./ui-characters/manifest";
+import { uiVersionsPlugin } from "./ui-versions/manifest";
+import { uiLineagePlugin } from "./ui-lineage/manifest";
 
 export const builtinPlugins: PluginManifest[] = [
   directorPlugin,
@@ -23,4 +32,15 @@ export const builtinPlugins: PluginManifest[] = [
   viewerHtmlPlugin,
   connectorGradioPlugin,
   connectorComfyuiPlugin,
+  // Node executors — must be registered so the node graph has types to run.
+  nodePrimitivesPlugin,
+  nodeAssetPlugin,
+  nodeCapabilityPlugin,
+  nodeExporterPlugin,
+  // Creative panels (phases 5-8, previously dormant).
+  uiStoryboardPlugin,
+  uiNodeGraphPlugin,
+  uiCharactersPlugin,
+  uiVersionsPlugin,
+  uiLineagePlugin,
 ];

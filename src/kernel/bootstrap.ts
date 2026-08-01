@@ -1,4 +1,4 @@
-import { getKernelAsync, getKernel } from "./index";
+import { getKernelAsync, getKernel, listNodeExecutors } from "./index";
 import { builtinPlugins } from "@/plugins";
 import { initDb } from "./db";
 import { initStorage } from "./storage";
@@ -30,9 +30,15 @@ export async function bootstrapKernel(
         })
       : undefined;
     await getKernelAsync({ db, storage, notify: opts.notify });
-    const { host } = getKernel();
+    const { host, scheduler } = getKernel();
     for (const p of builtinPlugins) {
       await host.register(p);
+    }
+    // Re-hydrate the scheduler with executors pushed during plugin activation.
+    // The kernel builds before plugins register, so the initial snapshot is
+    // taken too early — pull them in now that activation is done.
+    for (const exec of listNodeExecutors()) {
+      scheduler.registerExecutor(exec);
     }
     started = true;
   })();

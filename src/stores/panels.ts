@@ -1,12 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type SidebarModule =
-  | "library"
-  | "timeline"
-  | "connectors"
-  | "jobs"
-  | "director";
+export type SidebarModule = string;
 
 interface PanelStore {
   activeModule: SidebarModule;
