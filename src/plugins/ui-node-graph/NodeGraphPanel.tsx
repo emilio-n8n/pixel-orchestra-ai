@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useKernelEvents } from "@/kernel/react";
 import { SchemaForm } from "@/plugins/connectors-panel/SchemaForm";
+import {
+  listCapabilities,
+  listConnectors,
+  type CapabilityView,
+  type ConnectorView,
+} from "@/plugins/connectors-panel/server";
+import { CAPABILITY_NODE_ID } from "@/plugins/node-capability/manifest";
 import { listGraphRuns, listNodeTypes, runGraphFn } from "./server";
 import type { EdgeSpec, GraphDocument, NodeSpec } from "@/kernel";
 
@@ -260,13 +267,17 @@ function NodeCard({
   edgesFromThis: { edge: EdgeSpec; idx: number }[];
 }) {
   const type = types.find((t) => t.id === node.type);
+  const isCapabilityNode = node.type === CAPABILITY_NODE_ID;
   const schemaForParams: Record<string, unknown> = {
     type: "object",
     properties: Object.fromEntries(
-      Object.keys(node.params).map((k) => [
-        k,
-        { type: typeof node.params[k] === "number" ? "number" : "string" },
-      ]),
+      Object.keys(node.params)
+        // `capability` and `endpoint` are managed by the connector picker below.
+        .filter((k) => !(isCapabilityNode && (k === "capability" || k === "endpoint")))
+        .map((k) => [
+          k,
+          { type: typeof node.params[k] === "number" ? "number" : "string" },
+        ]),
     ),
   };
   return (
@@ -286,6 +297,9 @@ function NodeCard({
         </button>
       </div>
       <div className="mt-2">
+        {isCapabilityNode ? (
+          <CapabilityConfig params={node.params} onUpdateParams={onUpdateParams} />
+        ) : null}
         <SchemaForm schema={schemaForParams} onChange={onUpdateParams} initial={node.params} />
       </div>
       {otherNodes.length > 0 ? (
@@ -343,4 +357,122 @@ function emptyDoc(): GraphDocument {
     inputs: [],
     outputs: [],
   };
+}
+
+/** Picker for the `capability.run` node: choose a registered connector, then
+ *  one of its capabilities. Writes `capability` + `endpoint` into the node
+ *  params so the executor can run without manually wiring string nodes. */
+function CapabilityConfig({
+  params,
+  onUpdateParams,
+}: {
+  params: Record<string, unknown>;
+  onUpdateParams: (p: Record<string, unknown>) => void;
+}) {
+  const [connectors, setConnectors] = useState<ConnectorView[]>([]);
+  const [caps, setCaps] = useState<CapabilityView[]>([]);
+  const [connectorId, setConnectorId] = useState("");
+  const [capId, setCapId] = useState("");
+  const [loadingCaps, setLoadingCaps] = useState(false);
+
+  const capability = (params.capability ?? {}) as { connectorId?: string; capId?: string };
+
+  useEffect(() => {
+    listConnectors({})
+      .then((r) => {
+        setConnectors(r.connectors);
+        if (capability.connectorId && r.connectors.some((c) => c.id === capability.connectorId)) {
+          setConnectorId(capability.connectorId);
+        }
+      })
+      .catch(() => setConnectors([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!connectorId) {
+      setCaps([]);
+      setCapId("");
+      return;
+    }
+    setLoadingCaps(true);
+    listCapabilities({ data: { connectorId } })
+      .then((r) => {
+        setCaps(r.capabilities);
+        if (capability.capId && r.capabilities.some((c) => c.id === capability.capId)) {
+          setCapId(capability.capId);
+        }
+      })
+      .catch(() => setCaps([]))
+      .finally(() => setLoadingCaps(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectorId]);
+
+  function onConnectorChange(id: string) {
+    setConnectorId(id);
+    setCapId("");
+    const conn = connectors.find((c) => c.id === id);
+    const baseUrl = typeof conn?.config?.baseUrl === "string" ? conn.config.baseUrl : "";
+    onUpdateParams({
+      ...params,
+      capability: { connectorId: id, capId: "" },
+      ...(baseUrl ? { endpoint: baseUrl } : {}),
+    });
+  }
+
+  function onCapChange(id: string) {
+    setCapId(id);
+    onUpdateParams({ ...params, capability: { connectorId, capId: id } });
+  }
+
+  return (
+    <div className="mb-2 space-y-1.5 rounded border border-[var(--line)] bg-[var(--surface-3)] p-2">
+      <label className="flex items-center gap-2">
+        <span className="w-16 shrink-0 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
+          Connector
+        </span>
+        <select
+          value={connectorId}
+          onChange={(e) => onConnectorChange(e.target.value)}
+          className="flex-1 rounded border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] text-[var(--text)]"
+        >
+          <option value="">pick a connector</option>
+          {connectors.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} · {c.kind}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2">
+        <span className="w-16 shrink-0 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
+          Capability
+        </span>
+        <select
+          value={capId}
+          onChange={(e) => onCapChange(e.target.value)}
+          disabled={!connectorId || loadingCaps}
+          className="flex-1 rounded border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] text-[var(--text)] disabled:opacity-50"
+        >
+          <option value="">{loadingCaps ? "loading…" : "pick a capability"}</option>
+          {caps.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.displayName || c.id} · {c.kind}
+            </option>
+          ))}
+        </select>
+      </label>
+      {connectorId && !loadingCaps && caps.length === 0 ? (
+        <div className="text-[10px] text-[var(--status-warn)]">
+          No capabilities detected — the endpoint may be unreachable. Try "Probe" in the
+          Connectors tab.
+        </div>
+      ) : null}
+      {connectors.length === 0 ? (
+        <div className="text-[10px] text-[var(--status-warn)]">
+          No connectors registered yet — add a Gradio endpoint in the Connectors tab.
+        </div>
+      ) : null}
+    </div>
+  );
 }

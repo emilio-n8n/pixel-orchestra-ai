@@ -15,14 +15,17 @@ import {
 export function ConnectorsPanel() {
   const [connectors, setConnectors] = useState<ConnectorView[]>([]);
   const [adding, setAdding] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
-  // Refetch on any connector-related event.
+  // Refetch on any connector-related event or explicit reload.
   const last = useKernelEvents(1)[0];
   useEffect(() => {
     listConnectors({})
       .then((r: { connectors: ConnectorView[] }) => setConnectors(r.connectors))
       .catch(() => setConnectors([]));
-  }, [last]);
+  }, [last, reloadToken]);
+
+  const reload = useCallback(() => setReloadToken((t) => t + 1), []);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-1)]">
@@ -38,7 +41,7 @@ export function ConnectorsPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-auto p-3 text-xs text-[var(--text-muted)]">
-        {adding ? <AddForm onDone={() => setAdding(false)} /> : null}
+        {adding ? <AddForm onDone={() => { setAdding(false); reload(); }} /> : null}
         {connectors.length === 0 && !adding ? (
           <div className="text-center text-[var(--text-dim)]">
             No connectors yet. Add a Gradio endpoint to start.
@@ -49,7 +52,7 @@ export function ConnectorsPanel() {
             <ConnectorCard
               key={c.id}
               connector={c}
-              onDeleted={() => setConnectors((prev) => prev.filter((x) => x.id !== c.id))}
+              onDeleted={reload}
             />
           ))}
         </div>
@@ -63,10 +66,12 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const [baseUrl, setBaseUrl] = useState("");
   const [auth, setAuth] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = useCallback(async () => {
     if (!baseUrl) return;
     setBusy(true);
+    setError(null);
     try {
       const config: Record<string, string> = { baseUrl };
       if (auth) config.authHeader = auth;
@@ -74,6 +79,8 @@ function AddForm({ onDone }: { onDone: () => void }) {
         data: { kind: "gradio", name: name || "Gradio", config },
       });
       onDone();
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -104,6 +111,11 @@ function AddForm({ onDone }: { onDone: () => void }) {
           className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1 text-sm"
         />
       </div>
+      {error ? (
+        <div className="mt-2 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[10px] text-[var(--status-err)]">
+          {error}
+        </div>
+      ) : null}
       <div className="mt-3 flex justify-end gap-2">
         <button
           onClick={onDone}
