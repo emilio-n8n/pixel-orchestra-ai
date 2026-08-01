@@ -8,19 +8,30 @@ export function StoryboardPanel() {
   const [scenes, setScenes] = useState<SceneView[]>([]);
   const [shots, setShots] = useState<Record<string, ShotView[]>>({});
   const [sceneName, setSceneName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const last = useKernelEvents(1)[0];
 
   useEffect(() => {
     if (!projectId) return;
     listScenes({ data: { projectId } })
       .then((r) => setScenes(r.scenes as SceneView[]))
-      .catch(() => setScenes([]));
-  }, [projectId, last]);
+      .catch((e) => {
+        setScenes([]);
+        setError((e as Error).message);
+      });
+  }, [projectId, last, reloadToken]);
 
   const addScene = useCallback(async () => {
     if (!projectId || !sceneName.trim()) return;
-    await createScene({ data: { projectId, name: sceneName.trim() } });
-    setSceneName("");
+    setError(null);
+    try {
+      await createScene({ data: { projectId, name: sceneName.trim() } });
+      setSceneName("");
+      setReloadToken((t) => t + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }, [projectId, sceneName]);
 
   const loadShots = useCallback(async (sceneId: string) => {
@@ -59,6 +70,11 @@ export function StoryboardPanel() {
         </div>
       </div>
       <div className="mt-3 space-y-3">
+        {error ? (
+          <div className="rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[11px] text-[var(--status-err)]">
+            {error}
+          </div>
+        ) : null}
         {scenes.length === 0 ? <div className="text-[var(--text-dim)]">No scenes yet.</div> : null}
         {scenes.map((s) => (
           <div key={s.id} className="rounded border border-[var(--line)] bg-[var(--surface-2)] p-3">
