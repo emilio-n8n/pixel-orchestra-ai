@@ -2,6 +2,7 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
+import { bootstrapKernel } from "@/kernel/bootstrap";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -18,7 +19,15 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   }
 });
 
+// The kernel (and its SQLite DB) must be initialized on the server before any
+// createServerFn runs. `bootstrapKernel` is idempotent, so the first server
+// fn call does the init (DB + storage + plugin registration) and the rest no-op.
+const bootstrapMiddleware = createMiddleware().server(async ({ next }) => {
+  await bootstrapKernel();
+  return next();
+});
+
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  functionMiddleware: [bootstrapMiddleware, attachSupabaseAuth],
   requestMiddleware: [errorMiddleware],
 }));
