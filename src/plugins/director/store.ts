@@ -53,14 +53,16 @@ interface DirectorStore {
   setShowSettings: (v: boolean) => void;
   setCustomModel: (m: string) => void;
 
-  conversations: Conversation[];
-  currentId: string | null;
-  setMessages: (msgs: UIMessage[]) => void;
-  createConversation: () => string;
-  setCurrentConversation: (id: string) => void;
-  deleteConversation: (id: string) => void;
-  renameConversation: (id: string, title: string) => void;
-  clearHistory: () => void;
+  /** Conversations scoped per project: projectId -> list */
+  conversationsByProject: Record<string, Conversation[]>;
+  /** Active conversation per project: projectId -> conversation id */
+  currentByProject: Record<string, string | null>;
+  setMessages: (projectId: string, msgs: UIMessage[]) => void;
+  createConversation: (projectId: string) => string;
+  setCurrentConversation: (projectId: string, id: string) => void;
+  deleteConversation: (projectId: string, id: string) => void;
+  renameConversation: (projectId: string, id: string, title: string) => void;
+  clearHistory: (projectId: string) => void;
 }
 
 export const useDirectorStore = create<DirectorStore>()(
@@ -75,12 +77,12 @@ export const useDirectorStore = create<DirectorStore>()(
       setShowSettings: (showSettings) => set({ showSettings }),
       setCustomModel: (customModel) => set({ customModel }),
 
-      conversations: [],
-      currentId: null,
-      setMessages: (msgs) => {
+      conversationsByProject: {},
+      currentByProject: {},
+      setMessages: (projectId, msgs) => {
         const state = get();
-        let currentId = state.currentId;
-        let conversations = state.conversations;
+        let currentId = state.currentByProject[projectId] ?? null;
+        let conversations = state.conversationsByProject[projectId] ?? [];
         const now = Date.now();
 
         if (!currentId) {
@@ -107,38 +109,60 @@ export const useDirectorStore = create<DirectorStore>()(
             ? conversations.map((c) => (c.id === currentId ? updated : c))
             : [updated, ...conversations];
         }
-        set({ conversations, currentId });
+        set({
+          conversationsByProject: { ...state.conversationsByProject, [projectId]: conversations },
+          currentByProject: { ...state.currentByProject, [projectId]: currentId },
+        });
       },
-      createConversation: () => {
+      createConversation: (projectId) => {
         const id = makeId();
         const now = Date.now();
         set((s) => ({
-          currentId: id,
-          conversations: [
-            { id, title: "New conversation", createdAt: now, updatedAt: now, messages: [] },
-            ...s.conversations,
-          ],
+          currentByProject: { ...s.currentByProject, [projectId]: id },
+          conversationsByProject: {
+            ...s.conversationsByProject,
+            [projectId]: [
+              { id, title: "New conversation", createdAt: now, updatedAt: now, messages: [] },
+              ...(s.conversationsByProject[projectId] ?? []),
+            ],
+          },
         }));
         return id;
       },
-      setCurrentConversation: (id) => set({ currentId: id }),
-      deleteConversation: (id) => {
-        const state = get();
-        const remaining = state.conversations.filter((c) => c.id !== id);
-        const currentId =
-          state.currentId === id
-            ? remaining.length > 0 ? remaining[0].id : null
-            : state.currentId;
-        set({ conversations: remaining, currentId });
+      setCurrentConversation: (projectId, id) =>
+        set((s) => ({ currentByProject: { ...s.currentByProject, [projectId]: id } })),
+      deleteConversation: (projectId, id) => {
+        set((s) => {
+          const conversations = (s.conversationsByProject[projectId] ?? []).filter(
+            (c) => c.id !== id,
+          );
+          const currentId =
+            s.currentByProject[projectId] === id
+              ? conversations.length > 0
+                ? conversations[0].id
+                : null
+              : s.currentByProject[projectId];
+          return {
+            conversationsByProject: { ...s.conversationsByProject, [projectId]: conversations },
+            currentByProject: { ...s.currentByProject, [projectId]: currentId },
+          };
+        });
       },
-      renameConversation: (id, title) => {
+      renameConversation: (projectId, id, title) => {
         set((s) => ({
-          conversations: s.conversations.map((c) =>
-            c.id === id ? { ...c, title, updatedAt: Date.now() } : c,
-          ),
+          conversationsByProject: {
+            ...s.conversationsByProject,
+            [projectId]: (s.conversationsByProject[projectId] ?? []).map((c) =>
+              c.id === id ? { ...c, title, updatedAt: Date.now() } : c,
+            ),
+          },
         }));
       },
-      clearHistory: () => set({ conversations: [], currentId: null }),
+      clearHistory: (projectId) =>
+        set((s) => ({
+          conversationsByProject: { ...s.conversationsByProject, [projectId]: [] },
+          currentByProject: { ...s.currentByProject, [projectId]: null },
+        })),
     }),
     { name: "lilium.director.v1" },
   ),

@@ -1,6 +1,6 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,27 @@ export function DirectorPanel() {
   const setShowSettings = useDirectorStore((s) => s.setShowSettings);
   const setCustomModel = useDirectorStore((s) => s.setCustomModel);
 
-  const conversations = useDirectorStore((s) => s.conversations);
-  const currentId = useDirectorStore((s) => s.currentId);
+  const conversationsByProject = useDirectorStore((s) => s.conversationsByProject);
+  const currentByProject = useDirectorStore((s) => s.currentByProject);
+  const conversations = pid ? conversationsByProject[pid] ?? [] : [];
+  const currentId = pid ? currentByProject[pid] ?? null : null;
   const setMessagesStore = useDirectorStore((s) => s.setMessages);
   const createConversation = useDirectorStore((s) => s.createConversation);
   const setCurrentConversation = useDirectorStore((s) => s.setCurrentConversation);
   const deleteConversation = useDirectorStore((s) => s.deleteConversation);
+
+  // Guards the store-sync effect during conversation/project switches,
+  // so stale useChat messages never overwrite the target conversation.
+  const hydratingRef = useRef(false);
+  const hydrateTimerRef = useRef<number | null>(null);
+  function markHydrating() {
+    hydratingRef.current = true;
+    if (hydrateTimerRef.current != null) window.clearTimeout(hydrateTimerRef.current);
+    hydrateTimerRef.current = window.setTimeout(() => {
+      hydratingRef.current = false;
+      hydrateTimerRef.current = null;
+    }, 150);
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token ?? null));
@@ -58,48 +73,63 @@ export function DirectorPanel() {
 
   const busy = status === "streaming" || status === "submitted";
 
-  // Ensure a conversation exists on first mount
+  // Ensure a conversation exists on first mount for this project
   useEffect(() => {
-    if (!currentId && conversations.length === 0) {
-      createConversation();
+    if (!pid) return;
+    const s = useDirectorStore.getState();
+    const hasAny = (s.conversationsByProject[pid] ?? []).length > 0;
+    if (!s.currentByProject[pid] && !hasAny) {
+      createConversation(pid);
     }
-  }, [currentId, conversations.length, createConversation]);
+  }, [pid, currentId, conversations.length, createConversation]);
 
-  // Hydrate useChat when switching conversations
+  // Hydrate useChat when switching conversations / projects
   useEffect(() => {
-    if (!currentId) return;
-    const conv = useDirectorStore.getState().conversations.find((c) => c.id === currentId);
+    if (!pid || !currentId) return;
+    const conv = (useDirectorStore.getState().conversationsByProject[pid] ?? []).find(
+      (c) => c.id === currentId,
+    );
     if (!conv) return;
+    markHydrating();
     setMessages(conv.messages);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId]);
+  }, [pid, currentId]);
 
   // Sync messages from useChat to the store
   useEffect(() => {
-    if (!currentId) return;
-    setMessagesStore(messages);
-  }, [messages, currentId, setMessagesStore]);
+    if (!pid || !currentId) return;
+    if (hydratingRef.current) return;
+    setMessagesStore(pid, messages);
+  }, [messages, pid, currentId, setMessagesStore]);
 
   function handleNewConversation() {
-    createConversation();
+    if (!pid) return;
+    createConversation(pid);
+    markHydrating();
     setMessages([]);
     setShowHistory(false);
   }
 
   function handleSwitchConversation(id: string) {
+    if (!pid) return;
     if (id === currentId) {
       setShowHistory(false);
       return;
     }
-    setCurrentConversation(id);
+    markHydrating();
+    setCurrentConversation(pid, id);
     setShowHistory(false);
   }
 
   function handleDeleteConversation(id: string, e: React.MouseEvent) {
     e.stopPropagation();
+    if (!pid) return;
     if (!confirm("Delete this conversation?")) return;
-    deleteConversation(id);
+    deleteConversation(pid, id);
+    markHydrating();
   }
+
+  const currentTitle = conversations.find((c) => c.id === currentId)?.title ?? "Director";
 
   if (!pid) return <div className="p-6 text-sm text-[var(--text-muted)]">No project.</div>;
   if (!token)
@@ -112,10 +142,23 @@ export function DirectorPanel() {
   return (
     <div className="flex h-full flex-col bg-[var(--surface-1)]">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
-        <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Director
+        <span
+          onClick={() => { setShowHistory(!showHistory); setShowSettings(false); }}
+          className={`flex-1 cursor-pointer truncate pr-2 text-[11px] font-medium uppercase tracking-[0.16em] ${
+            showHistory ? "text-[var(--text)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+          }`}
+          title="Past conversations"
+        >
+          {currentTitle}
         </span>
         <div className="flex items-center gap-1">
+          <button
+            onClick={handleNewConversation}
+            className="rounded p-1 text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
+            title="New conversation"
+          >
+            <Plus size={14} />
+          </button>
           <button
             onClick={() => { setShowHistory(!showHistory); setShowSettings(false); }}
             className={`rounded p-1 hover:bg-[var(--surface-3)] ${
