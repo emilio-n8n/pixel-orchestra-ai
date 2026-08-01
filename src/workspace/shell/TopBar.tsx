@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { Settings } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 export function TopBar({
@@ -53,6 +54,13 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-2">
+        <Link
+          to="/settings"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
+          title="Settings"
+        >
+          <Settings size={14} />
+        </Link>
         <button
           onClick={onOpenCommand}
           className="flex h-7 items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-2 text-[12px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)]"

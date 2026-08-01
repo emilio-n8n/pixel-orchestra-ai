@@ -15,8 +15,12 @@ export function LibraryPanel() {
   const projectId = useLibraryProject();
   const setSelected = useLibrary((s) => s.setSelected);
   const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  const PAGE_SIZE = 50;
 
   // Refetch on AssetImported events.
   const lastImport = useKernelEvents(1)
@@ -24,10 +28,28 @@ export function LibraryPanel() {
     .slice(-1)[0];
   useEffect(() => {
     if (!projectId) return;
-    listAssets({ data: { projectId } })
-      .then((r) => setAssets(r.assets))
-      .catch(() => setAssets([]));
+    listAssets({ data: { projectId, offset: 0, limit: PAGE_SIZE } })
+      .then((r) => {
+        setAssets(r.assets);
+        setTotal(r.total);
+      })
+      .catch(() => {
+        setAssets([]);
+        setTotal(0);
+      });
   }, [projectId, lastImport]);
+
+  const loadMore = async () => {
+    if (!projectId || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const r = await listAssets({ data: { projectId, offset: assets.length, limit: PAGE_SIZE } });
+      setAssets((prev) => [...prev, ...r.assets]);
+      setTotal(r.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const onFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -114,6 +136,17 @@ export function LibraryPanel() {
         {busy ? (
           <div className="mt-3 text-center text-[11px] text-[var(--text-dim)]">Importing…</div>
         ) : null}
+        {assets.length < total && (
+          <div className="mt-3 flex justify-center pb-4">
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50"
+            >
+              {loadingMore ? "Loading…" : `Load more (${assets.length}/${total})`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

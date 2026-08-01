@@ -93,13 +93,22 @@ export const importAsset = createServerFn({ method: "POST" })
   });
 
 export const listAssets = createServerFn({ method: "GET" })
-  .validator(z.object({ projectId: z.string() }))
+  .validator(
+    z.object({
+      projectId: z.string(),
+      offset: z.number().int().min(0).optional().default(0),
+      limit: z.number().int().min(1).max(200).optional().default(50),
+    }),
+  )
   .handler(async ({ data }) => {
     const db = getDb();
     const rows = db
-      .prepare("SELECT * FROM assets WHERE project_id = ? ORDER BY created_at DESC")
-      .all<RawRow>(data.projectId);
-    return { assets: rows.map(rowToAsset) };
+      .prepare("SELECT * FROM assets WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?")
+      .all<RawRow>(data.projectId, data.limit, data.offset);
+    const totalRow = db
+      .prepare("SELECT COUNT(*) AS n FROM assets WHERE project_id = ?")
+      .get<{ n: number }>(data.projectId);
+    return { assets: rows.map(rowToAsset), total: totalRow?.n ?? 0 };
   });
 
 export const getAssetBytes = createServerFn({ method: "GET" })
