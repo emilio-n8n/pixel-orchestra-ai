@@ -6,6 +6,7 @@ import html2canvas from "html2canvas";
 
 const TRACKS = ["Video", "Audio", "Music", "SFX", "Subtitles"] as const;
 const AUDIO_TRACKS = new Set(["Audio", "Music", "SFX"]);
+const PX_PER_MS = 0.08;
 
 type Clip = {
   id: string;
@@ -46,6 +47,16 @@ export function TimelinePanel() {
   const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
   const prerenderedRef = useRef<Map<string, string>>(new Map());
   const htmlVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const trackAreaRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ clipId: string; offsetMs: number } | null>(null);
+  const resizeRef = useRef<{
+    clipId: string;
+    side: "left" | "right";
+    startMs: number;
+    durationMs: number;
+    startClientX: number;
+  } | null>(null);
+  const [dragOverTrack, setDragOverTrack] = useState<string | null>(null);
   clipsRef.current = clips;
 
   // --------------- load + subscribe clips ---------------
@@ -226,6 +237,112 @@ export function TimelinePanel() {
       (el as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen?.();
     }
   }
+
+  // --------------- drag & drop + resize clips ---------------
+  function msFromClientX(clientX: number): number {
+    const el = trackAreaRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const scrollLeft = (el.parentElement as HTMLElement | null)?.scrollLeft ?? 0;
+    return Math.max(0, (clientX - rect.left + scrollLeft) / PX_PER_MS);
+  }
+
+  /** Push `startMs` after any overlapping clip on `track` (same logic as add_to_timeline). */
+  function resolveNoOverlap(track: string, startMs: number, durationMs: number, excludeId?: string): number {
+    let start = Math.max(0, Math.round(startMs / 10) * 10);
+    const others = clipsRef.current
+      .filter((c) => c.track === track && c.id !== excludeId)
+      .sort((a, b) => (a.start_ms ?? 0) - (b.start_ms ?? 0));
+    for (const o of others) {
+      const oStart = o.start_ms ?? 0;
+      const oEnd = oStart + (o.duration_ms ?? 3000);
+      if (start < oEnd && start + durationMs > oStart) start = oEnd;
+    }
+    return start;
+  }
+
+  function patchClipLocal(id: string, patch: Partial<Clip>) {
+    setClips((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  async function updateClip(id: string, patch: { start_ms?: number; duration_ms?: number; track?: string }) {
+    try {
+      await supabase.from("timeline_clips").update(patch).eq("id", id);
+    } catch {
+      /* the realtime channel keeps the UI in sync; ignore transient errors */
+    }
+  }
+
+  function handleClipDragStart(e: React.DragEvent, clip: Clip) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    dragRef.current = { clipId: clip.id, offsetMs: (e.clientX - rect.left) / PX_PER_MS };
+    e.dataTransfer.setData("text/plain", clip.id);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleClipDrop(e: React.DragEvent, track: string) {
+    e.preventDefault();
+    setDragOverTrack(null);
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag) return;
+    const clip = clipsRef.current.find((c) => c.id === drag.clipId);
+    if (!clip) return;
+    const duration = clip.duration_ms ?? 3000;
+    const start = resolveNoOverlap(track, msFromClientX(e.clientX) - drag.offsetMs, duration, clip.id);
+    void updateClip(clip.id, { start_ms: start, track });
+  }
+
+  function handleResizeStart(e: React.MouseEvent, clip: Clip, side: "left" | "right") {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = {
+      clipId: clip.id,
+      side,
+      startMs: clip.start_ms ?? 0,
+      durationMs: clip.duration_ms ?? 3000,
+      startClientX: e.clientX,
+    };
+  }
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      const r = resizeRef.current;
+      if (!r) return;
+      const dx = (e.clientX - r.startClientX) / PX_PER_MS;
+      if (r.side === "left") {
+        const newStart = Math.max(0, Math.min(r.startMs + dx, r.startMs + r.durationMs - 100));
+        patchClipLocal(r.clipId, {
+          start_ms: Math.round(newStart),
+          duration_ms: Math.round(r.durationMs - (newStart - r.startMs)),
+        });
+      } else {
+        patchClipLocal(r.clipId, { duration_ms: Math.round(Math.max(100, r.durationMs + dx)) });
+      }
+    }
+    function onUp(e: MouseEvent) {
+      const r = resizeRef.current;
+      if (r) {
+        const dx = (e.clientX - r.startClientX) / PX_PER_MS;
+        if (r.side === "left") {
+          const newStart = Math.max(0, Math.min(r.startMs + dx, r.startMs + r.durationMs - 100));
+          void updateClip(r.clipId, {
+            start_ms: Math.round(newStart),
+            duration_ms: Math.round(r.durationMs - (newStart - r.startMs)),
+          });
+        } else {
+          void updateClip(r.clipId, { duration_ms: Math.round(Math.max(100, r.durationMs + dx)) });
+        }
+      }
+      resizeRef.current = null;
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
 
   // --------------- playback controls ---------------
   const stopAudios = useCallback(() => {
@@ -486,8 +603,6 @@ export function TimelinePanel() {
       </div>
     );
 
-  const PX_PER_MS = 0.08;
-
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-1)] text-xs text-[var(--text-muted)]">
       {/* Preview */}
@@ -620,19 +735,29 @@ export function TimelinePanel() {
               </div>
             ))}
           </div>
-          <div className="relative flex-1" style={{ minWidth: totalMs * PX_PER_MS }}>
+          <div className="relative flex-1" style={{ minWidth: totalMs * PX_PER_MS }} ref={trackAreaRef}>
             <div className="space-y-1">
               {TRACKS.map((t) => {
                 const rowClips = clips.filter((c) => c.track === t);
                 return (
-                  <div key={t} className="relative h-12 rounded bg-[var(--surface-2)]">
+                  <div
+                    key={t}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverTrack(t); }}
+                    onDragLeave={() => setDragOverTrack((cur) => (cur === t ? null : cur))}
+                    onDrop={(e) => handleClipDrop(e, t)}
+                    className={`relative h-12 rounded transition-colors ${
+                      dragOverTrack === t ? "bg-[var(--accent-quiet)]" : "bg-[var(--surface-2)]"
+                    }`}
+                  >
                     {rowClips.map((c) => (
                       <div
                         key={c.id}
-                        className="absolute top-1 h-10 overflow-hidden rounded border border-[var(--accent)]/40 bg-[var(--surface-3)] text-[10px]"
+                        draggable
+                        onDragStart={(e) => handleClipDragStart(e, c)}
+                        className="absolute top-1 h-10 cursor-grab overflow-hidden rounded border border-[var(--accent)]/40 bg-[var(--surface-3)] text-[10px] active:cursor-grabbing"
                         style={{
                           left: c.start_ms * PX_PER_MS,
-                          width: Math.max(20, c.duration_ms * PX_PER_MS),
+                          width: Math.max(24, c.duration_ms * PX_PER_MS),
                         }}
                         title={c.assets?.prompt ?? ""}
                       >
@@ -649,6 +774,14 @@ export function TimelinePanel() {
                         ) : (
                           <div className="truncate p-1">{c.assets?.kind ?? "?"}</div>
                         )}
+                        <div
+                          onMouseDown={(e) => handleResizeStart(e, c, "left")}
+                          className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
+                        />
+                        <div
+                          onMouseDown={(e) => handleResizeStart(e, c, "right")}
+                          className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
+                        />
                       </div>
                     ))}
                   </div>
