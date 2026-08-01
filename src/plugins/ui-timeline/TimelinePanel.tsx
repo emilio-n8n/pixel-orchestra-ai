@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Pause, Square, Download, Loader2 } from "lucide-react";
+import { Play, Pause, Square, Download, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import html2canvas from "html2canvas";
 
 const TRACKS = ["Video", "Audio", "Music", "SFX", "Subtitles"] as const;
@@ -34,8 +34,10 @@ export function TimelinePanel() {
   const [exporting, setExporting] = useState(false);
   const [exportPct, setExportPct] = useState(0);
   const [activeHtmlClip, setActiveHtmlClip] = useState<Clip | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const rafRef = useRef<number | null>(null);
   const audiosRef = useRef<HTMLAudioElement[]>([]);
@@ -194,6 +196,36 @@ export function TimelinePanel() {
   useEffect(() => {
     draw(playhead);
   }, [playhead, clips, draw]);
+
+  // --------------- fullscreen preview ---------------
+  useEffect(() => {
+    const onFs = () => {
+      const fs = document.fullscreenElement === previewRef.current;
+      setIsFullscreen(fs);
+      if (fs) {
+        setPlayhead((p) => (p >= totalMs ? 0 : p));
+        setPlaying(true);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs as EventListener);
+    };
+  }, [totalMs]);
+
+  function toggleFullscreen() {
+    const el = previewRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else if (el.requestFullscreen) {
+      void el.requestFullscreen();
+    } else {
+      (el as unknown as { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen?.();
+    }
+  }
 
   // --------------- playback controls ---------------
   const stopAudios = useCallback(() => {
@@ -459,7 +491,7 @@ export function TimelinePanel() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-1)] text-xs text-[var(--text-muted)]">
       {/* Preview */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black">
+      <div ref={previewRef} className="group relative flex min-h-0 flex-1 items-center justify-center bg-black">
         <canvas
           ref={canvasRef}
           width={1920}
@@ -470,8 +502,8 @@ export function TimelinePanel() {
         {activeHtmlClip && (
           <iframe
             ref={htmlOverlayRef}
-            className="pointer-events-none absolute z-10"
-            style={{ aspectRatio: "16 / 9", width: "100%", maxHeight: "100%" }}
+            className="pointer-events-none absolute z-10 max-h-full max-w-full"
+            style={{ aspectRatio: "16 / 9" }}
             sandbox="allow-scripts"
             title="html-preview"
           />
@@ -480,6 +512,46 @@ export function TimelinePanel() {
           <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-black/70 px-3 py-2 text-[11px] text-white">
             <Loader2 className="h-3 w-3 animate-spin" />
             Recording… {Math.round(exportPct * 100)}%
+          </div>
+        )}
+        {isFullscreen && (
+          <div
+            className={`absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-black/60 px-3 py-2 backdrop-blur-sm transition-opacity ${
+              playing ? "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100" : ""
+            }`}
+          >
+            <button
+              onClick={() => setPlaying(!playing)}
+              className="flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
+              title={playing ? "Pause" : "Play"}
+            >
+              {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={() => { setPlaying(false); setPlayhead(0); }}
+              className="flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
+              title="Stop"
+            >
+              <Square className="h-3 w-3" />
+            </button>
+            <span className="mono text-[11px] tabular-nums text-white/90">
+              {fmt(playhead)} / {fmt(totalMs)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={totalMs}
+              value={Math.round(playhead)}
+              onChange={(e) => { setPlaying(false); setPlayhead(Number(e.target.value)); }}
+              className="flex-1 accent-[var(--accent)]"
+            />
+            <button
+              onClick={toggleFullscreen}
+              className="flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
+              title="Exit fullscreen"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
       </div>
@@ -515,6 +587,15 @@ export function TimelinePanel() {
           className="flex-1 accent-[var(--accent)]"
         />
         <div className="text-[11px] text-[var(--text-dim)]">{clips.length} clips</div>
+        <button
+          onClick={toggleFullscreen}
+          disabled={exporting}
+          className="ml-2 flex h-7 items-center gap-1.5 rounded bg-[var(--surface-3)] px-2.5 text-[11px] font-medium text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40"
+          title="Fullscreen preview (record with Cmd+Shift+5)"
+        >
+          <Maximize2 className="h-3.5 w-3.5" />
+          Fullscreen
+        </button>
         <button
           onClick={exportVideo}
           disabled={exporting || clips.length === 0}
