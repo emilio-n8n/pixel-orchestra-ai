@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Settings, History, Plus, Trash2 } from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
+import type { DirectorModel } from "@/lib/models/catalog";
 
 export function DirectorPanel() {
   const pid = useLibraryProject();
@@ -29,6 +30,16 @@ export function DirectorPanel() {
   const setModel = useDirectorStore((s) => s.setModel);
   const setShowSettings = useDirectorStore((s) => s.setShowSettings);
   const setCustomModel = useDirectorStore((s) => s.setCustomModel);
+
+  const cloudflareAccountId = useDirectorStore((s) => s.cloudflareAccountId);
+  const cloudflareApiKey = useDirectorStore((s) => s.cloudflareApiKey);
+  const groqApiKey = useDirectorStore((s) => s.groqApiKey);
+  const customModels = useDirectorStore((s) => s.customModels);
+  const setCloudflareAccountId = useDirectorStore((s) => s.setCloudflareAccountId);
+  const setCloudflareApiKey = useDirectorStore((s) => s.setCloudflareApiKey);
+  const setGroqApiKey = useDirectorStore((s) => s.setGroqApiKey);
+  const addCustomModel = useDirectorStore((s) => s.addCustomModel);
+  const removeCustomModel = useDirectorStore((s) => s.removeCustomModel);
 
   const conversationsByProject = useDirectorStore((s) => s.conversationsByProject);
   const currentByProject = useDirectorStore((s) => s.currentByProject);
@@ -66,7 +77,15 @@ export function DirectorPanel() {
     id: currentId ?? "new",
     transport: new DefaultChatTransport({
       api: "/api/director",
-      body: { projectId: pid, apiKey, model: effectiveModel },
+      body: {
+        projectId: pid,
+        apiKey,
+        model: effectiveModel,
+        customModels,
+        cloudflareAccountId,
+        cloudflareApiKey,
+        groqApiKey,
+      },
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }),
   });
@@ -265,6 +284,79 @@ export function DirectorPanel() {
               />
             )}
           </div>
+
+          <div className="border-t border-[var(--line)] pt-2">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
+              Cloudflare (image generation)
+            </div>
+            <Input
+              type="text"
+              value={cloudflareAccountId}
+              onChange={(e) => setCloudflareAccountId(e.target.value)}
+              placeholder="Account ID"
+              className="mb-1.5 h-7 text-xs"
+            />
+            <Input
+              type="password"
+              value={cloudflareApiKey}
+              onChange={(e) => setCloudflareApiKey(e.target.value)}
+              placeholder="API Token"
+              className="h-7 text-xs"
+            />
+            <p className="mt-1 text-[10px] text-[var(--text-dim)]">
+              Used for image models (flux-1-schnell…). Chat always stays on OpenCode Go.
+            </p>
+          </div>
+
+          <div className="border-t border-[var(--line)] pt-2">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
+              Groq (subtitles)
+            </div>
+            <Input
+              type="password"
+              value={groqApiKey}
+              onChange={(e) => setGroqApiKey(e.target.value)}
+              placeholder="Groq API Key"
+              className="h-7 text-xs"
+            />
+            <p className="mt-1 text-[10px] text-[var(--text-dim)]">
+              whisper-large-v3 (pré-configuré) — transcription des narrations en sous-titres.
+            </p>
+          </div>
+
+          <div className="border-t border-[var(--line)] pt-2">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
+                My models
+              </span>
+              <span className="text-[10px] text-[var(--text-dim)]">{customModels.length} custom</span>
+            </div>
+            {customModels.length > 0 && (
+              <div className="mb-2 space-y-1">
+                {customModels.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-[11px] text-[var(--text)]">{m.label}</div>
+                      <div className="mono truncate text-[9px] text-[var(--text-dim)]">
+                        {m.provider} · {m.modelId}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeCustomModel(m.id)}
+                      className="ml-1 shrink-0 rounded p-0.5 text-[var(--text-dim)] hover:text-red-400"
+                      title="Remove"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <AddModelForm onAdd={addCustomModel} />
+          </div>
         </div>
       )}
 
@@ -319,6 +411,91 @@ export function DirectorPanel() {
           {busy ? "…" : "Send"}
         </Button>
       </form>
+    </div>
+  );
+}
+
+const CAP_OPTIONS: { value: DirectorModel["capabilities"][number]; label: string }[] = [
+  { value: "image", label: "Image" },
+  { value: "audio.speech", label: "Voice" },
+  { value: "audio.transcribe", label: "Subtitles" },
+];
+
+/** Form to add a custom model (Cloudflare by id, or a Gradio endpoint). */
+function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
+  const [provider, setProvider] = useState<"cloudflare" | "gradio">("cloudflare");
+  const [modelId, setModelId] = useState("");
+  const [label, setLabel] = useState("");
+  const [caps, setCaps] = useState<Set<string>>(new Set(["image"]));
+
+  function toggleCap(c: string) {
+    setCaps((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }
+
+  function submit() {
+    const idVal = modelId.trim();
+    if (!idVal) return;
+    onAdd({
+      id: `custom/${provider}/${idVal}`,
+      provider,
+      modelId: idVal,
+      label: label.trim() || (provider === "gradio" ? "Gradio endpoint" : idVal),
+      capabilities: [...caps] as DirectorModel["capabilities"],
+      custom: true,
+    });
+    setModelId("");
+    setLabel("");
+  }
+
+  return (
+    <div className="rounded border border-dashed border-[var(--line)] p-2">
+      <div className="flex items-center gap-2">
+        <select
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as "cloudflare" | "gradio")}
+          className="h-6 rounded border border-[var(--line)] bg-[var(--surface-3)] px-1.5 text-[10px] text-[var(--text-muted)]"
+        >
+          <option value="cloudflare">Cloudflare</option>
+          <option value="gradio">Gradio endpoint</option>
+        </select>
+        <Input
+          type="text"
+          value={modelId}
+          onChange={(e) => setModelId(e.target.value)}
+          placeholder={provider === "cloudflare" ? "model id (e.g. @cf/black-forest-labs/flux-1-schnell)" : "endpoint URL"}
+          className="h-6 flex-1 text-[10px]"
+        />
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
+        <Input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label (optional)"
+          className="h-6 flex-1 text-[10px]"
+        />
+        <div className="flex items-center gap-2">
+          {CAP_OPTIONS.map((c) => (
+            <label key={c.value} className="flex cursor-pointer items-center gap-0.5 text-[10px] text-[var(--text-muted)]">
+              <input
+                type="checkbox"
+                checked={caps.has(c.value)}
+                onChange={() => toggleCap(c.value)}
+                className="h-3 w-3 accent-[var(--accent)]"
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+        <Button size="sm" onClick={submit} disabled={!modelId.trim()} className="h-6 px-2 text-[10px]">
+          Add
+        </Button>
+      </div>
     </div>
   );
 }

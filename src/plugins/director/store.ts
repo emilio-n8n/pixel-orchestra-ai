@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { UIMessage } from "ai";
+import type { DirectorModel } from "@/lib/models/catalog";
 
 export const OPENCODE_GO_MODELS = [
   { id: "grok-4.5", label: "Grok 4.5" },
@@ -53,6 +54,16 @@ interface DirectorStore {
   setShowSettings: (v: boolean) => void;
   setCustomModel: (m: string) => void;
 
+  cloudflareAccountId: string;
+  cloudflareApiKey: string;
+  groqApiKey: string;
+  customModels: DirectorModel[];
+  setCloudflareAccountId: (v: string) => void;
+  setCloudflareApiKey: (v: string) => void;
+  setGroqApiKey: (v: string) => void;
+  addCustomModel: (m: DirectorModel) => void;
+  removeCustomModel: (id: string) => void;
+
   /** Conversations scoped per project: projectId -> list */
   conversationsByProject: Record<string, Conversation[]>;
   /** Active conversation per project: projectId -> conversation id */
@@ -76,6 +87,17 @@ export const useDirectorStore = create<DirectorStore>()(
       setModel: (model) => set({ model }),
       setShowSettings: (showSettings) => set({ showSettings }),
       setCustomModel: (customModel) => set({ customModel }),
+
+      cloudflareAccountId: "",
+      cloudflareApiKey: "",
+      groqApiKey: "",
+      customModels: [],
+      setCloudflareAccountId: (cloudflareAccountId) => set({ cloudflareAccountId }),
+      setCloudflareApiKey: (cloudflareApiKey) => set({ cloudflareApiKey }),
+      setGroqApiKey: (groqApiKey) => set({ groqApiKey }),
+      addCustomModel: (m) => set((s) => ({ customModels: [...s.customModels, m] })),
+      removeCustomModel: (id) =>
+        set((s) => ({ customModels: s.customModels.filter((m) => m.id !== id) })),
 
       conversationsByProject: {},
       currentByProject: {},

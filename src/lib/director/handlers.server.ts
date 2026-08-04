@@ -7,6 +7,8 @@ import { getStorage } from "@/kernel/storage";
 import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
 import { measureMp3DurationMs } from "./audio-duration";
+import { generateImageCloudflare, generateImageLovable, transcribeAudioGroq, type ModelCreds } from "@/lib/models/providers.server";
+import type { DirectorModel } from "@/lib/models/catalog";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
@@ -90,29 +92,41 @@ export interface DirectorCtx {
   supabase: SupabaseClient;
   userId: string;
   projectId: string;
+  /** Unified model catalogue available to this request (user's models). */
+  models?: DirectorModel[];
+  /** Provider credentials sent from the client. */
+  creds?: ModelCreds;
 }
 
 // -------- image ----------
-export async function generateImage(ctx: DirectorCtx, prompt: string) {
-  const res = await fetch(`${LOVABLE_AI_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${requireKey()}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
-  if (!res.ok) throw new Error(`image gen failed: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!url || !url.startsWith("data:")) throw new Error("image gen returned no image");
-  const [meta, b64] = url.split(",");
-  const mime = /data:([^;]+)/.exec(meta)?.[1] ?? "image/png";
-  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+/**
+ * Generate an image. If `modelId` is provided and matches a catalogued
+ * Cloudflare image model, use Cloudflare Workers AI; otherwise fall back
+ * to the Lovable AI Gateway (Gemini).
+ */
+export async function generateImage(
+  ctx: DirectorCtx,
+  prompt: string,
+  modelId?: string,
+) {
+  const models = ctx.models ?? [];
+  const creds = ctx.creds ?? {};
+  const preferred = modelId
+    ? models.find((m) => m.id === modelId || m.modelId === modelId)
+    : undefined;
+  const cfModel = preferred?.provider === "cloudflare" ? preferred : undefined;
+
+  let mime: string;
+  let bytes: Uint8Array;
+  if (cfModel && creds.cloudflareAccountId && creds.cloudflareApiKey) {
+    const out = await generateImageCloudflare(cfModel, prompt, creds);
+    mime = out.mime;
+    bytes = out.bytes;
+  } else {
+    const out = await generateImageLovable(prompt);
+    mime = out.mime;
+    bytes = out.bytes;
+  }
   const ext = mime.split("/")[1] ?? "png";
   const storedUrl = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, mime, ext);
   const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
@@ -165,6 +179,60 @@ export async function generateVoice(
   });
   storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, meta);
   return row;
+}
+
+// -------- subtitles / transcription (Groq whisper) ----------
+/**
+ * Transcribe an audio asset with Groq (whisper-large-v3) and place the
+ * result as a Subtitles clip on the timeline, sized to the real audio
+ * duration. Returns the transcript + the created asset + clip.
+ */
+export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
+  const groqApiKey = ctx.creds?.groqApiKey;
+  if (!groqApiKey) throw new Error("Groq API key not configured (Director settings → Groq)");
+
+  const { data: asset, error: assetErr } = await ctx.supabase
+    .from("assets")
+    .select("id, kind, mime, url, meta")
+    .eq("id", assetId)
+    .maybeSingle();
+  if (assetErr || !asset) throw new Error("asset not found");
+  const mime = asset.mime ?? "audio/mpeg";
+  const res = await fetch(asset.url);
+  if (!res.ok) throw new Error(`failed to fetch audio: ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+
+  const { text } = await transcribeAudioGroq(bytes, mime, groqApiKey);
+  if (!text) throw new Error("transcription returned empty text");
+
+  // Store the transcript as an asset (kind html so the viewer can open it).
+  const transcriptBytes = new TextEncoder().encode(text);
+  const storedUrl = await uploadBinaryAsset(
+    ctx.supabase,
+    ctx.userId,
+    ctx.projectId,
+    transcriptBytes,
+    "text/html",
+    "html",
+  );
+  const assetRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+    kind: "html",
+    mime: "text/html",
+    url: storedUrl,
+    prompt: text,
+  });
+  storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text);
+
+  // Place on the Subtitles track with the audio's real duration.
+  const meta = (asset.meta ?? {}) as Record<string, unknown>;
+  const durationMs = typeof meta.duration_ms === "number" && meta.duration_ms > 0 ? meta.duration_ms : 3000;
+  const clip = await addToTimeline(ctx, {
+    asset_id: assetRow.id,
+    track: "Subtitles",
+    duration_ms: durationMs,
+  });
+
+  return { transcript: text, asset: assetRow, clip };
 }
 
 // -------- html card (MCP only — uses LOVABLE_API_KEY) ----------

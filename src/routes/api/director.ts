@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, tool, stepCountIs, type UIMessage } from "ai";
 import { z } from "zod";
+import { CATALOG, listByCapability, capLabel, type DirectorModel } from "@/lib/models/catalog";
 
 export const Route = createFileRoute("/api/director")({
   server: {
@@ -15,6 +16,10 @@ export const Route = createFileRoute("/api/director")({
           projectId: string;
           apiKey: string;
           model?: string;
+          customModels?: DirectorModel[];
+          cloudflareAccountId?: string;
+          cloudflareApiKey?: string;
+          groqApiKey?: string;
         };
         if (!body?.projectId) return new Response("projectId required", { status: 400 });
         if (!body?.apiKey) return new Response("apiKey required", { status: 400 });
@@ -34,8 +39,16 @@ export const Route = createFileRoute("/api/director")({
         const projectId = body.projectId;
         const modelId = body.model ?? "kimi-k2.7-code";
 
+        // Unified catalogue = builtin + user custom models.
+        const models = [...CATALOG, ...(body.customModels ?? [])];
+        const creds = {
+          cloudflareAccountId: body.cloudflareAccountId,
+          cloudflareApiKey: body.cloudflareApiKey,
+          groqApiKey: body.groqApiKey,
+        };
+
         const H = await import("@/lib/director/handlers.server");
-        const ctx = { supabase, userId, projectId };
+        const ctx = { supabase, userId, projectId, models, creds };
 
         const { createOpenCodeGoProvider } = await import("@/lib/opencode-go-provider.server");
         const provider = createOpenCodeGoProvider(body.apiKey);
@@ -43,18 +56,37 @@ export const Route = createFileRoute("/api/director")({
 
         const { generateHtmlCard } = await import("@/lib/director/html-cards.server");
 
+        // Tell the Director which image models exist so it can pick one.
+        const imageModels = listByCapability(models, "image")
+          .map((m) => `- ${m.id} (${m.label}, ${m.provider})`)
+          .join("\n");
+        const transcribeModels = listByCapability(models, "audio.transcribe")
+          .map((m) => `- ${m.id} (${m.label}, ${m.provider})`)
+          .join("\n");
+        const hasCloudflare = Boolean(creds.cloudflareAccountId && creds.cloudflareApiKey);
+
         const result = streamText({
           model,
           system:
             "You are the Director inside Lilium Studio — an AI video/creative producer. You can generate images, voiceovers, and HTML title cards, then place them on the timeline (tracks: Video, Audio, Music, SFX, Subtitles). After generating any asset, add it to the appropriate track so the user sees a live preview. Be concise; act, do not narrate.\n\n" +
+            `AVAILABLE IMAGE MODELS (pass one as model_id to generate_image, or omit for the default):\n${imageModels}\n\n` +
+            `AVAILABLE TRANSCRIPTION MODELS (generate_subtitles):\n${transcribeModels}\n\n` +
+            (hasCloudflare
+              ? "Cloudflare Workers AI is configured — prefer a Cloudflare image model (flux-1-schnell, sd-xl-base) for image generation."
+              : "Cloudflare is NOT configured — use the Lovable fallback for images (no model_id needed).") +
+            "\n\n" +
             "AUDIO OVERLAP: Never let two audio clips overlap on the same track. generate_voice returns the real duration_ms of the audio file in its metadata — trust it, never estimate or guess the duration. add_to_timeline uses that real duration automatically for overlap detection (it never underestimates), so do NOT pass duration_ms for audio clips unless you intentionally want a longer clip. Pay attention to the _warning field returned by add_to_timeline: if present, the clip was shifted or its duration was adjusted. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add.",
           messages: await convertToModelMessages(body.messages),
           stopWhen: stepCountIs(50),
           tools: {
             generate_image: tool({
-              description: "Generate an image from a text prompt.",
-              inputSchema: z.object({ prompt: z.string() }),
-              execute: ({ prompt }) => H.generateImage(ctx, prompt),
+              description:
+                "Generate an image from a text prompt. Optionally pass model_id (one of the AVAILABLE IMAGE MODELS).",
+              inputSchema: z.object({
+                prompt: z.string(),
+                model_id: z.string().optional(),
+              }),
+              execute: ({ prompt, model_id }) => H.generateImage(ctx, prompt, model_id),
             }),
             generate_voice: tool({
               description: "Generate a voiceover / narration (TTS). The returned asset includes the real duration_ms of the audio in its meta — always read it and never estimate the duration yourself.",
@@ -68,6 +100,12 @@ export const Route = createFileRoute("/api/director")({
               description: "Generate a styled HTML card (title, lower third, credits).",
               inputSchema: z.object({ brief: z.string() }),
               execute: ({ brief }) => generateHtmlCard(ctx, model, brief),
+            }),
+            generate_subtitles: tool({
+              description:
+                "Transcribe an audio asset with Groq (whisper-large-v3) and place the text as a Subtitles clip on the timeline. Pass the audio asset_id.",
+              inputSchema: z.object({ asset_id: z.string() }),
+              execute: ({ asset_id }) => H.transcribeAudio(ctx, asset_id),
             }),
             add_to_timeline: tool({
               description: "Place an existing asset on a timeline track. For audio assets, the real duration_ms from the asset metadata is used automatically for overlap detection (never underestimated); pass duration_ms only if you intentionally want a longer clip. If the clip would overlap existing clips on the same track, it is automatically shifted. Check the _warning field in the result — if present, the clip was moved or its duration was adjusted. Audio clips (Audio, Music, SFX) should never overlap on the same track.",
@@ -93,6 +131,27 @@ export const Route = createFileRoute("/api/director")({
               description: "List recently created assets in this project. Audio assets include their real duration_ms in meta.",
               inputSchema: z.object({}),
               execute: () => H.listAssets(ctx),
+            }),
+            list_models: tool({
+              description:
+                "List all available models across providers with their capabilities. Pass an optional capability filter (chat, image, audio.speech, audio.transcribe).",
+              inputSchema: z.object({
+                capability: z
+                  .enum(["chat", "image", "audio.speech", "audio.transcribe"])
+                  .optional(),
+              }),
+              execute: ({ capability }) => {
+                const list = capability
+                  ? listByCapability(models, capability)
+                  : models;
+                return list.map((m) => ({
+                  id: m.id,
+                  provider: m.provider,
+                  model_id: m.modelId,
+                  label: m.label,
+                  capabilities: m.capabilities.map(capLabel),
+                }));
+              },
             }),
           },
         });
