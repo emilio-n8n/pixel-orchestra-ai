@@ -153,10 +153,15 @@ export function LibraryPanel() {
 }
 
 function AssetCard({ asset, onOpen }: { asset: AssetRow; onOpen: () => void }) {
+  const isPending = asset.status === "pending";
   return (
     <button
       onClick={onOpen}
-      className="group flex flex-col gap-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-2 text-left transition-colors hover:border-[var(--line-strong)]"
+      className={`group flex flex-col gap-1 rounded-md border p-2 text-left transition-colors ${
+        isPending
+          ? "border-dashed border-[var(--status-warn)]/60 bg-[var(--status-warn)]/5 hover:border-[var(--status-warn)]"
+          : "border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--line-strong)]"
+      }`}
     >
       <div className="flex aspect-square items-center justify-center overflow-hidden rounded bg-[var(--surface-3)]">
         <KindPreview asset={asset} />
@@ -165,7 +170,15 @@ function AssetCard({ asset, onOpen }: { asset: AssetRow; onOpen: () => void }) {
         {asset.name}
       </div>
       <div className="mono text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-        {asset.kind} · {formatBytes(asset.sizeBytes)}
+        {isPending ? (
+          <span className="flex items-center gap-1 text-[var(--status-warn)]">
+            ⏳ {asset.pendingKind ?? "pending"} · awaiting file
+          </span>
+        ) : (
+          <>
+            {asset.kind} · {formatBytes(asset.sizeBytes)}
+          </>
+        )}
       </div>
     </button>
   );
@@ -175,6 +188,7 @@ function KindPreview({ asset }: { asset: AssetRow }) {
   if (asset.kind === "image" && asset.blobHash) {
     return <ImageThumb hash={asset.blobHash} alt={asset.name} />;
   }
+  if (asset.status === "pending") return <span className="text-2xl">⏳</span>;
   return <KindGlyph kind={asset.kind} />;
 }
 
@@ -186,6 +200,7 @@ function KindGlyph({ kind }: { kind: AssetRow["kind"] }) {
     html: "</>",
     doc: "▤",
     other: "·",
+    pending: "⏳",
   };
   return <span className="text-2xl text-[var(--text-dim)]">{glyph[kind]}</span>;
 }

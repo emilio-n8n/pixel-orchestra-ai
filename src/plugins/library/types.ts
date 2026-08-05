@@ -1,6 +1,6 @@
 // Shared types between client and server for the asset API.
 
-export type AssetKind = "image" | "video" | "audio" | "html" | "doc" | "other";
+export type AssetKind = "image" | "video" | "audio" | "html" | "doc" | "other" | "pending";
 
 /** Anything JSON-serializable. TanStack Start's createServerFn rejects
  *  `Record<string, unknown>` because `unknown` may include functions, etc. */
@@ -34,6 +34,14 @@ export interface AssetRow {
   thumbnailHash: string | null;
   createdAt: number;
   updatedAt: number;
+  /** "pending" when the asset is waiting for the user to provide the file. */
+  status?: "pending" | "ready";
+  /** For pending assets: the kind being waited on (image/video/audio). */
+  pendingKind?: AssetKind;
+  /** For pending assets: the generation prompt the user should follow. */
+  prompt?: string;
+  /** The matching row id in Supabase (synced assets). */
+  supabaseId?: string | null;
 }
 
 export interface ImportAssetInput {

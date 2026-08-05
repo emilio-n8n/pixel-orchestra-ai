@@ -62,7 +62,7 @@ async function uploadBinaryAsset(
   bytes: Uint8Array,
   mime: string,
   ext: string,
-): Promise<string> {
+): Promise<{ url: string; storagePath: string }> {
   const filename = `${userId}/${projectId}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from("assets").upload(filename, bytes, {
     contentType: mime,
@@ -70,7 +70,7 @@ async function uploadBinaryAsset(
   });
   if (error) throw new Error(`upload failed: ${error.message}`);
   const { data } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
-  return data?.signedUrl ?? filename;
+  return { url: data?.signedUrl ?? filename, storagePath: filename };
 }
 
 async function insertAsset(
@@ -128,14 +128,15 @@ export async function generateImage(
     bytes = out.bytes;
   }
   const ext = mime.split("/")[1] ?? "png";
-  const storedUrl = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, mime, ext);
+  const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, mime, ext);
   const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
     kind: "image",
     mime,
     url: storedUrl,
     prompt,
+    meta: { storage_path: storagePath },
   });
-  storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt);
+  storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt, { storage_path: storagePath });
   return row;
 }
 
@@ -162,7 +163,7 @@ export async function generateVoice(
   const bytes = new Uint8Array(await res.arrayBuffer());
   const durationMs = measureMp3DurationMs(bytes);
   const meta = { voice, duration_ms: durationMs };
-  const storedUrl = await uploadBinaryAsset(
+  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
     ctx.supabase,
     ctx.userId,
     ctx.projectId,
@@ -175,9 +176,9 @@ export async function generateVoice(
     mime: "audio/mpeg",
     url: storedUrl,
     prompt: text,
-    meta,
+    meta: { ...meta, storage_path: storagePath },
   });
-  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, meta);
+  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, { ...meta, storage_path: storagePath });
   return row;
 }
 
@@ -207,7 +208,7 @@ export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
 
   // Store the transcript as an asset (kind html so the viewer can open it).
   const transcriptBytes = new TextEncoder().encode(text);
-  const storedUrl = await uploadBinaryAsset(
+  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
     ctx.supabase,
     ctx.userId,
     ctx.projectId,
@@ -220,8 +221,9 @@ export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
     mime: "text/html",
     url: storedUrl,
     prompt: text,
+    meta: { storage_path: storagePath },
   });
-  storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text);
+  storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text, { storage_path: storagePath });
 
   // Place on the Subtitles track with the audio's real duration.
   const meta = (asset.meta ?? {}) as Record<string, unknown>;
@@ -262,7 +264,7 @@ export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
   const bytes = new TextEncoder().encode(cleaned);
   const wrapped = `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;
   const wrappedBytes = new TextEncoder().encode(wrapped);
-  const storedUrl = await uploadBinaryAsset(
+  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
     ctx.supabase,
     ctx.userId,
     ctx.projectId,
@@ -275,8 +277,9 @@ export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
     mime: "text/html",
     url: storedUrl,
     prompt: brief,
+    meta: { storage_path: storagePath },
   });
-  storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief);
+  storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief, { storage_path: storagePath });
   return row;
 }
 
@@ -401,4 +404,105 @@ export async function listAssets(ctx: DirectorCtx) {
     .limit(50);
   if (error) throw new Error(error.message);
   return data;
+}
+
+// -------- pending assets (user-assisted generation) ----------
+type PendingRow = {
+  id: string;
+  project_id: string;
+  kind: string;
+  name: string;
+  meta_json: string;
+};
+
+export async function createPendingAsset(
+  ctx: DirectorCtx,
+  kind: "image" | "video" | "audio",
+  prompt: string,
+) {
+  const db = getDb();
+  const id = uid("pend");
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, thumbnail_hash, meta_json, created_at, updated_at)
+     VALUES (?, ?, 'pending', ?, NULL, 0, NULL, NULL, ?, ?, ?)`,
+  ).run(
+    id,
+    ctx.projectId,
+    `Pending ${kind} — ${prompt.slice(0, 40)}`,
+    JSON.stringify({ pending_kind: kind, prompt, status: "pending" }),
+    now,
+    now,
+  );
+  try {
+    getKernel().events.emit({ type: "AssetImported", assetId: id, projectId: ctx.projectId, kind: "pending", name: prompt.slice(0, 40), sizeBytes: 0, blobHash: null });
+  } catch { /* kernel not ready */ }
+  return { id, kind, prompt, status: "pending" };
+}
+
+export async function listPendingAssets(ctx: DirectorCtx) {
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT * FROM assets WHERE project_id = ? AND kind = 'pending' ORDER BY created_at DESC")
+    .all<PendingRow>(ctx.projectId);
+  return rows.map((r) => {
+    let meta: Record<string, unknown> = {};
+    try { meta = JSON.parse(r.meta_json) as Record<string, unknown>; } catch { /* empty */ }
+    return {
+      id: r.id,
+      kind: meta.pending_kind ?? "image",
+      prompt: typeof meta.prompt === "string" ? meta.prompt : "",
+      status: "pending",
+    };
+  });
+}
+
+/** Check whether pending assets have been fulfilled by the user. */
+export async function waitForUserAssets(ctx: DirectorCtx, assetIds: string[]) {
+  const db = getDb();
+  const results: Array<{
+    id: string;
+    status: "pending" | "ready" | "missing";
+    kind?: string;
+    prompt?: string;
+    url?: string | null;
+    duration_ms?: number | null;
+    supabase_id?: string | null;
+  }> = [];
+  for (const id of assetIds) {
+    const row = db.prepare("SELECT * FROM assets WHERE id = ?").get<PendingRow & { blob_hash: string | null }>(id);
+    if (!row) {
+      results.push({ id, status: "missing" });
+      continue;
+    }
+    let meta: Record<string, unknown> = {};
+    try { meta = JSON.parse(row.meta_json) as Record<string, unknown>; } catch { /* empty */ }
+    if (row.kind === "pending") {
+      results.push({
+        id,
+        status: "pending",
+        kind: typeof meta.pending_kind === "string" ? meta.pending_kind : undefined,
+        prompt: typeof meta.prompt === "string" ? meta.prompt : undefined,
+      });
+      continue;
+    }
+    // Fulfilled: the local row keeps the pending id; meta holds the Supabase id.
+    const supabaseId = typeof meta.supabase_id === "string" ? meta.supabase_id : null;
+    let url: string | null = null;
+    let durationMs: number | null = null;
+    if (supabaseId) {
+      const { data: sbRow } = await ctx.supabase
+        .from("assets")
+        .select("id, url, meta")
+        .eq("id", supabaseId)
+        .maybeSingle();
+      if (sbRow) {
+        url = sbRow.url;
+        const sbMeta = (sbRow.meta ?? {}) as Record<string, unknown>;
+        if (typeof sbMeta.duration_ms === "number") durationMs = sbMeta.duration_ms;
+      }
+    }
+    results.push({ id, status: "ready", kind: row.kind, url, duration_ms: durationMs, supabase_id: supabaseId });
+  }
+  return results;
 }

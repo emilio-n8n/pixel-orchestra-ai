@@ -21,7 +21,7 @@ async function uploadBinaryAsset(
   bytes: Uint8Array,
   mime: string,
   ext: string,
-): Promise<string> {
+): Promise<{ url: string; storagePath: string }> {
   const filename = `${userId}/${projectId}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from("assets").upload(filename, bytes, {
     contentType: mime,
@@ -29,7 +29,7 @@ async function uploadBinaryAsset(
   });
   if (error) throw new Error(`upload failed: ${error.message}`);
   const { data } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
-  return data?.signedUrl ?? filename;
+  return { url: data?.signedUrl ?? filename, storagePath: filename };
 }
 
 async function insertAsset(
@@ -80,12 +80,13 @@ export async function generateHtmlCard(
   const bytes = new TextEncoder().encode(wrapped);
 
   // Store in Supabase (timeline / MCP)
-  const storedUrl = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, "text/html", "html");
+  const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, "text/html", "html");
   const supabaseRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
     kind: "html",
     mime: "text/html",
     url: storedUrl,
     prompt: brief,
+    meta: { storage_path: storagePath },
   });
 
   // Also store in local kernel (Library / CenterView)
@@ -97,8 +98,8 @@ export async function generateHtmlCard(
     const now = Date.now();
     db.prepare(
       `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
-       VALUES (?, ?, 'html', ?, 'text/html', ?, ?, '{}', ?, ?)`,
-    ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, now, now);
+       VALUES (?, ?, 'html', ?, 'text/html', ?, ?, ?, ?, ?)`,
+    ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, JSON.stringify({ storage_path: storagePath }), now, now);
     try {
       getKernel().events.emit({
         type: "AssetImported",

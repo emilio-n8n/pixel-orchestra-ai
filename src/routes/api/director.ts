@@ -75,18 +75,47 @@ export const Route = createFileRoute("/api/director")({
               ? "Cloudflare Workers AI is configured — prefer a Cloudflare image model (flux-1-schnell, sd-xl-base) for image generation."
               : "Cloudflare is NOT configured — use the Lovable fallback for images (no model_id needed).") +
             "\n\n" +
+            "USER-ASSISTED GENERATION: For video, music, or when the user wants a better quality generation (complex image, special video), you do NOT generate — call generate_image/generate_video/generate_music with external:true. That creates a PENDING asset visible in the user's Library, waiting for a file. Tell the user what is pending and that you will wait. Then use wait_for_user_assets (or list_pending_assets) to check when it is ready; once ready, place it on the timeline. For audio, wait until you know the real duration_ms before placing." +
+            "\n\n" +
             "AUDIO OVERLAP: Never let two audio clips overlap on the same track. generate_voice returns the real duration_ms of the audio file in its metadata — trust it, never estimate or guess the duration. add_to_timeline uses that real duration automatically for overlap detection (it never underestimates), so do NOT pass duration_ms for audio clips unless you intentionally want a longer clip. Pay attention to the _warning field returned by add_to_timeline: if present, the clip was shifted or its duration was adjusted. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add.",
           messages: await convertToModelMessages(body.messages),
           stopWhen: stepCountIs(50),
           tools: {
             generate_image: tool({
               description:
-                "Generate an image from a text prompt. Optionally pass model_id (one of the AVAILABLE IMAGE MODELS).",
+                "Generate an image from a text prompt. Pass model_id (one of the AVAILABLE IMAGE MODELS) to choose a model, or set external=true to create a pending asset for the user to generate elsewhere.",
               inputSchema: z.object({
                 prompt: z.string(),
                 model_id: z.string().optional(),
+                external: z.boolean().optional(),
               }),
-              execute: ({ prompt, model_id }) => H.generateImage(ctx, prompt, model_id),
+              execute: async ({ prompt, model_id, external }) => {
+                if (external) return H.createPendingAsset(ctx, "image", prompt);
+                return H.generateImage(ctx, prompt, model_id);
+              },
+            }),
+            generate_video: tool({
+              description:
+                "Request a video. There is no built-in video model — always creates a pending asset so the user can generate the video elsewhere and drop it into the Library. Pass a detailed brief as the prompt.",
+              inputSchema: z.object({ brief: z.string() }),
+              execute: ({ brief }) => H.createPendingAsset(ctx, "video", brief),
+            }),
+            generate_music: tool({
+              description:
+                "Request a music / background track. There is no built-in music model — always creates a pending asset so the user can provide the audio file. Pass a description of the mood/style as the prompt.",
+              inputSchema: z.object({ brief: z.string() }),
+              execute: ({ brief }) => H.createPendingAsset(ctx, "audio", brief),
+            }),
+            wait_for_user_assets: tool({
+              description:
+                "Check the status of pending assets (created with external generation). Returns pending/ready per asset id; ready entries include the real url and duration_ms (for audio) plus the supabase_id to use with add_to_timeline.",
+              inputSchema: z.object({ asset_ids: z.array(z.string()) }),
+              execute: ({ asset_ids }) => H.waitForUserAssets(ctx, asset_ids),
+            }),
+            list_pending_assets: tool({
+              description: "List all pending assets (id, kind, prompt) waiting for the user to provide a file.",
+              inputSchema: z.object({}),
+              execute: () => H.listPendingAssets(ctx),
             }),
             generate_voice: tool({
               description: "Generate a voiceover / narration (TTS). The returned asset includes the real duration_ms of the audio in its meta — always read it and never estimate the duration yourself.",

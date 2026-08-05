@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useRegistrySnapshot } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
 import { useLibrary } from "@/plugins/library/store";
+import { PendingAssetView } from "@/plugins/library/PendingAssetView";
 import type { ViewerAsset } from "@/kernel";
 
 const MODULE_TITLES: Record<string, string> = {
@@ -35,6 +36,16 @@ export function CenterView() {
   // Viewer mode: an asset is selected → find the highest-priority viewer
   // matching its kind and render it.
   if (selected) {
+    // Pending assets show a "drop your generated file" screen instead of a viewer.
+    if (selected.status === "pending") {
+      return (
+        <PendingAssetView
+          asset={selected}
+          onFulfilled={() => setSelected(null)}
+          onBack={() => setSelected(null)}
+        />
+      );
+    }
     const viewer = registry.viewerFor(selected.kind);
     if (viewer) {
       const Comp = viewer.component;
