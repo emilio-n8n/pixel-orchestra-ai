@@ -24,7 +24,7 @@ export type AssetImported = EventBase & {
   kind: string;
   name: string;
   sizeBytes: number;
-  blobHash: string;
+  blobHash: string | null;
 };
 
 export type JobQueued = EventBase & { type: "JobQueued"; jobId: string };
