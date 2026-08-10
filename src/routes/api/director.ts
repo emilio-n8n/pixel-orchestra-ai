@@ -88,6 +88,12 @@ export const Route = createFileRoute("/api/director")({
             "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.",
           messages: await convertToModelMessages(body.messages),
           stopWhen: stepCountIs(50),
+          onError: (err) => {
+            // The stream error is otherwise swallowed into the client's
+            // generic "An error occurred." — log it for Lovable Cloud logs.
+            console.error("[/api/director] stream error:", err?.name, err?.message);
+            console.error(err?.stack ?? String(err));
+          },
           tools: {
             generate_image: tool({
               description:
