@@ -19,6 +19,7 @@ export function LibraryPanel() {
   const [busy, setBusy] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const PAGE_SIZE = 50;
 
@@ -28,14 +29,16 @@ export function LibraryPanel() {
     .slice(-1)[0];
   useEffect(() => {
     if (!projectId) return;
+    setError(null);
     listAssets({ data: { projectId, offset: 0, limit: PAGE_SIZE } })
       .then((r) => {
         setAssets(r.assets);
         setTotal(r.total);
       })
-      .catch(() => {
+      .catch((loadError) => {
         setAssets([]);
         setTotal(0);
+        setError(loadError instanceof Error ? loadError.message : "Unable to load assets");
       });
   }, [projectId, lastImport]);
 
@@ -55,6 +58,7 @@ export function LibraryPanel() {
     async (files: FileList | File[]) => {
       if (!projectId) return;
       setBusy(true);
+      setError(null);
       try {
         for (const f of Array.from(files)) {
           const buf = new Uint8Array(await f.arrayBuffer());
@@ -67,6 +71,8 @@ export function LibraryPanel() {
             },
           });
         }
+      } catch (importError) {
+        setError(importError instanceof Error ? importError.message : "Import failed");
       } finally {
         setBusy(false);
       }
@@ -122,6 +128,11 @@ export function LibraryPanel() {
         </label>
       </div>
       <div className="flex-1 overflow-auto px-4 pb-4">
+        {error ? (
+          <div className="mb-3 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-xs text-[var(--status-err)]">
+            {error}
+          </div>
+        ) : null}
         {assets.length === 0 ? (
           <div className="text-center text-xs text-[var(--text-dim)]">
             No assets yet. Import something above.
@@ -185,6 +196,9 @@ function AssetCard({ asset, onOpen }: { asset: AssetRow; onOpen: () => void }) {
 }
 
 function KindPreview({ asset }: { asset: AssetRow }) {
+  if (asset.kind === "image" && asset.url) {
+    return <img src={asset.url} alt={asset.name} loading="lazy" className="h-full w-full object-cover" />;
+  }
   if (asset.kind === "image" && asset.blobHash) {
     return <ImageThumb hash={asset.blobHash} alt={asset.name} />;
   }

@@ -78,6 +78,38 @@ function rowToAsset(r: RawRow): AssetRow {
   return base;
 }
 
+function cloudRowToAsset(r: {
+  id: string;
+  project_id: string;
+  kind: string;
+  mime: string | null;
+  url: string;
+  prompt: string | null;
+  meta: unknown;
+  created_at: string;
+}): AssetRow {
+  const meta = (r.meta && typeof r.meta === "object" ? r.meta : {}) as Record<string, unknown>;
+  const createdAt = Date.parse(r.created_at);
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    kind: r.kind as AssetKind,
+    name:
+      (typeof meta.name === "string" && meta.name) ||
+      r.prompt ||
+      `${r.kind} asset`,
+    mime: r.mime,
+    sizeBytes: typeof meta.size_bytes === "number" ? meta.size_bytes : 0,
+    blobHash: null,
+    thumbnailHash: null,
+    createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+    updatedAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+    status: "ready",
+    supabaseId: r.id,
+    url: r.url,
+  };
+}
+
 /** Upload bytes to Supabase storage + insert a row. Returns the row id + url. */
 async function syncToSupabase(
   supabase: SupabaseClient,
@@ -162,7 +194,7 @@ export const importAsset = createServerFn({ method: "POST" })
     let supabaseId: string | null = null;
     let storagePath: string | null = null;
     try {
-      const meta: Record<string, unknown> = {};
+      const meta: Record<string, unknown> = { name: data.name, size_bytes: bytes.byteLength };
       const prompt = data.name;
       const sb = await syncToSupabase(
         context.supabase,
@@ -448,6 +480,7 @@ export const updateHtmlAsset = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 
 export const listAssets = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .validator(
     z.object({
       projectId: z.string(),
@@ -455,15 +488,18 @@ export const listAssets = createServerFn({ method: "GET" })
       limit: z.number().int().min(1).max(200).optional().default(50),
     }),
   )
-  .handler(async ({ data }) => {
-    const db = getDb();
-    const rows = db
-      .prepare("SELECT * FROM assets WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?")
-      .all<RawRow>(data.projectId, data.limit, data.offset);
-    const totalRow = db
-      .prepare("SELECT COUNT(*) AS n FROM assets WHERE project_id = ?")
-      .get<{ n: number }>(data.projectId);
-    return { assets: rows.map(rowToAsset), total: totalRow?.n ?? 0 };
+  .handler(async ({ data, context }) => {
+    const from = data.offset;
+    const to = data.offset + data.limit - 1;
+    const { data: rows, error, count } = await context.supabase
+      .from("assets")
+      .select("id, project_id, kind, mime, url, prompt, meta, created_at", { count: "exact" })
+      .eq("owner_id", context.userId)
+      .eq("project_id", data.projectId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(`Unable to load assets: ${error.message}`);
+    return { assets: (rows ?? []).map(cloudRowToAsset), total: count ?? rows?.length ?? 0 };
   });
 
 export const getAssetBytes = createServerFn({ method: "GET" })

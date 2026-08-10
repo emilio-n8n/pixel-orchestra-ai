@@ -16,7 +16,12 @@ async function init(): Promise<BlobStore> {
 
 export async function initStorage(): Promise<BlobStore> {
   if (_store) return _store;
-  if (!_initPromise) _initPromise = init();
+  if (!_initPromise) {
+    _initPromise = init().then((store) => {
+      _store = store;
+      return store;
+    });
+  }
   return _initPromise;
 }
 

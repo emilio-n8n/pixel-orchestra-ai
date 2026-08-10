@@ -56,6 +56,7 @@ export function CenterView() {
         mime: selected.mime,
         sizeBytes: selected.sizeBytes,
         blobHash: selected.blobHash,
+        meta: selected.url ? { url: selected.url } : undefined,
       };
       return (
         <div className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]">

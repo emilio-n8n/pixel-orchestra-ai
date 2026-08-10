@@ -12,6 +12,12 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
   const lastUrl = useRef<string | null>(null);
 
   const load = useCallback(() => {
+    const remoteUrl = typeof asset.meta?.url === "string" ? asset.meta.url : null;
+    if (remoteUrl) {
+      setSrc(remoteUrl);
+      setErr(null);
+      return;
+    }
     if (!asset.blobHash) {
       setErr("no blob hash");
       return;
@@ -36,7 +42,7 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
         lastUrl.current = null;
       }
     };
-  }, [asset.blobHash]);
+  }, [asset.blobHash, asset.meta]);
 
   useEffect(() => {
     setErr(null);
