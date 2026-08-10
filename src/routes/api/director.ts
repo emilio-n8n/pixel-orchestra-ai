@@ -75,7 +75,8 @@ export const Route = createFileRoute("/api/director")({
               ? "Cloudflare Workers AI is configured — prefer a Cloudflare image model (flux-1-schnell, sd-xl-base) for image generation."
               : "Cloudflare is NOT configured — use the Lovable fallback for images (no model_id needed).") +
             "\n\n" +
-            "USER-ASSISTED GENERATION: For video, music, or when the user wants a better quality generation (complex image, special video), you do NOT generate — call generate_image/generate_video/generate_music with external:true. That creates a PENDING asset visible in the user's Library, waiting for a file. Tell the user what is pending and that you will wait. Then use wait_for_user_assets (or list_pending_assets) to check when it is ready; once ready, place it on the timeline. For audio, wait until you know the real duration_ms before placing." +
+            "USER-ASSISTED GENERATION: For video, music, or when the user wants a better quality generation (complex image, special video), you do NOT generate — call generate_image/generate_video/generate_music with external:true. That creates a PENDING asset visible in the user's Library, waiting for a file. Tell the user what is pending and that you will wait. Then use wait_for_user_assets (or list_pending_assets) to check when it is ready; once ready, place it on the timeline. For audio, wait until you know the real duration_ms before placing.\n" +
+            "IMPORTANT: NEVER poll wait_for_user_assets repeatedly — check it at most ONCE after the user says the files are ready. If the assets are still pending, stop and wait for the user to confirm they dropped the files. Do not loop on the same tool call; do not retry a failed generation more than once." +
             "\n\n" +
             "AUDIO OVERLAP: Never let two audio clips overlap on the same track. generate_voice returns the real duration_ms of the audio file in its metadata — trust it, never estimate or guess the duration. add_to_timeline uses that real duration automatically for overlap detection (it never underestimates), so do NOT pass duration_ms for audio clips unless you intentionally want a longer clip. Pay attention to the _warning field returned by add_to_timeline: if present, the clip was shifted or its duration was adjusted. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add." +
             "\n\n" +
@@ -115,8 +116,7 @@ export const Route = createFileRoute("/api/director")({
             }
             console.error("[/api/director] stream error:", detail);
           },
-          tools: {
-            generate_image: tool({
+          tools: {            generate_image: tool({
               description:
                 "Generate an image from a text prompt. Pass model_id (one of the AVAILABLE IMAGE MODELS) to choose a model, or set external=true to create a pending asset for the user to generate elsewhere.",
               inputSchema: z.object({
@@ -258,6 +258,22 @@ export const Route = createFileRoute("/api/director")({
             }),
           },
         });
+
+        // Diagnostic: log how the stream ended (finish reason + step count)
+        // — an AI_MissingToolResultsError usually means the step limit was hit
+        // mid tool-call cycle (the model looped on tool calls).
+        result.finishReason
+          .then((reason) => {
+            console.error(
+              "[/api/director] stream finished:",
+              reason,
+              "steps:",
+              result.steps.length,
+              "tools:",
+              result.toolCalls?.map((t) => t.toolName).join(",") ?? "none",
+            );
+          })
+          .catch(() => {});
 
         return result.toUIMessageStreamResponse();
       },
