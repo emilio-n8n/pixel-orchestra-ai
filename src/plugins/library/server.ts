@@ -141,7 +141,7 @@ function emitImported(projectId: string, id: string, kind: string, name: string,
 // ---------------------------------------------------------------------------
 
 export const importAsset = createServerFn({ method: "POST" })
-  .use(requireSupabaseAuth)
+  .middleware([requireSupabaseAuth])
   .validator(
     z.object({
       projectId: z.string(),
@@ -239,7 +239,7 @@ export const createPendingAsset = createServerFn({ method: "POST" })
   });
 
 export const fulfillPendingAsset = createServerFn({ method: "POST" })
-  .use(requireSupabaseAuth)
+  .middleware([requireSupabaseAuth])
   .validator(
     z.object({
       assetId: z.string(),
@@ -332,7 +332,7 @@ async function applyReplaceLocalAsync(
 }
 
 export const replaceAsset = createServerFn({ method: "POST" })
-  .use(requireSupabaseAuth)
+  .middleware([requireSupabaseAuth])
   .validator(
     z.object({
       assetId: z.string(),
@@ -409,7 +409,7 @@ export const replaceAsset = createServerFn({ method: "POST" })
   });
 
 export const updateHtmlAsset = createServerFn({ method: "POST" })
-  .use(requireSupabaseAuth)
+  .middleware([requireSupabaseAuth])
   .validator(z.object({ assetId: z.string(), html: z.string() }))
   .handler(async ({ data, context }) => {
     const db = getDb();
