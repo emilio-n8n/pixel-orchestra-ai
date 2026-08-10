@@ -91,7 +91,7 @@ export function JobsPanel() {
       .subscribe();
     return () => {
       alive = false;
-      supabase.removeChannel(ch);
+      ch.unsubscribe();
     };
   }, [pid]);
 

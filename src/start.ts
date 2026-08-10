@@ -22,7 +22,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 // The kernel (and its SQLite DB) must be initialized on the server before any
 // createServerFn runs. `bootstrapKernel` is idempotent, so the first server
 // fn call does the init (DB + storage + plugin registration) and the rest no-op.
-const bootstrapMiddleware = createMiddleware().server(async ({ next }) => {
+const bootstrapMiddleware = createMiddleware({ type: "function" }).server(async ({ next }) => {
   await bootstrapKernel();
   return next();
 });

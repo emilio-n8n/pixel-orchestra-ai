@@ -37,7 +37,7 @@ export async function bootstrapKernel(
     // Re-hydrate the scheduler with executors pushed during plugin activation.
     // The kernel builds before plugins register, so the initial snapshot is
     // taken too early — pull them in now that activation is done.
-    for (const exec of listNodeExecutors()) {
+    for (const exec of listNodeExecutors().values()) {
       scheduler.registerExecutor(exec);
     }
     started = true;

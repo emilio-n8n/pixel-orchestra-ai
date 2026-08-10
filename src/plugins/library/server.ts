@@ -361,7 +361,10 @@ export const replaceAsset = createServerFn({ method: "POST" })
       if (sbId) {
         const { error } = await context.supabase
           .from("assets")
-          .update({ mime: data.mime, meta: { ...prevMeta, ...extraMeta } })
+          .update({
+            mime: data.mime,
+            meta: { ...prevMeta, ...extraMeta } as unknown as Record<string, never>,
+          })
           .eq("id", sbId);
         if (error) throw error;
         if (typeof prevMeta.storage_path === "string") {

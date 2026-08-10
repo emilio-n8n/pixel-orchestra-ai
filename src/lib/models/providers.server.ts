@@ -86,7 +86,7 @@ export async function transcribeAudioGroq(
   if (!groqApiKey) throw new Error("Groq API key not configured (Director settings → Groq)");
   const form = new FormData();
   const ext = mime.includes("mp3") ? "mp3" : mime.includes("wav") ? "wav" : "m4a";
-  form.append("file", new Blob([bytes], { type: mime }), `audio.${ext}`);
+  form.append("file", new Blob([bytes as unknown as BlobPart], { type: mime }), `audio.${ext}`);
   form.append("model", "whisper-large-v3");
   form.append("temperature", "0");
   form.append("response_format", "verbose_json");
