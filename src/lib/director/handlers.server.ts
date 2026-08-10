@@ -257,7 +257,9 @@ export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
         {
           role: "system",
           content:
-            "Return ONE complete HTML fragment (no <html> or <body>) styled inline for a 1920x1080 broadcast card. Bold typography, cinematic. No commentary, HTML only.",
+            "Return ONE complete HTML fragment (no <html> or <body>) styled inline for a 1920x1080 broadcast card. Bold typography, cinematic.\n" +
+            "THE CARD MUST BE ANIMATED — motion graphics, not a static image. Include a <style> tag inside the fragment with @keyframes: a strong entrance (fadeIn + slideUp/zoomIn/letterSpacing/typewriter, animation-fill-mode: forwards) and continuous ambient motion (gradient shift, floating, pulsing glow, ken-burns). Use animation shorthand with explicit 1.5s-4s durations and ease timing; animate transform/opacity only, add will-change: transform,opacity. Use vw/vh/% units (never px for layout).\n" +
+            "No <script>, no <html>, no <body>, no commentary. HTML only.",
         },
         { role: "user", content: brief },
       ],

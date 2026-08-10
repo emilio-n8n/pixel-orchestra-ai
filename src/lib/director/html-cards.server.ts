@@ -5,14 +5,19 @@ import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
 
 const HTML_SYSTEM =
-  "You are generating a SINGLE fullscreen HTML element to be embedded as a 1920x1080 video frame.\n" +
+  "You are generating a SINGLE fullscreen animated HTML element to be embedded as a 1920x1080 video frame.\n" +
   "Return ONE root element (e.g. <div>, <section>) with inline styles. " +
+  "Include a <style> tag INSIDE the root element defining all your @keyframes. " +
   "Use vw/vh/% units (NEVER px for layout). " +
   "display:flex; align-items:center; justify-content:center. " +
-  "Solid color or gradient background. " +
-  "Bold cinematic typography.\n" +
-  "Do NOT output <html>, <head>, <body>, <script>, or <style> tags. " +
-  "Do NOT output markdown, code fences, or commentary. Just the root element.";
+  "Bold cinematic typography, solid color or gradient background.\n" +
+  "THE CARD MUST BE ANIMATED — this is motion graphics, not a static image:\n" +
+  "- A strong ENTRANCE animation (fadeIn + slideUp / zoomIn / letterSpacing / typewriter) with animation-fill-mode: forwards.\n" +
+  "- Continuous AMBIENT motion so the card never freezes (slow gradient shift, floating, pulsing glow, subtle ken-burns zoom, shimmer).\n" +
+  "- Define every animation with @keyframes in the <style> tag; use the animation shorthand with explicit durations (1.5s-4s) and ease/ease-out timing.\n" +
+  "- Animate transform and opacity only (cheap); add will-change: transform,opacity to animated elements.\n" +
+  "Do NOT output <html>, <head>, <body>, or <script> tags. " +
+  "Do NOT output markdown, code fences, or commentary. Just the root element (with its inner <style>).";
 
 async function uploadBinaryAsset(
   supabase: SupabaseClient,
@@ -62,7 +67,7 @@ function wrapFullscreen(html: string): string {
     .replace(/<\/?html[^>]*>/gi, "")
     .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
     .replace(/<\/?body[^>]*>/gi, "")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    // <style> is allowed (CSS keyframes drive the animations); scripts are not.
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .trim();
   return `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;

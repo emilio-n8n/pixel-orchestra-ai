@@ -6,7 +6,8 @@ import { generateHtmlCard } from "@/lib/director/handlers.server";
 export default defineTool({
   name: "generate_html_card",
   title: "Generate HTML title card",
-  description: "Generate a styled HTML card (title, lower third, credits).",
+  description:
+    "Generate an ANIMATED HTML card (title, lower third, credits, transition) — ships with CSS keyframes (entrance + ambient motion) that become real video motion at export. Pass the text, vibe, colors and the motion in the brief.",
   inputSchema: { project_id: z.string(), brief: z.string().min(1) },
   annotations: { readOnlyHint: false },
   handler: async ({ project_id, brief }, ctx: ToolContext) => {
