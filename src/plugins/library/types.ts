@@ -42,6 +42,8 @@ export interface AssetRow {
   prompt?: string;
   /** The matching row id in Supabase (synced assets). */
   supabaseId?: string | null;
+  /** Durable signed URL used by published builds and remote viewers. */
+  url?: string | null;
 }
 
 export interface ImportAssetInput {

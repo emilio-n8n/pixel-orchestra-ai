@@ -88,7 +88,20 @@ export const Route = createFileRoute("/api/director")({
             "\n\n" +
             "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.",
           messages: await convertToModelMessages(body.messages),
-          stopWhen: stepCountIs(50),
+          // Reserve the final turns for a text response. Without this guard,
+          // some OpenAI-compatible providers can emit a tool call exactly at
+          // the step boundary, leaving no continuation turn for its result.
+          stopWhen: stepCountIs(16),
+          prepareStep: ({ stepNumber }) =>
+            stepNumber >= 14 ? { toolChoice: "none" as const } : undefined,
+          onStepFinish: (step) => {
+            console.info(
+              "[/api/director] step:",
+              step.stepNumber,
+              step.finishReason,
+              step.toolCalls.map((call) => call.toolName).join(",") || "text",
+            );
+          },
           onError: (err) => {
             // The stream error is otherwise swallowed into the client's
             // generic "An error occurred." — log it for Lovable Cloud logs.
@@ -275,7 +288,14 @@ export const Route = createFileRoute("/api/director")({
           })
           .catch(() => {});
 
-        return result.toUIMessageStreamResponse();
+        return result.toUIMessageStreamResponse({
+          onError: (error) => {
+            if (error instanceof Error && error.message) {
+              return `Director stopped: ${error.message}`;
+            }
+            return "Director stopped before completing this request. Please retry with a shorter instruction.";
+          },
+        });
       },
     },
   },

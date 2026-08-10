@@ -117,10 +117,14 @@ async function recordJob(
       .select("id")
       .single();
     jobId = data?.id ?? null;
-  } catch { /* best-effort */ }
+  } catch (error) {
+    console.error("[director] failed to create job", error);
+  }
   try {
     if (jobId) await sb.from("director_jobs").update({ status: "running" }).eq("id", jobId);
-  } catch { /* best-effort */ }
+  } catch (error) {
+    console.error("[director] failed to mark job running", error);
+  }
   try {
     const result = await run();
     try {
@@ -130,7 +134,9 @@ async function recordJob(
           .update({ status: "completed", result, finished_at: new Date().toISOString() })
           .eq("id", jobId);
       }
-    } catch { /* best-effort */ }
+    } catch (error) {
+      console.error("[director] failed to complete job", error);
+    }
     return result;
   } catch (e) {
     try {
@@ -140,7 +146,9 @@ async function recordJob(
           .update({ status: "failed", error: (e as Error).message ?? String(e), finished_at: new Date().toISOString() })
           .eq("id", jobId);
       }
-    } catch { /* best-effort */ }
+    } catch (jobError) {
+      console.error("[director] failed to mark job failed", jobError);
+    }
     throw e;
   }
 }
