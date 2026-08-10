@@ -7,6 +7,12 @@ export function ImageViewer({ asset }: { asset: ViewerAsset }) {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    const remoteUrl = typeof asset.meta?.url === "string" ? asset.meta.url : null;
+    if (remoteUrl) {
+      setSrc(remoteUrl);
+      setErr(null);
+      return;
+    }
     if (!asset.blobHash) {
       setErr("no blob hash");
       return;
@@ -21,7 +27,7 @@ export function ImageViewer({ asset }: { asset: ViewerAsset }) {
     return () => {
       cancelled = true;
     };
-  }, [asset.blobHash, asset.mime]);
+  }, [asset.blobHash, asset.mime, asset.meta]);
 
   if (err) {
     return (

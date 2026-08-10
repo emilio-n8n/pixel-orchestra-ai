@@ -275,15 +275,17 @@ export const Route = createFileRoute("/api/director")({
         // Diagnostic: log how the stream ended (finish reason + step count)
         // — an AI_MissingToolResultsError usually means the step limit was hit
         // mid tool-call cycle (the model looped on tool calls).
-        result.finishReason
-          .then((reason) => {
+        Promise.resolve(result.finishReason)
+          .then(async (reason) => {
+            const steps = await result.steps;
+            const toolCalls = await result.toolCalls;
             console.error(
               "[/api/director] stream finished:",
               reason,
               "steps:",
-              result.steps.length,
+              steps.length,
               "tools:",
-              result.toolCalls?.map((t) => t.toolName).join(",") ?? "none",
+              toolCalls.map((call) => call.toolName).join(",") || "none",
             );
           })
           .catch(() => {});
