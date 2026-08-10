@@ -91,8 +91,29 @@ export const Route = createFileRoute("/api/director")({
           onError: (err) => {
             // The stream error is otherwise swallowed into the client's
             // generic "An error occurred." — log it for Lovable Cloud logs.
-            console.error("[/api/director] stream error:", err?.name, err?.message);
-            console.error(err?.stack ?? String(err));
+            let detail: string;
+            if (err instanceof Error) {
+              detail = `${err.name}: ${err.message}\n${err.stack ?? ""}`;
+            } else if (typeof err === "object" && err !== null) {
+              const seen = new WeakSet<object>();
+              const parts: string[] = [];
+              for (const k of Object.keys(err)) {
+                const v = (err as Record<string, unknown>)[k];
+                if (typeof v === "object" && v !== null) {
+                  if (seen.has(v)) { parts.push(`${k}: [circular]`); continue; }
+                  seen.add(v);
+                }
+                try {
+                  parts.push(`${k}: ${JSON.stringify(v)}`);
+                } catch {
+                  parts.push(`${k}: [unserializable:${String(v)}]`);
+                }
+              }
+              detail = `[plain object]\n${parts.join("\n")}`;
+            } else {
+              detail = String(err);
+            }
+            console.error("[/api/director] stream error:", detail);
           },
           tools: {
             generate_image: tool({
