@@ -28,10 +28,15 @@ export function Sidebar() {
   const registry = useRegistrySnapshot();
 
   const items = useMemo<RailItem[]>(() => {
+    // Plugin panels rarely ship an icon — use a single readable glyph instead
+    // of two truncated letters ("St", "No"…).
+    const glyphFor = (title: string, icon?: string) =>
+      icon ? icon.slice(0, 2) : (title.trim()[0] ?? "◆").toUpperCase();
+
     const pluginSidebar: RailItem[] = registry.panelsForSlot("sidebar").map((p) => ({
       id: p.id,
       label: p.title,
-      glyph: (p.icon ?? p.title).slice(0, 2),
+      glyph: glyphFor(p.title, p.icon),
       order: p.order ?? 1000,
     }));
 
@@ -39,7 +44,7 @@ export function Sidebar() {
     const pluginCenter: RailItem[] = registry.panelsForSlot("center").map((p) => ({
       id: moduleIdFromPanelId(p.id),
       label: p.title,
-      glyph: (p.icon ?? p.title).slice(0, 2),
+      glyph: glyphFor(p.title, p.icon),
       order: p.order ?? 1000,
     }));
 

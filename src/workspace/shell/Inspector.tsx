@@ -14,7 +14,19 @@ export function Inspector() {
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-2)]">
       <Header />
       <div className="flex-1 overflow-auto">
-        {selected ? <AssetInspector asset={selected} onClose={() => setSelected(null)} /> : null}
+        {selected ? <AssetInspector asset={selected} onClose={() => setSelected(null)} /> : (
+          <div className="border-b border-[var(--line)] p-4 text-[11px] leading-relaxed text-[var(--text-dim)]">
+            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
+              Inspector
+            </div>
+            <p className="mt-2">
+              Select an asset in the Library to inspect, edit its HTML or replace its file.
+            </p>
+            <p className="mt-2">
+              Select a timeline clip to edit its position, duration or fades.
+            </p>
+          </div>
+        )}
         {panels.map((p) => {
           const Comp = p.component;
           return <Comp key={p.id} />;

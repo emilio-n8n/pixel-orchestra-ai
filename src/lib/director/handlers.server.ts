@@ -91,6 +91,80 @@ async function insertAsset(
   return data;
 }
 
+// -------- jobs + provenance (agent operations) ----------
+// director_jobs / asset_provenance aren't in the generated Database type yet —
+// cast to a loosely-typed client for those tables.
+function looseSupabase(ctx: DirectorCtx) {
+  return ctx.supabase as unknown as SupabaseClient<any>;
+}
+
+/**
+ * Record an agent operation as a job (queued → running → completed/failed)
+ * and run it. Best-effort: a job recording failure never blocks the tool.
+ */
+async function recordJob(
+  ctx: DirectorCtx,
+  kind: string,
+  prompt: string | null,
+  run: () => Promise<unknown>,
+) {
+  const sb = looseSupabase(ctx);
+  let jobId: string | null = null;
+  try {
+    const { data } = await sb
+      .from("director_jobs")
+      .insert({ owner_id: ctx.userId, project_id: ctx.projectId, kind, status: "queued", prompt })
+      .select("id")
+      .single();
+    jobId = data?.id ?? null;
+  } catch { /* best-effort */ }
+  try {
+    if (jobId) await sb.from("director_jobs").update({ status: "running" }).eq("id", jobId);
+  } catch { /* best-effort */ }
+  try {
+    const result = await run();
+    try {
+      if (jobId) {
+        await sb
+          .from("director_jobs")
+          .update({ status: "completed", result, finished_at: new Date().toISOString() })
+          .eq("id", jobId);
+      }
+    } catch { /* best-effort */ }
+    return result;
+  } catch (e) {
+    try {
+      if (jobId) {
+        await sb
+          .from("director_jobs")
+          .update({ status: "failed", error: (e as Error).message ?? String(e), finished_at: new Date().toISOString() })
+          .eq("id", jobId);
+      }
+    } catch { /* best-effort */ }
+    throw e;
+  }
+}
+
+/** Link an agent-generated asset to its provenance (tool, params, sources). */
+async function recordProvenance(
+  ctx: DirectorCtx,
+  assetId: string,
+  tool: string,
+  params: Record<string, unknown> = {},
+  sourceAssetIds: string[] = [],
+) {
+  try {
+    await looseSupabase(ctx).from("asset_provenance").insert({
+      owner_id: ctx.userId,
+      project_id: ctx.projectId,
+      asset_id: assetId,
+      tool,
+      params,
+      source_asset_ids: sourceAssetIds,
+    });
+  } catch { /* best-effort */ }
+}
+
 export interface DirectorCtx {
   supabase: SupabaseClient;
   userId: string;
@@ -112,35 +186,42 @@ export async function generateImage(
   prompt: string,
   modelId?: string,
 ) {
-  const models = ctx.models ?? [];
-  const creds = ctx.creds ?? {};
-  const preferred = modelId
-    ? models.find((m) => m.id === modelId || m.modelId === modelId)
-    : undefined;
-  const cfModel = preferred?.provider === "cloudflare" ? preferred : undefined;
+  return recordJob(ctx, "generate_image", prompt, async () => {
+    const models = ctx.models ?? [];
+    const creds = ctx.creds ?? {};
+    const preferred = modelId
+      ? models.find((m) => m.id === modelId || m.modelId === modelId)
+      : undefined;
+    const cfModel = preferred?.provider === "cloudflare" ? preferred : undefined;
 
-  let mime: string;
-  let bytes: Uint8Array;
-  if (cfModel && creds.cloudflareAccountId && creds.cloudflareApiKey) {
-    const out = await generateImageCloudflare(cfModel, prompt, creds);
-    mime = out.mime;
-    bytes = out.bytes;
-  } else {
-    const out = await generateImageLovable(prompt);
-    mime = out.mime;
-    bytes = out.bytes;
-  }
-  const ext = mime.split("/")[1] ?? "png";
-  const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, mime, ext);
-  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
-    kind: "image",
-    mime,
-    url: storedUrl,
-    prompt,
-    meta: { storage_path: storagePath },
+    let mime: string;
+    let bytes: Uint8Array;
+    if (cfModel && creds.cloudflareAccountId && creds.cloudflareApiKey) {
+      const out = await generateImageCloudflare(cfModel, prompt, creds);
+      mime = out.mime;
+      bytes = out.bytes;
+    } else {
+      const out = await generateImageLovable(prompt);
+      mime = out.mime;
+      bytes = out.bytes;
+    }
+    const ext = mime.split("/")[1] ?? "png";
+    const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, mime, ext);
+    const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+      kind: "image",
+      mime,
+      url: storedUrl,
+      prompt,
+      meta: { storage_path: storagePath },
+    });
+    recordProvenance(ctx, row.id, "director.generate_image", {
+      prompt,
+      model_id: modelId ?? null,
+      provider: cfModel ? "cloudflare" : "lovable",
+    });
+    storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt, { storage_path: storagePath });
+    return row;
   });
-  storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt, { storage_path: storagePath });
-  return row;
 }
 
 // -------- tts / voice ----------
@@ -149,40 +230,43 @@ export async function generateVoice(
   text: string,
   voice: string = "alloy",
 ) {
-  const res = await fetch(`${LOVABLE_AI_URL}/audio/speech`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${requireKey()}`,
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-4o-mini-tts",
-      voice,
-      input: text,
-      response_format: "mp3",
-    }),
+  return recordJob(ctx, "generate_voice", text, async () => {
+    const res = await fetch(`${LOVABLE_AI_URL}/audio/speech`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${requireKey()}`,
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini-tts",
+        voice,
+        input: text,
+        response_format: "mp3",
+      }),
+    });
+    if (!res.ok) throw new Error(`tts failed: ${res.status} ${await res.text()}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const durationMs = measureMp3DurationMs(bytes);
+    const meta = { voice, duration_ms: durationMs };
+    const { url: storedUrl, storagePath } = await uploadBinaryAsset(
+      ctx.supabase,
+      ctx.userId,
+      ctx.projectId,
+      bytes,
+      "audio/mpeg",
+      "mp3",
+    );
+    const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+      kind: "audio",
+      mime: "audio/mpeg",
+      url: storedUrl,
+      prompt: text,
+      meta: { ...meta, storage_path: storagePath },
+    });
+    recordProvenance(ctx, row.id, "director.generate_voice", { text, voice });
+    storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, { ...meta, storage_path: storagePath });
+    return row;
   });
-  if (!res.ok) throw new Error(`tts failed: ${res.status} ${await res.text()}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  const durationMs = measureMp3DurationMs(bytes);
-  const meta = { voice, duration_ms: durationMs };
-  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
-    ctx.supabase,
-    ctx.userId,
-    ctx.projectId,
-    bytes,
-    "audio/mpeg",
-    "mp3",
-  );
-  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
-    kind: "audio",
-    mime: "audio/mpeg",
-    url: storedUrl,
-    prompt: text,
-    meta: { ...meta, storage_path: storagePath },
-  });
-  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, { ...meta, storage_path: storagePath });
-  return row;
 }
 
 // -------- subtitles / transcription (Groq whisper) ----------
@@ -192,103 +276,109 @@ export async function generateVoice(
  * duration. Returns the transcript + the created asset + clip.
  */
 export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
-  const groqApiKey = ctx.creds?.groqApiKey;
-  if (!groqApiKey) throw new Error("Groq API key not configured (Director settings → Groq)");
+  return recordJob(ctx, "generate_subtitles", null, async () => {
+    const groqApiKey = ctx.creds?.groqApiKey;
+    if (!groqApiKey) throw new Error("Groq API key not configured (Director settings → Groq)");
 
-  const { data: asset, error: assetErr } = await ctx.supabase
-    .from("assets")
-    .select("id, kind, mime, url, meta")
-    .eq("id", assetId)
-    .maybeSingle();
-  if (assetErr || !asset) throw new Error("asset not found");
-  const mime = asset.mime ?? "audio/mpeg";
-  if (!asset.url || !/^https?:\/\//i.test(asset.url)) {
-    throw new Error("asset has no usable url (signed url missing) — replace the file or regenerate the voice");
-  }
-  const res = await fetch(asset.url);
-  if (!res.ok) throw new Error(`failed to fetch audio: ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+    const { data: asset, error: assetErr } = await ctx.supabase
+      .from("assets")
+      .select("id, kind, mime, url, meta")
+      .eq("id", assetId)
+      .maybeSingle();
+    if (assetErr || !asset) throw new Error("asset not found");
+    const mime = asset.mime ?? "audio/mpeg";
+    if (!asset.url || !/^https?:\/\//i.test(asset.url)) {
+      throw new Error("asset has no usable url (signed url missing) — replace the file or regenerate the voice");
+    }
+    const res = await fetch(asset.url);
+    if (!res.ok) throw new Error(`failed to fetch audio: ${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
 
-  const { text } = await transcribeAudioGroq(bytes, mime, groqApiKey);
-  if (!text) throw new Error("transcription returned empty text");
+    const { text } = await transcribeAudioGroq(bytes, mime, groqApiKey);
+    if (!text) throw new Error("transcription returned empty text");
 
-  // Store the transcript as an asset (kind html so the viewer can open it).
-  const transcriptBytes = new TextEncoder().encode(text);
-  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
-    ctx.supabase,
-    ctx.userId,
-    ctx.projectId,
-    transcriptBytes,
-    "text/html",
-    "html",
-  );
-  const assetRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
-    kind: "html",
-    mime: "text/html",
-    url: storedUrl,
-    prompt: text,
-    meta: { storage_path: storagePath },
+    // Store the transcript as an asset (kind html so the viewer can open it).
+    const transcriptBytes = new TextEncoder().encode(text);
+    const { url: storedUrl, storagePath } = await uploadBinaryAsset(
+      ctx.supabase,
+      ctx.userId,
+      ctx.projectId,
+      transcriptBytes,
+      "text/html",
+      "html",
+    );
+    const assetRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+      kind: "html",
+      mime: "text/html",
+      url: storedUrl,
+      prompt: text,
+      meta: { storage_path: storagePath },
+    });
+    recordProvenance(ctx, assetRow.id, "director.generate_subtitles", { audio_asset_id: assetId }, [assetId]);
+    storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text, { storage_path: storagePath });
+
+    // Place on the Subtitles track with the audio's real duration.
+    const meta = (asset.meta ?? {}) as Record<string, unknown>;
+    const durationMs = typeof meta.duration_ms === "number" && meta.duration_ms > 0 ? meta.duration_ms : 3000;
+    const clip = await addToTimeline(ctx, {
+      asset_id: assetRow.id,
+      track: "Subtitles",
+      duration_ms: durationMs,
+    });
+
+    return { transcript: text, asset: assetRow, clip };
   });
-  storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text, { storage_path: storagePath });
-
-  // Place on the Subtitles track with the audio's real duration.
-  const meta = (asset.meta ?? {}) as Record<string, unknown>;
-  const durationMs = typeof meta.duration_ms === "number" && meta.duration_ms > 0 ? meta.duration_ms : 3000;
-  const clip = await addToTimeline(ctx, {
-    asset_id: assetRow.id,
-    track: "Subtitles",
-    duration_ms: durationMs,
-  });
-
-  return { transcript: text, asset: assetRow, clip };
 }
 
 // -------- html card (MCP only — uses LOVABLE_API_KEY) ----------
 export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
-  const res = await fetch(`${LOVABLE_AI_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${requireKey()}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Return ONE complete HTML fragment (no <html> or <body>) styled inline for a 1920x1080 broadcast card. Bold typography, cinematic.\n" +
-            "THE CARD MUST BE ANIMATED — motion graphics, not a static image. Include a <style> tag inside the fragment with @keyframes: a strong entrance (fadeIn + slideUp/zoomIn/letterSpacing/typewriter, animation-fill-mode: forwards) and continuous ambient motion (gradient shift, floating, pulsing glow, ken-burns). Use animation shorthand with explicit 1.5s-4s durations and ease timing; animate transform/opacity only, add will-change: transform,opacity. Use vw/vh/% units (never px for layout).\n" +
-            "No <script>, no <html>, no <body>, no commentary. HTML only.",
-        },
-        { role: "user", content: brief },
-      ],
-    }),
+  return recordJob(ctx, "generate_html_card", brief, async () => {
+    const res = await fetch(`${LOVABLE_AI_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${requireKey()}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Return ONE complete HTML fragment (no <html> or <body>) styled inline for a 1920x1080 broadcast card. Bold typography, cinematic.\n" +
+              "THE CARD MUST BE ANIMATED — motion graphics, not a static image. Include a <style> tag inside the fragment with @keyframes: a strong entrance (fadeIn + slideUp/zoomIn/letterSpacing/typewriter, animation-fill-mode: forwards) and continuous ambient motion (gradient shift, floating, pulsing glow, ken-burns). Use animation shorthand with explicit 1.5s-4s durations and ease timing; animate transform/opacity only, add will-change: transform,opacity. Use vw/vh/% units (never px for layout).\n" +
+              "No <script>, no <html>, no <body>, no commentary. HTML only.",
+          },
+          { role: "user", content: brief },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`html gen failed: ${res.status}`);
+    const data = await res.json();
+    const html: string = data?.choices?.[0]?.message?.content ?? "";
+    const cleaned = html.replace(/^```html\n?/i, "").replace(/```\s*$/i, "").trim();
+    const bytes = new TextEncoder().encode(cleaned);
+    const wrapped = `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;
+    const wrappedBytes = new TextEncoder().encode(wrapped);
+    const { url: storedUrl, storagePath } = await uploadBinaryAsset(
+      ctx.supabase,
+      ctx.userId,
+      ctx.projectId,
+      wrappedBytes,
+      "text/html",
+      "html",
+    );
+    const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+      kind: "html",
+      mime: "text/html",
+      url: storedUrl,
+      prompt: brief,
+      meta: { storage_path: storagePath },
+    });
+    recordProvenance(ctx, row.id, "director.generate_html_card", { brief });
+    storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief, { storage_path: storagePath });
+    return row;
   });
-  if (!res.ok) throw new Error(`html gen failed: ${res.status}`);
-  const data = await res.json();
-  const html: string = data?.choices?.[0]?.message?.content ?? "";
-  const cleaned = html.replace(/^```html\n?/i, "").replace(/```\s*$/i, "").trim();
-  const bytes = new TextEncoder().encode(cleaned);
-  const wrapped = `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;
-  const wrappedBytes = new TextEncoder().encode(wrapped);
-  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
-    ctx.supabase,
-    ctx.userId,
-    ctx.projectId,
-    wrappedBytes,
-    "text/html",
-    "html",
-  );
-  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
-    kind: "html",
-    mime: "text/html",
-    url: storedUrl,
-    prompt: brief,
-    meta: { storage_path: storagePath },
-  });
-  storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief, { storage_path: storagePath });
-  return row;
 }
 
 // -------- timeline ops ----------
@@ -390,6 +480,146 @@ export async function removeFromTimeline(ctx: DirectorCtx, clipId: string) {
   return data;
 }
 
+/**
+ * Edit an existing clip: shift it (start_ms), resize it (duration_ms), move
+ * it to another track, or apply volume fades (fade_in_ms / fade_out_ms,
+ * stored in meta and honoured by the preview + export). Returns a _warning
+ * when the new position overlaps another clip on the track.
+ */
+export async function updateTimelineClip(
+  ctx: DirectorCtx,
+  args: {
+    clip_id: string;
+    start_ms?: number;
+    duration_ms?: number;
+    track?: string;
+    fade_in_ms?: number;
+    fade_out_ms?: number;
+  },
+) {
+  const { data: existing, error: getErr } = await ctx.supabase
+    .from("timeline_clips")
+    .select("id, track, start_ms, duration_ms, meta")
+    .eq("id", args.clip_id)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .maybeSingle();
+  if (getErr || !existing) throw new Error("clip not found");
+
+  const patch: Record<string, unknown> = {};
+  if (args.start_ms != null) patch.start_ms = args.start_ms;
+  if (args.duration_ms != null) patch.duration_ms = args.duration_ms;
+  if (args.track != null) patch.track = args.track;
+  const meta = (existing.meta ?? {}) as Record<string, unknown>;
+  if (args.fade_in_ms != null) meta.fade_in_ms = args.fade_in_ms;
+  if (args.fade_out_ms != null) meta.fade_out_ms = args.fade_out_ms;
+  patch.meta = meta;
+
+  const { data, error } = await ctx.supabase
+    .from("timeline_clips")
+    .update(patch)
+    .eq("id", args.clip_id)
+    .eq("owner_id", ctx.userId)
+    .select("id, track, start_ms, duration_ms, asset_id, meta")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const track = args.track ?? existing.track;
+  const start = args.start_ms ?? existing.start_ms;
+  const duration = args.duration_ms ?? existing.duration_ms;
+  let overlapWarning: string | null = null;
+  const { data: others } = await ctx.supabase
+    .from("timeline_clips")
+    .select("start_ms, duration_ms")
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .eq("track", track)
+    .neq("id", args.clip_id);
+  for (const o of others ?? []) {
+    const oStart = o.start_ms ?? 0;
+    const oEnd = oStart + (o.duration_ms ?? 3000);
+    const cEnd = start + duration;
+    if (start < oEnd && cEnd > oStart) {
+      overlapWarning = `⚠️ this clip now overlaps another clip on "${track}" (start ${start}ms → end ${cEnd}ms). Move or trim one of them to keep the mix clean.`;
+      break;
+    }
+  }
+  return { ...data, _warning: overlapWarning };
+}
+
+/**
+ * Swap the asset of an existing clip in place (keeps its position). If the
+ * new asset is audio with a known real duration, the clip is resized to it.
+ */
+export async function replaceClipAsset(ctx: DirectorCtx, clipId: string, newAssetId: string) {
+  const { data: asset, error: assetErr } = await ctx.supabase
+    .from("assets")
+    .select("id, kind, meta")
+    .eq("id", newAssetId)
+    .eq("owner_id", ctx.userId)
+    .maybeSingle();
+  if (assetErr || !asset) throw new Error("asset not found");
+
+  const patch: Record<string, unknown> = { asset_id: newAssetId };
+  const meta = (asset.meta ?? {}) as Record<string, unknown>;
+  if (asset.kind === "audio" && typeof meta.duration_ms === "number" && meta.duration_ms > 0) {
+    patch.duration_ms = meta.duration_ms;
+  }
+  const { data, error } = await ctx.supabase
+    .from("timeline_clips")
+    .update(patch)
+    .eq("id", clipId)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .select("id, track, start_ms, duration_ms, asset_id")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Lineage of an agent-generated asset (Supabase asset_provenance): its own
+ * provenance row (tool + params), its parents (source assets) and its
+ * descendants (assets that used it as a source).
+ */
+export async function getLineage(ctx: DirectorCtx, assetId: string) {
+  const sb = looseSupabase(ctx);
+  const { data: prov, error: provErr } = await sb
+    .from("asset_provenance")
+    .select("*")
+    .eq("asset_id", assetId)
+    .eq("owner_id", ctx.userId)
+    .maybeSingle();
+  if (provErr) throw new Error(provErr.message);
+  if (!prov) return { asset_id: assetId, provenance: null, parents: [], descendants: [] };
+
+  const parents = (prov.source_asset_ids ?? []) as string[];
+  let parentDetails: Array<{ id: string; kind: string; prompt: string | null }> = [];
+  if (parents.length > 0) {
+    const { data: pd } = await ctx.supabase
+      .from("assets")
+      .select("id, kind, prompt")
+      .in("id", parents)
+      .eq("owner_id", ctx.userId);
+    parentDetails = pd ?? [];
+  }
+  const { data: children } = await sb
+    .from("asset_provenance")
+    .select("asset_id, tool")
+    .eq("owner_id", ctx.userId)
+    .contains("source_asset_ids", [assetId]);
+
+  return {
+    asset_id: assetId,
+    provenance: { tool: prov.tool, params: prov.params, created_at: prov.created_at },
+    parents: parentDetails,
+    descendants: (children ?? []).map((c: { asset_id: string; tool: string }) => ({
+      asset_id: c.asset_id,
+      tool: c.tool,
+    })),
+  };
+}
+
 export async function listTimeline(ctx: DirectorCtx) {
   const { data, error } = await ctx.supabase
     .from("timeline_clips")
@@ -428,24 +658,26 @@ export async function createPendingAsset(
   kind: "image" | "video" | "audio",
   prompt: string,
 ) {
-  const db = getDb();
-  const id = uid("pend");
-  const now = Date.now();
-  db.prepare(
-    `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, thumbnail_hash, meta_json, created_at, updated_at)
-     VALUES (?, ?, 'pending', ?, NULL, 0, NULL, NULL, ?, ?, ?)`,
-  ).run(
-    id,
-    ctx.projectId,
-    `Pending ${kind} — ${prompt.slice(0, 40)}`,
-    JSON.stringify({ pending_kind: kind, prompt, status: "pending" }),
-    now,
-    now,
-  );
-  try {
-    getKernel().events.emit({ type: "AssetImported", assetId: id, projectId: ctx.projectId, kind: "pending", name: prompt.slice(0, 40), sizeBytes: 0, blobHash: null });
-  } catch { /* kernel not ready */ }
-  return { id, kind, prompt, status: "pending" };
+  return recordJob(ctx, `pending_${kind}`, prompt, async () => {
+    const db = getDb();
+    const id = uid("pend");
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, thumbnail_hash, meta_json, created_at, updated_at)
+       VALUES (?, ?, 'pending', ?, NULL, 0, NULL, NULL, ?, ?, ?)`,
+    ).run(
+      id,
+      ctx.projectId,
+      `Pending ${kind} — ${prompt.slice(0, 40)}`,
+      JSON.stringify({ pending_kind: kind, prompt, status: "pending" }),
+      now,
+      now,
+    );
+    try {
+      getKernel().events.emit({ type: "AssetImported", assetId: id, projectId: ctx.projectId, kind: "pending", name: prompt.slice(0, 40), sizeBytes: 0, blobHash: null });
+    } catch { /* kernel not ready */ }
+    return { id, kind, prompt, status: "pending" };
+  });
 }
 
 export async function listPendingAssets(ctx: DirectorCtx) {

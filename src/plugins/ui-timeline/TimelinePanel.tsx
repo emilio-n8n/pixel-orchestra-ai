@@ -15,7 +15,30 @@ type Clip = {
   duration_ms: number;
   asset_id: string | null;
   assets: { kind: string; url: string; prompt: string | null } | null;
+  meta?: Record<string, unknown> | null;
 };
+
+function clipFades(c: Clip): { fadeInMs: number; fadeOutMs: number } {
+  const meta = c.meta ?? {};
+  const fadeInMs = typeof meta.fade_in_ms === "number" ? meta.fade_in_ms : 0;
+  const fadeOutMs = typeof meta.fade_out_ms === "number" ? meta.fade_out_ms : 0;
+  return { fadeInMs, fadeOutMs };
+}
+
+/** Linear volume ramp for preview playback (HTMLAudioElement.volume). */
+function rampVolume(a: HTMLAudioElement, from: number, to: number, ms: number) {
+  if (ms <= 0) {
+    a.volume = to;
+    return;
+  }
+  const start = performance.now();
+  const step = (now: number) => {
+    const p = Math.min(1, (now - start) / ms);
+    a.volume = from + (to - from) * p;
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
 function fmt(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -76,7 +99,7 @@ export function TimelinePanel() {
     async function load() {
       const { data } = await supabase
         .from("timeline_clips")
-        .select("id, track, start_ms, duration_ms, asset_id, assets(kind, url, prompt)")
+        .select("id, track, start_ms, duration_ms, asset_id, meta, assets(kind, url, prompt)")
         .eq("project_id", projectId)
         .order("track")
         .order("start_ms");
@@ -390,15 +413,32 @@ export function TimelinePanel() {
       if (!AUDIO_TRACKS.has(c.track) || !isHttpUrl(c.assets?.url)) continue;
       const a = new Audio(c.assets!.url);
       a.crossOrigin = "anonymous";
+      const { fadeInMs, fadeOutMs } = clipFades(c);
       const offset = (startFrom - c.start_ms) / 1000;
+      const scheduleFadeIn = () => {
+        if (fadeInMs > 0) rampVolume(a, 0, 1, fadeInMs);
+      };
       if (startFrom >= c.start_ms && startFrom < c.start_ms + c.duration_ms) {
         a.currentTime = Math.max(0, offset);
-        a.play().catch(() => {});
+        a.play().then(scheduleFadeIn).catch(() => {});
         audiosRef.current.push(a);
       } else if (startFrom < c.start_ms) {
-        const t = window.setTimeout(() => a.play().catch(() => {}), c.start_ms - startFrom);
+        const t = window.setTimeout(() => {
+          a.play().then(scheduleFadeIn).catch(() => {});
+        }, c.start_ms - startFrom);
         timersRef.current.push(t);
         audiosRef.current.push(a);
+      }
+      if (fadeOutMs > 0) {
+        const tick = () => {
+          const remainingMs = (a.duration - a.currentTime) * 1000;
+          if (remainingMs <= fadeOutMs && remainingMs > 0) {
+            rampVolume(a, a.volume, 0, Math.max(1, remainingMs));
+            return;
+          }
+          if (!a.paused && !a.ended) requestAnimationFrame(tick);
+        };
+        a.addEventListener("play", () => requestAnimationFrame(tick));
       }
     }
 
@@ -538,10 +578,22 @@ export function TimelinePanel() {
       const startAt = ac.currentTime + 0.15;
       for (const item of decoded) {
         if (!item) continue;
+        const c = item.c;
+        const { fadeInMs, fadeOutMs } = clipFades(c);
         const src = ac.createBufferSource();
         src.buffer = item.audio;
-        src.connect(dest);
-        src.start(startAt + item.c.start_ms / 1000);
+        const gain = ac.createGain();
+        const t0 = startAt + c.start_ms / 1000;
+        const tEnd = t0 + item.audio.duration;
+        gain.gain.setValueAtTime(0, t0);
+        gain.gain.linearRampToValueAtTime(1, t0 + Math.min(fadeInMs, item.audio.duration * 1000) / 1000);
+        if (fadeOutMs > 0) {
+          gain.gain.setValueAtTime(1, Math.max(t0, tEnd - fadeOutMs / 1000));
+          gain.gain.linearRampToValueAtTime(0, tEnd);
+        }
+        src.connect(gain);
+        gain.connect(dest);
+        src.start(t0);
       }
       dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
 

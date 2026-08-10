@@ -78,48 +78,80 @@ export async function generateHtmlCard(
   model: Parameters<typeof generateText>[0]["model"],
   brief: string,
 ) {
-  const { text } = await generateText({
-    model,
-    system: HTML_SYSTEM,
-    prompt: brief,
-  });
-
-  const wrapped = wrapFullscreen(text);
-  const bytes = new TextEncoder().encode(wrapped);
-
-  // Store in Supabase (timeline / MCP)
-  const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, "text/html", "html");
-  const supabaseRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
-    kind: "html",
-    mime: "text/html",
-    url: storedUrl,
-    prompt: brief,
-    meta: { storage_path: storagePath },
-  });
-
-  // Also store in local kernel (Library / CenterView)
+  // Mirror the director's job/provenance recording for this generation.
+  const loose = ctx.supabase as unknown as SupabaseClient<any>;
+  let jobId: string | null = null;
   try {
-    const storage = getStorage();
-    const db = getDb();
-    const ref = await storage.put(bytes);
-    const id = uid("dir_html");
-    const now = Date.now();
-    db.prepare(
-      `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
-       VALUES (?, ?, 'html', ?, 'text/html', ?, ?, ?, ?, ?)`,
-    ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, JSON.stringify({ storage_path: storagePath }), now, now);
-    try {
-      getKernel().events.emit({
-        type: "AssetImported",
-        assetId: id,
-        projectId: ctx.projectId,
-        kind: "html",
-        name: `Director HTML Card — ${brief.slice(0, 40)}`,
-        sizeBytes: ref.size,
-        blobHash: ref.hash,
-      });
-    } catch { /* kernel not ready */ }
-  } catch { /* local kernel not available */ }
+    const { data } = await loose
+      .from("director_jobs")
+      .insert({ owner_id: ctx.userId, project_id: ctx.projectId, kind: "generate_html_card", status: "queued", prompt: brief })
+      .select("id")
+      .single();
+    jobId = data?.id ?? null;
+  } catch { /* best-effort */ }
 
-  return supabaseRow;
+  try {
+    const { text } = await generateText({
+      model,
+      system: HTML_SYSTEM,
+      prompt: brief,
+    });
+
+    const wrapped = wrapFullscreen(text);
+    const bytes = new TextEncoder().encode(wrapped);
+
+    // Store in Supabase (timeline / MCP)
+    const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, "text/html", "html");
+    const supabaseRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+      kind: "html",
+      mime: "text/html",
+      url: storedUrl,
+      prompt: brief,
+      meta: { storage_path: storagePath },
+    });
+    try {
+      await loose.from("asset_provenance").insert({
+        owner_id: ctx.userId,
+        project_id: ctx.projectId,
+        asset_id: supabaseRow.id,
+        tool: "director.generate_html_card",
+        params: { brief },
+        source_asset_ids: [],
+      });
+    } catch { /* best-effort */ }
+
+    // Also store in local kernel (Library / CenterView)
+    try {
+      const storage = getStorage();
+      const db = getDb();
+      const ref = await storage.put(bytes);
+      const id = uid("dir_html");
+      const now = Date.now();
+      db.prepare(
+        `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
+         VALUES (?, ?, 'html', ?, 'text/html', ?, ?, ?, ?, ?)`,
+      ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, JSON.stringify({ storage_path: storagePath }), now, now);
+      try {
+        getKernel().events.emit({
+          type: "AssetImported",
+          assetId: id,
+          projectId: ctx.projectId,
+          kind: "html",
+          name: `Director HTML Card — ${brief.slice(0, 40)}`,
+          sizeBytes: ref.size,
+          blobHash: ref.hash,
+        });
+      } catch { /* kernel not ready */ }
+    } catch { /* local kernel not available */ }
+
+    try {
+      if (jobId) await loose.from("director_jobs").update({ status: "completed", finished_at: new Date().toISOString() }).eq("id", jobId);
+    } catch { /* best-effort */ }
+    return supabaseRow;
+  } catch (e) {
+    try {
+      if (jobId) await loose.from("director_jobs").update({ status: "failed", error: (e as Error).message ?? String(e), finished_at: new Date().toISOString() }).eq("id", jobId);
+    } catch { /* best-effort */ }
+    throw e;
+  }
 }

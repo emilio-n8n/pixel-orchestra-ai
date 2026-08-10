@@ -79,7 +79,13 @@ export const Route = createFileRoute("/api/director")({
             "\n\n" +
             "AUDIO OVERLAP: Never let two audio clips overlap on the same track. generate_voice returns the real duration_ms of the audio file in its metadata — trust it, never estimate or guess the duration. add_to_timeline uses that real duration automatically for overlap detection (it never underestimates), so do NOT pass duration_ms for audio clips unless you intentionally want a longer clip. Pay attention to the _warning field returned by add_to_timeline: if present, the clip was shifted or its duration was adjusted. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add." +
             "\n\n" +
-            "HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. \"fade-in + slide-up title with a slow gradient shift and pulsing glow\"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles.",
+            "HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. \"fade-in + slide-up title with a slow gradient shift and pulsing glow\"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles." +
+            "\n\n" +
+            "TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear. Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to \"start the music at Xs with a fade-in\", use update_timeline_clip with start_ms + fade_in_ms on the music clip." +
+            "\n\n" +
+            "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
+            "\n\n" +
+            "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.",
           messages: await convertToModelMessages(body.messages),
           stopWhen: stepCountIs(50),
           tools: {
@@ -153,6 +159,44 @@ export const Route = createFileRoute("/api/director")({
               description: "Remove a clip from the timeline by its id.",
               inputSchema: z.object({ clip_id: z.string() }),
               execute: ({ clip_id }) => H.removeFromTimeline(ctx, clip_id),
+            }),
+            update_timeline_clip: tool({
+              description:
+                "Edit an existing clip WITHOUT removing/re-adding it: shift it (start_ms), resize it (duration_ms), move it to another track, or apply volume fades (fade_in_ms / fade_out_ms, in milliseconds — used by preview and export). Use this for any surgical edit the user asks for (\"shift the voice by 0.5s\", \"music fade-in of 1s\", \"start the music at 2s\"). Returns a _warning if the new position overlaps another clip on the track.",
+              inputSchema: z.object({
+                clip_id: z.string(),
+                start_ms: z.number().int().optional(),
+                duration_ms: z.number().int().optional(),
+                track: z.enum(["Video", "Audio", "Music", "SFX", "Subtitles"]).optional(),
+                fade_in_ms: z.number().int().min(0).optional(),
+                fade_out_ms: z.number().int().min(0).optional(),
+              }),
+              execute: (args) => H.updateTimelineClip(ctx, args),
+            }),
+            replace_clip_asset: tool({
+              description:
+                "Swap the asset of an existing clip in place, keeping its position on the timeline. Use this when regenerating an asset that is already placed (e.g. a new voiceover with corrected text, a new version of an image): generate the new asset first, then replace_clip_asset(clip_id, new_asset_id). For audio, the clip is resized to the new asset's real duration.",
+              inputSchema: z.object({
+                clip_id: z.string(),
+                new_asset_id: z.string(),
+              }),
+              execute: ({ clip_id, new_asset_id }) => H.replaceClipAsset(ctx, clip_id, new_asset_id),
+            }),
+            generate_sfx: tool({
+              description:
+                "Request a sound effect (engine roar, explosion, whoosh, beep, ambient hum…). There is no built-in SFX model — always creates a pending asset so the user can generate the sound elsewhere and drop it into the Library. Pass a precise description (and an optional target duration_ms) as the prompt.",
+              inputSchema: z.object({
+                brief: z.string(),
+                duration_ms: z.number().int().optional(),
+              }),
+              execute: ({ brief, duration_ms }) =>
+                H.createPendingAsset(ctx, "audio", duration_ms ? `${brief} (target duration: ${duration_ms}ms)` : brief),
+            }),
+            get_lineage: tool({
+              description:
+                "Show the lineage of an asset: how it was generated (tool + params) and what other assets depend on it. Use to answer questions like \"what depends on this asset?\" or \"how was this made?\".",
+              inputSchema: z.object({ asset_id: z.string() }),
+              execute: ({ asset_id }) => H.getLineage(ctx, asset_id),
             }),
             list_timeline: tool({
               description: "List the current timeline clips.",
