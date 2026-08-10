@@ -114,6 +114,14 @@ export function TimelinePanel() {
 
   // --------------- HTML overlay effect (preview) ---------------
   const currentHtmlUrlRef = useRef<string | null>(null);
+
+  // Restart the card's CSS animations on every playback session: when play
+  // is (re)started, forget the cached url so the effect re-applies the
+  // srcdoc below and the iframe (and its keyframes) reload from t=0.
+  useEffect(() => {
+    if (playing) currentHtmlUrlRef.current = null;
+  }, [playing]);
+
   useEffect(() => {
     if (!playing && !exporting) return;
     const active = clipsRef.current.find(
@@ -139,6 +147,10 @@ export function TimelinePanel() {
       .then((html) => {
         const iframe = htmlOverlayRef.current;
         if (iframe) {
+          // Clear first so even identical HTML reloads the document and the
+          // keyframes restart from frame 0 (srcdoc assignment alone may be a
+          // no-op when the value is unchanged).
+          iframe.srcdoc = "";
           iframe.srcdoc = html;
         }
       })
