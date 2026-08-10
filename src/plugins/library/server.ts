@@ -96,9 +96,12 @@ async function syncToSupabase(
     upsert: false,
   });
   if (error) throw new Error(`storage upload failed: ${error.message}`);
-  const { data: urlData } = await supabase.storage
+  const { data: urlData, error: signErr } = await supabase.storage
     .from("assets")
     .createSignedUrl(filename, 60 * 60 * 24 * 365);
+  if (signErr || !urlData?.signedUrl) {
+    console.warn(`[library] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename`);
+  }
   const url = urlData?.signedUrl ?? filename;
   const { data, error: rowErr } = await supabase
     .from("assets")
@@ -369,9 +372,12 @@ export const replaceAsset = createServerFn({ method: "POST" })
             .from("assets")
             .upload(filename, bytes, { contentType: data.mime, upsert: false });
           if (!upErr) {
-            const { data: urlData } = await context.supabase.storage
+            const { data: urlData, error: signErr } = await context.supabase.storage
               .from("assets")
               .createSignedUrl(filename, 60 * 60 * 24 * 365);
+            if (signErr || !urlData?.signedUrl) {
+              console.warn(`[library] replace: createSignedUrl failed (${signErr?.message ?? "empty"})`);
+            }
             extraMeta.storage_path = filename;
             await context.supabase.from("assets").update({ url: urlData?.signedUrl ?? filename }).eq("id", sbId);
           }

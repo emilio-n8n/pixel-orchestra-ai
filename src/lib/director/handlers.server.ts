@@ -69,7 +69,10 @@ async function uploadBinaryAsset(
     upsert: false,
   });
   if (error) throw new Error(`upload failed: ${error.message}`);
-  const { data } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
+  const { data, error: signErr } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
+  if (signErr || !data?.signedUrl) {
+    console.warn(`[director] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename, timeline will skip it`);
+  }
   return { url: data?.signedUrl ?? filename, storagePath: filename };
 }
 
@@ -199,6 +202,9 @@ export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
     .maybeSingle();
   if (assetErr || !asset) throw new Error("asset not found");
   const mime = asset.mime ?? "audio/mpeg";
+  if (!asset.url || !/^https?:\/\//i.test(asset.url)) {
+    throw new Error("asset has no usable url (signed url missing) — replace the file or regenerate the voice");
+  }
   const res = await fetch(asset.url);
   if (!res.ok) throw new Error(`failed to fetch audio: ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());

@@ -13,6 +13,18 @@ function oauth(): OAuthNS {
   return (supabase.auth as unknown as { oauth: OAuthNS }).oauth;
 }
 
+/**
+ * Only allow redirects we can actually land on: absolute http(s) URLs or
+ * root-relative paths. A bare relative string (e.g. the project id) would
+ * resolve against the current directory and 500 on the server — refuse it.
+ */
+function safeRedirect(raw: string | null | undefined): string {
+  if (!raw) return "/";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
+  return "/";
+}
+
 export const Route = createFileRoute("/.lovable/oauth/consent")({
   ssr: false,
   validateSearch: (s: Record<string, unknown>) => ({
@@ -28,7 +40,7 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
     const id = new URLSearchParams(location.search).get("authorization_id")!;
     const { data, error } = await oauth().getAuthorizationDetails(id);
     if (error) throw error;
-    const immediate = data?.redirect_url ?? data?.redirect_to;
+    const immediate = safeRedirect(data?.redirect_url ?? data?.redirect_to);
     if (immediate && !data?.client) throw redirect({ href: immediate } as never);
     return data;
   },
@@ -52,7 +64,7 @@ function Consent() {
       ? await oauth().approveAuthorization(authorization_id)
       : await oauth().denyAuthorization(authorization_id);
     if (error) { setBusy(false); setErr(error.message); return; }
-    const target = data?.redirect_url ?? data?.redirect_to;
+    const target = safeRedirect(data?.redirect_url ?? data?.redirect_to);
     if (!target) { setBusy(false); setErr("No redirect returned."); return; }
     window.location.href = target;
   }

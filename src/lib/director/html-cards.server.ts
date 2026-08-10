@@ -28,7 +28,10 @@ async function uploadBinaryAsset(
     upsert: false,
   });
   if (error) throw new Error(`upload failed: ${error.message}`);
-  const { data } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
+  const { data, error: signErr } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
+  if (signErr || !data?.signedUrl) {
+    console.warn(`[director] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename, timeline will skip it`);
+  }
   return { url: data?.signedUrl ?? filename, storagePath: filename };
 }
 

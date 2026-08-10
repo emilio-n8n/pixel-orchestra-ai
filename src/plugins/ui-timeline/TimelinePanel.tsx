@@ -27,6 +27,15 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Asset urls come from Supabase storage. If a signed url failed at creation
+ * time a relative filename can leak into the table; loading it against the
+ * app origin 500s. Only ever load absolute http(s) urls.
+ */
+function isHttpUrl(url: string | null | undefined): url is string {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
 export function TimelinePanel() {
   const pid = useLibraryProject();
   const [clips, setClips] = useState<Clip[]>([]);
@@ -94,7 +103,7 @@ export function TimelinePanel() {
   useEffect(() => {
     for (const c of clips) {
       const url = c.assets?.url;
-      if (c.assets?.kind === "image" && url && !imgCacheRef.current.has(url)) {
+      if (c.assets?.kind === "image" && isHttpUrl(url) && !imgCacheRef.current.has(url)) {
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.src = url;
@@ -124,6 +133,7 @@ export function TimelinePanel() {
     if (url === currentHtmlUrlRef.current) return;
     currentHtmlUrlRef.current = url;
 
+    if (!isHttpUrl(url)) return;
     fetch(url)
       .then((r) => r.text())
       .then((html) => {
@@ -365,8 +375,8 @@ export function TimelinePanel() {
     const startedAt = performance.now();
 
     for (const c of clipsRef.current) {
-      if (!AUDIO_TRACKS.has(c.track) || !c.assets?.url) continue;
-      const a = new Audio(c.assets.url);
+      if (!AUDIO_TRACKS.has(c.track) || !isHttpUrl(c.assets?.url)) continue;
+      const a = new Audio(c.assets!.url);
       a.crossOrigin = "anonymous";
       const offset = (startFrom - c.start_ms) / 1000;
       if (startFrom >= c.start_ms && startFrom < c.start_ms + c.duration_ms) {
@@ -405,7 +415,7 @@ export function TimelinePanel() {
   // --------------- pre-render HTML clip to video ---------------
   async function prerenderHtmlClip(clip: Clip): Promise<string | null> {
     const url = clip.assets?.url;
-    if (!url) return null;
+    if (!isHttpUrl(url)) return null;
 
     try {
       const html = await fetch(url).then((r) => r.text());
@@ -500,7 +510,7 @@ export function TimelinePanel() {
       const dest = ac.createMediaStreamDestination();
 
       const audioClips = clipsRef.current.filter(
-        (c) => AUDIO_TRACKS.has(c.track) && c.assets?.url,
+        (c) => AUDIO_TRACKS.has(c.track) && isHttpUrl(c.assets?.url),
       );
       const decoded = await Promise.all(
         audioClips.map(async (c) => {
@@ -761,7 +771,7 @@ export function TimelinePanel() {
                         }}
                         title={c.assets?.prompt ?? ""}
                       >
-                        {c.assets?.kind === "image" && c.assets.url ? (
+                        {c.assets?.kind === "image" && isHttpUrl(c.assets.url) ? (
                           <img
                             src={c.assets.url}
                             alt=""
