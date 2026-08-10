@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      asset_provenance: {
+        Row: {
+          asset_id: string
+          created_at: string
+          id: string
+          owner_id: string
+          params: Json
+          project_id: string
+          source_asset_ids: Json
+          tool: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          id?: string
+          owner_id: string
+          params?: Json
+          project_id: string
+          source_asset_ids?: Json
+          tool: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          id?: string
+          owner_id?: string
+          params?: Json
+          project_id?: string
+          source_asset_ids?: Json
+          tool?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_provenance_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assets: {
         Row: {
           created_at: string
@@ -47,6 +88,45 @@ export type Database = {
           project_id?: string
           prompt?: string | null
           url?: string
+        }
+        Relationships: []
+      }
+      director_jobs: {
+        Row: {
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          owner_id: string
+          project_id: string
+          prompt: string | null
+          result: Json
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          owner_id: string
+          project_id: string
+          prompt?: string | null
+          result?: Json
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          owner_id?: string
+          project_id?: string
+          prompt?: string | null
+          result?: Json
+          status?: string
         }
         Relationships: []
       }
