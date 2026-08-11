@@ -390,7 +390,28 @@ export function DirectorPanel() {
             })}
           </div>
         ))}
-        {error && <div className="text-red-400">{String(error.message)}</div>}
+        {error ? (
+          <div className="mx-3 mb-3 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-xs text-[var(--status-err)]">
+            <div className="font-medium">{String(error.message || "Director request failed.")}</div>
+            <button
+              onClick={() => {
+                const diag = [
+                  `time: ${new Date().toISOString()}`,
+                  `url: ${typeof window !== "undefined" ? window.location.href : "n/a"}`,
+                  `deployment: ${document.querySelector('meta[name="x-deployment-id"]')?.getAttribute("content") ?? "unknown"}`,
+                  `error: ${String(error.message ?? "(no message)")}`,
+                  `stack: ${error.stack ? error.stack.split("\n").slice(0, 3).join(" | ") : "(none)"}`,
+                ].join("\n");
+                if (navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(diag).catch(() => {});
+                }
+              }}
+              className="mt-1.5 rounded border border-[var(--status-err)]/40 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-[var(--status-err)]/15"
+            >
+              Copy diagnostics
+            </button>
+          </div>
+        ) : null}
       </div>
       <form
         className="flex shrink-0 gap-2 border-t border-[var(--line)] p-2"
