@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { MousePointerSquareDashed, Code2, Upload, X } from "lucide-react";
 import { useRegistrySnapshot } from "@/kernel/react";
 import { useLibrary } from "@/plugins/library/store";
 import { replaceAsset, updateHtmlAsset, getAssetBytes } from "@/plugins/library/server";
+import { EmptyState } from "@/components/ui/empty-state";
+import { kindLabel } from "@/lib/ui/labels";
+import { usePanelStore } from "@/stores/panels";
 import type { AssetRow } from "@/plugins/library/types";
 
 export function Inspector() {
@@ -12,35 +16,21 @@ export function Inspector() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-2)]">
-      <Header />
       <div className="flex-1 overflow-auto">
-        {selected ? <AssetInspector asset={selected} onClose={() => setSelected(null)} /> : (
-          <div className="border-b border-[var(--line)] p-4 text-[11px] leading-relaxed text-[var(--text-dim)]">
-            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-              Inspector
-            </div>
-            <p className="mt-2">
-              Select an asset in the Library to inspect, edit its HTML or replace its file.
-            </p>
-            <p className="mt-2">
-              Select a timeline clip to edit its position, duration or fades.
-            </p>
-          </div>
+        {selected ? (
+          <AssetInspector asset={selected} onClose={() => setSelected(null)} />
+        ) : (
+          <EmptyState
+            compact
+            icon={MousePointerSquareDashed}
+            title="Aucune sélection"
+            description="Sélectionnez un média ou un plan de la timeline pour ajuster ses propriétés."
+          />
         )}
         {panels.map((p) => {
           const Comp = p.component;
           return <Comp key={p.id} />;
         })}
-      </div>
-    </div>
-  );
-}
-
-function Header() {
-  return (
-    <div className="flex h-9 shrink-0 items-center border-b border-[var(--line)] px-3">
-      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-        Inspector
       </div>
     </div>
   );
@@ -63,6 +53,7 @@ function AssetInspector({
   const [htmlDraft, setHtmlDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const devMode = usePanelStore((s) => s.devMode);
 
   // Load HTML content when starting to edit.
   useEffect(() => {
@@ -111,26 +102,25 @@ function AssetInspector({
   }, [asset.id, htmlDraft]);
 
   return (
-    <div className="border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
+    <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
-        <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Selected asset
-        </div>
-        <button
-          onClick={onClose}
-          className="text-[10px] uppercase tracking-widest text-[var(--text-dim)] hover:text-[var(--text-muted)]"
-        >
-          clear
+        <div className="t-meta">Média sélectionné</div>
+        <button onClick={onClose} title="Désélectionner" className="ghost-btn h-6 w-6">
+          <X size={12} />
         </button>
       </div>
-      <div className="mt-2 space-y-1">
-        <Row k="id" v={asset.id} />
-        <Row k="name" v={asset.name} />
-        <Row k="kind" v={asset.kind} />
-        <Row k="mime" v={asset.mime ?? "—"} />
-        <Row k="size" v={formatBytes(asset.sizeBytes)} />
-        <Row k="hash" v={asset.blobHash ?? "—"} />
-        <Row k="created" v={new Date(asset.createdAt).toLocaleString()} />
+      <div className="mt-2.5 space-y-1.5">
+        <Row k="Nom" v={asset.name} />
+        <Row k="Type" v={kindLabel(asset.kind)} />
+        <Row k="Poids" v={formatBytes(asset.sizeBytes)} />
+        <Row k="Créé le" v={new Date(asset.createdAt).toLocaleString("fr-FR")} />
+        {devMode ? (
+          <>
+            <Row k="id" v={asset.id} />
+            <Row k="mime" v={asset.mime ?? "—"} />
+            <Row k="hash" v={asset.blobHash ?? "—"} />
+          </>
+        ) : null}
       </div>
 
       {asset.status !== "pending" ? (
@@ -139,13 +129,14 @@ function AssetInspector({
             <button
               onClick={() => setEditingHtml(true)}
               disabled={busy}
-              className="rounded border border-[var(--line)] px-2 py-1 text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--line-strong)] disabled:opacity-50"
+              className="flex h-7 items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50"
             >
-              Edit HTML
+              <Code2 size={12} /> Modifier le visuel
             </button>
           ) : null}
-          <label className="cursor-pointer rounded border border-[var(--line)] px-2 py-1 text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--line-strong)]">
-            {busy ? "Updating…" : "Replace file"}
+          <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)]">
+            <Upload size={12} />
+            {busy ? "Envoi…" : "Remplacer le fichier"}
             <input
               type="file"
               className="hidden"
@@ -168,19 +159,19 @@ function AssetInspector({
             rows={10}
             className="mono w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[10px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
           />
-          <div className="mt-1 flex justify-end gap-2">
+          <div className="mt-1.5 flex justify-end gap-2">
             <button
               onClick={() => setEditingHtml(false)}
-              className="rounded border border-[var(--line)] px-2 py-1 text-[10px] uppercase tracking-widest text-[var(--text-muted)]"
+              className="h-7 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)]"
             >
-              Cancel
+              Annuler
             </button>
             <button
               onClick={saveHtml}
               disabled={busy}
-              className="rounded bg-[var(--accent)] px-2 py-1 text-[10px] font-medium uppercase tracking-widest text-[var(--accent-fg)] disabled:opacity-50"
+              className="h-7 rounded-lg bg-[var(--accent)] px-3 text-[11.5px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
             >
-              Save
+              Enregistrer
             </button>
           </div>
         </div>
@@ -198,8 +189,8 @@ function AssetInspector({
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-2">
-      <span className="text-[10px] uppercase tracking-widest text-[var(--text-dim)]">{k}</span>
-      <span className="mono truncate text-right text-[11px] text-[var(--text)]" title={v}>
+      <span className="text-[11px] text-[var(--text-dim)]">{k}</span>
+      <span className="truncate text-right text-[11.5px] text-[var(--text)]" title={v}>
         {v}
       </span>
     </div>
