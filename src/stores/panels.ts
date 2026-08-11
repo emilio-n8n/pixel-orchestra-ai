@@ -9,6 +9,10 @@ interface PanelStore {
   bottomCollapsed: boolean;
   inspectorCollapsed: boolean;
   toggle: (which: "bottom" | "inspector") => void;
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  devMode: boolean;
+  setDevMode: (v: boolean) => void;
   layout: { center: number; inspector: number; bottom: number };
   setLayout: (l: Partial<PanelStore["layout"]>) => void;
 }
@@ -16,7 +20,7 @@ interface PanelStore {
 export const usePanelStore = create<PanelStore>()(
   persist(
     (set) => ({
-      activeModule: "director",
+      activeModule: "timeline",
       setActiveModule: (m) => set({ activeModule: m }),
       bottomCollapsed: false,
       inspectorCollapsed: false,
@@ -25,9 +29,13 @@ export const usePanelStore = create<PanelStore>()(
           bottomCollapsed: which === "bottom" ? !s.bottomCollapsed : s.bottomCollapsed,
           inspectorCollapsed: which === "inspector" ? !s.inspectorCollapsed : s.inspectorCollapsed,
         })),
+      sidebarCollapsed: false,
+      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      devMode: false,
+      setDevMode: (v) => set({ devMode: v }),
       layout: { center: 74, inspector: 26, bottom: 32 },
       setLayout: (l) => set((s) => ({ layout: { ...s.layout, ...l } })),
     }),
-    { name: "lilium.panels.v1" },
+    { name: "lilium.panels.v2" },
   ),
 );

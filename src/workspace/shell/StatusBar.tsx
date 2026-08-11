@@ -1,67 +1,115 @@
+import { Cloud, PanelBottom, PanelRight, Terminal } from "lucide-react";
 import { useKernel, useKernelEvents } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
+import { StatusPill } from "@/components/ui/status-pill";
 
+/**
+ * Calm production status bar. Technical internals (plugin count, executors,
+ * raw event stream) live behind the developer drawer instead of being shown
+ * permanently.
+ */
 export function StatusBar() {
   const { host, scheduler } = useKernel();
-  const events = useKernelEvents(1);
+  const events = useKernelEvents(24);
   const last = events[events.length - 1];
   const toggle = usePanelStore((s) => s.toggle);
   const bottomCollapsed = usePanelStore((s) => s.bottomCollapsed);
   const inspectorCollapsed = usePanelStore((s) => s.inspectorCollapsed);
+  const devMode = usePanelStore((s) => s.devMode);
+  const setDevMode = usePanelStore((s) => s.setDevMode);
 
-  const isJobEvent =
-    last?.type === "JobQueued" ||
-    last?.type === "JobStarted" ||
-    last?.type === "JobProgress" ||
-    last?.type === "JobFinished" ||
-    last?.type === "JobFailed";
-  const jobNote = isJobEvent ? last : null;
+  const runningJobs = events.filter(
+    (e) => e.type === "JobQueued" || e.type === "JobStarted",
+  ).length;
 
   return (
-    <div className="flex h-6 shrink-0 items-center justify-between border-t border-[var(--line)] bg-[var(--rail)] px-2 text-[11px] text-[var(--text-dim)]">
-      <div className="flex items-center gap-3">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--status-ok)]" />
-          Kernel ready
-        </span>
-        <span className="mono">Plugins: {host.count()}</span>
-        <span className="mono">Executors: {scheduler.count()}</span>
-        {jobNote ? (
-          <span className="mono">
-            <span className="text-[var(--accent)]">{jobNote.type}</span>
-            {jobNote.type === "JobProgress" && "progress" in jobNote
-              ? ` ${Math.round((jobNote as unknown as { progress: number }).progress * 100)}%`
-              : null}
+    <div className="relative shrink-0 border-t border-[var(--line)] bg-[var(--rail)]">
+      {devMode ? (
+        <div className="animate-fade-in max-h-48 overflow-auto border-b border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
+          <div className="t-meta mb-1.5 flex items-center justify-between">
+            <span>Journal développeur</span>
+            <span>
+              {host.count()} plugins · {scheduler.count()} exécuteurs
+            </span>
+          </div>
+          {events.length === 0 ? (
+            <div className="t-caption">Aucun évènement.</div>
+          ) : (
+            <ul className="space-y-0.5">
+              {[...events].reverse().map((e, i) => (
+                <li key={i} className="mono text-[10.5px] text-[var(--text-dim)]">
+                  {new Date(e.ts).toLocaleTimeString()} · {e.type}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+
+      <div className="flex h-7 items-center justify-between px-3 text-[11px] text-[var(--text-dim)]">
+        <div className="flex items-center gap-4">
+          <StatusPill tone="done">Studio prêt</StatusPill>
+          <span className="flex items-center gap-1.5">
+            <Cloud size={12} /> Rendu cloud
           </span>
-        ) : last ? (
-          <span className="mono">
-            {new Date(last.ts).toLocaleTimeString()} · {last.type}
+          <span className="hidden items-center gap-1.5 md:flex">
+            Stockage <span className="text-[var(--text-muted)]">Lilium Cloud</span>
           </span>
-        ) : (
-          <span className="mono">no events</span>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        <StatusToggle label="Bottom" on={!bottomCollapsed} onClick={() => toggle("bottom")} />
-        <StatusToggle
-          label="Inspector"
-          on={!inspectorCollapsed}
-          onClick={() => toggle("inspector")}
-        />
+          {runningJobs > 0 ? (
+            <StatusPill tone="running" pulse>
+              {runningJobs} tâche{runningJobs > 1 ? "s" : ""} en cours
+            </StatusPill>
+          ) : (
+            <span>Aucune tâche</span>
+          )}
+          {devMode && last ? (
+            <span className="mono text-[10.5px] opacity-70">{last.type}</span>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-0.5">
+          <IconToggle
+            label="Timeline"
+            on={!bottomCollapsed}
+            onClick={() => toggle("bottom")}
+            icon={<PanelBottom size={13} />}
+          />
+          <IconToggle
+            label="Panneau IA"
+            on={!inspectorCollapsed}
+            onClick={() => toggle("inspector")}
+            icon={<PanelRight size={13} />}
+          />
+          <IconToggle
+            label="Mode développeur"
+            on={devMode}
+            onClick={() => setDevMode(!devMode)}
+            icon={<Terminal size={13} />}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function StatusToggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+function IconToggle({
+  label,
+  on,
+  onClick,
+  icon,
+}: {
+  label: string;
+  on: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-widest hover:bg-[var(--surface-3)] ${
-        on ? "text-[var(--text-muted)]" : "text-[var(--text-dim)]"
-      }`}
+      title={label}
+      className={`ghost-btn h-6 w-6 ${on ? "text-[var(--text)]" : "text-[var(--text-dim)] opacity-60"}`}
     >
-      {label}
+      {icon}
     </button>
   );
 }

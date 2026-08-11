@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   convertToModelMessages,
   createUIMessageStream,
+  createUIMessageStreamResponse,
   generateText,
   tool,
   type UIMessage,
@@ -263,7 +264,8 @@ export const Route = createFileRoute("/api/director")({
               system: systemPrompt,
               messages: conversation as never,
               tools: tools as never,
-            });
+              toolsContext: undefined as never,
+            } as never);
 
             for (const tc of step.toolCalls ?? []) toolsCalled.push(tc.toolName);
 
@@ -296,7 +298,7 @@ export const Route = createFileRoute("/api/director")({
                   ...(step.toolResults ?? []).map((tr) => ({
                     role: "tool",
                     toolCallId: tr.toolCallId,
-                    content: JSON.stringify(tr.result ?? null),
+                    content: JSON.stringify((tr as { output?: unknown }).output ?? null),
                   })),
                 ];
               }
@@ -326,7 +328,7 @@ export const Route = createFileRoute("/api/director")({
               writer.write({ type: "text-end", id: "err" } as never);
             },
           });
-          return stream.toUIMessageStreamResponse();
+          return createUIMessageStreamResponse({ stream });
         }
 
         console.error(
@@ -353,7 +355,7 @@ export const Route = createFileRoute("/api/director")({
           },
         });
 
-return stream.toUIMessageStreamResponse();
+return createUIMessageStreamResponse({ stream });
       },
     },
   },
