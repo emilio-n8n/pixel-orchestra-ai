@@ -318,13 +318,15 @@ export const Route = createFileRoute("/api/director")({
             }
           } else detail = String(err);
           console.error("[/api/director] manual-loop error:", detail);
-          return new Response(
-            `data: ${JSON.stringify({
-              type: "error",
-              error: { message: `Director stopped: ${(err as Error)?.message ?? String(err)}` },
-            })}\n\n`,
-            { status: 200, headers: { "Content-Type": "text/event-stream" } },
-          );
+          const message = `Director stopped: ${(err as Error)?.message ?? String(err)}`;
+          const stream = createUIMessageStream({
+            execute: ({ writer }) => {
+              writer.write({ type: "text-start", id: "err" } as never);
+              writer.write({ type: "text-delta", id: "err", delta: message } as never);
+              writer.write({ type: "text-end", id: "err" } as never);
+            },
+          });
+          return stream.toUIMessageStreamResponse();
         }
 
         console.error(
@@ -351,14 +353,7 @@ export const Route = createFileRoute("/api/director")({
           },
         });
 
-        return stream.toUIMessageStreamResponse({
-          onError: (error: unknown) => {
-            if (error instanceof Error && error.message) {
-              return `Director stopped: ${error.message}`;
-            }
-            return "Director stopped before completing this request. Please retry with a shorter instruction.";
-          },
-        });
+return stream.toUIMessageStreamResponse();
       },
     },
   },
