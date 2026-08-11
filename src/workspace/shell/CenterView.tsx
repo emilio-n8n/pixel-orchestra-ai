@@ -1,16 +1,12 @@
 import { useMemo } from "react";
+import { ArrowLeft, Hammer } from "lucide-react";
 import { useRegistrySnapshot } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
 import { useLibrary } from "@/plugins/library/store";
 import { PendingAssetView } from "@/plugins/library/PendingAssetView";
+import { EmptyState } from "@/components/ui/empty-state";
+import { kindLabel, moduleMeta } from "@/lib/ui/labels";
 import type { ViewerAsset } from "@/kernel";
-
-const MODULE_TITLES: Record<string, string> = {
-  library: "Library",
-  timeline: "Timeline",
-  connectors: "Connectors",
-  jobs: "Jobs",
-};
 
 export function CenterView() {
   const registry = useRegistrySnapshot();
@@ -59,20 +55,16 @@ export function CenterView() {
       };
       return (
         <div className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]">
-          <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-                {selected.kind}
-              </span>
-              <span className="truncate text-[12px] text-[var(--text-muted)]" title={selected.name}>
+          <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="t-meta">{kindLabel(selected.kind)}</span>
+              <span className="truncate text-[12.5px] text-[var(--text)]" title={selected.name}>
                 {selected.name}
               </span>
             </div>
-            <button
-              onClick={() => setSelected(null)}
-              className="rounded px-2 py-1 text-[10px] uppercase tracking-widest text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text-muted)]"
-            >
-              ← Back
+            <button onClick={() => setSelected(null)} className="ghost-btn h-7 px-2 text-[12px]">
+              <ArrowLeft size={13} />
+              Retour
             </button>
           </div>
           <div className="flex-1 min-h-0">
@@ -93,21 +85,13 @@ export function CenterView() {
     );
   }
 
-  const title = MODULE_TITLES[active] ?? active;
-
   return (
-    <div className="flex h-full items-center justify-center bg-[var(--surface-1)] p-8">
-      <div className="max-w-md text-center">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-dim)]">Module</div>
-        <h2 className="mt-1 text-lg font-medium text-[var(--text)]">{title}</h2>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          This module ships in a later phase. Once its plugin is registered, its
-          <code className="mono mx-1 rounded bg-[var(--surface-3)] px-1 py-0.5 text-[11px]">
-            center
-          </code>
-          panel renders here.
-        </p>
-      </div>
+    <div className="h-full bg-[var(--surface-1)]">
+      <EmptyState
+        icon={Hammer}
+        title={`${moduleMeta(active).label} arrive bientôt`}
+        description="Cet espace de travail est en cours de préparation. Utilisez l'Éditeur et la médiathèque en attendant."
+      />
     </div>
   );
 }
