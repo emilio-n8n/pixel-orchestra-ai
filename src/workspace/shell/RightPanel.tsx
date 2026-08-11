@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Sparkles, SlidersHorizontal } from "lucide-react";
 import { usePanelStore } from "@/stores/panels";
 import { DirectorPanel } from "@/plugins/director/DirectorPanel";
 import { Inspector } from "./Inspector";
@@ -25,16 +26,16 @@ export function RightPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]">
-      <div className="flex h-9 shrink-0 border-b border-[var(--line)]">
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--line)] px-2">
         <TabButton
-          label="Chat"
-          glyph="✦"
+          label="Assistant"
+          icon={<Sparkles size={13} />}
           active={tab === "chat"}
           onClick={() => setOverride("chat")}
         />
         <TabButton
-          label="Inspect"
-          glyph="▤"
+          label="Propriétés"
+          icon={<SlidersHorizontal size={13} />}
           active={tab === "inspect"}
           onClick={() => setOverride("inspect")}
         />
@@ -48,31 +49,26 @@ export function RightPanel() {
 
 function TabButton({
   label,
-  glyph,
+  icon,
   active,
   onClick,
 }: {
   label: string;
-  glyph: string;
+  icon: React.ReactNode;
   active: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`relative flex flex-1 items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em] transition-colors ${
+      className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-lg text-[12px] transition-colors duration-150 ease-out ${
         active
-          ? "text-[var(--accent-strong)]"
-          : "text-[var(--text-dim)] hover:text-[var(--text)]"
+          ? "bg-[var(--surface-3)] text-[var(--text)]"
+          : "text-[var(--text-dim)] hover:text-[var(--text-muted)]"
       }`}
     >
-      <span aria-hidden className="text-[12px] leading-none">
-        {glyph}
-      </span>
+      <span className={active ? "text-[var(--accent-strong)]" : undefined}>{icon}</span>
       <span>{label}</span>
-      {active ? (
-        <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--accent)]" />
-      ) : null}
     </button>
   );
 }
