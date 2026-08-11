@@ -227,7 +227,7 @@ export async function generateImage(
       model_id: modelId ?? null,
       provider: cfModel ? "cloudflare" : "lovable",
     });
-    storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt, { storage_path: storagePath });
+    storeInLocalKernel(ctx.projectId, "image", `Director Image — ${prompt.slice(0, 40)}`, mime, bytes, prompt, { storage_path: storagePath, supabase_id: row.id });
     return row;
   });
 }
@@ -272,7 +272,7 @@ export async function generateVoice(
       meta: { ...meta, storage_path: storagePath },
     });
     recordProvenance(ctx, row.id, "director.generate_voice", { text, voice });
-    storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, { ...meta, storage_path: storagePath });
+    storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, { ...meta, storage_path: storagePath, supabase_id: row.id });
     return row;
   });
 }
@@ -323,7 +323,7 @@ export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
       meta: { storage_path: storagePath },
     });
     recordProvenance(ctx, assetRow.id, "director.generate_subtitles", { audio_asset_id: assetId }, [assetId]);
-    storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text, { storage_path: storagePath });
+    storeInLocalKernel(ctx.projectId, "html", `Subtitles — ${text.slice(0, 40)}`, "text/html", transcriptBytes, text, { storage_path: storagePath, supabase_id: assetRow.id });
 
     // Place on the Subtitles track with the audio's real duration.
     const meta = (asset.meta ?? {}) as Record<string, unknown>;
@@ -384,7 +384,7 @@ export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
       meta: { storage_path: storagePath },
     });
     recordProvenance(ctx, row.id, "director.generate_html_card", { brief });
-    storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief, { storage_path: storagePath });
+    storeInLocalKernel(ctx.projectId, "html", `Director HTML Card — ${brief.slice(0, 40)}`, "text/html", wrappedBytes, brief, { storage_path: storagePath, supabase_id: row.id });
     return row;
   });
 }

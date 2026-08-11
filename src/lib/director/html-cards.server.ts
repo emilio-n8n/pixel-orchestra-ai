@@ -130,7 +130,7 @@ export async function generateHtmlCard(
       db.prepare(
         `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
          VALUES (?, ?, 'html', ?, 'text/html', ?, ?, ?, ?, ?)`,
-      ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, JSON.stringify({ storage_path: storagePath }), now, now);
+      ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, JSON.stringify({ storage_path: storagePath, supabase_id: supabaseRow.id }), now, now);
       try {
         getKernel().events.emit({
           type: "AssetImported",

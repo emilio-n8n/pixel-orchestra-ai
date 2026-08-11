@@ -499,7 +499,37 @@ export const listAssets = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .range(from, to);
     if (error) throw new Error(`Unable to load assets: ${error.message}`);
-    return { assets: (rows ?? []).map(cloudRowToAsset), total: count ?? rows?.length ?? 0 };
+
+    const cloud = (rows ?? []).map(cloudRowToAsset);
+
+    // Merge local-only rows on top of the cloud page: pending assets (they
+    // live in the kernel DB by design) and legacy local rows that were never
+    // mirrored to Supabase. Rows that have a supabase_id are owned by the
+    // cloud pagination — never duplicated here.
+    let localOnly: AssetRow[] = [];
+    try {
+      const db = getDb();
+      const locals = db
+        .prepare("SELECT * FROM assets WHERE project_id = ? ORDER BY created_at DESC")
+        .all<RawRow>(data.projectId);
+      for (const l of locals) {
+        const meta = parseMeta(l.meta_json);
+        const supabaseId = typeof meta.supabase_id === "string" ? meta.supabase_id : null;
+        if (l.kind === "pending") {
+          localOnly.push(rowToAsset(l));
+        } else if (!supabaseId) {
+          localOnly.push(rowToAsset(l));
+        }
+        // supabaseId present → the cloud owns this asset (shown on its page).
+      }
+    } catch {
+      /* local kernel DB unavailable — cloud only */
+    }
+
+    return {
+      assets: [...localOnly, ...cloud],
+      total: (count ?? rows?.length ?? 0) + localOnly.length,
+    };
   });
 
 export const getAssetBytes = createServerFn({ method: "GET" })
