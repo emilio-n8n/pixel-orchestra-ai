@@ -9,7 +9,6 @@ import { connectorsPanelPlugin } from "./connectors-panel/manifest";
 import { uiJobsPlugin } from "./ui-jobs/manifest";
 import { uiTimelinePlugin } from "./ui-timeline/manifest";
 import { connectorComfyuiPlugin } from "./connector-comfyui";
-import { directorPlugin } from "./director/manifest";
 import { nodePrimitivesPlugin } from "./node-primitives/manifest";
 import { nodeAssetPlugin } from "./node-asset/manifest";
 import { nodeCapabilityPlugin } from "./node-capability/manifest";
@@ -21,7 +20,6 @@ import { uiVersionsPlugin } from "./ui-versions/manifest";
 import { uiLineagePlugin } from "./ui-lineage/manifest";
 
 export const builtinPlugins: PluginManifest[] = [
-  directorPlugin,
   libraryPlugin,
   uiTimelinePlugin,
   connectorsPanelPlugin,

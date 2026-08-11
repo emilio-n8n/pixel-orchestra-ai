@@ -10,7 +10,6 @@ interface RailItem {
 }
 
 const CORE_MODULES: Array<{ id: string; label: string; glyph: string; order: number }> = [
-  { id: "director", label: "Director", glyph: "✦", order: 5 },
   { id: "library", label: "Library", glyph: "▤", order: 10 },
   { id: "timeline", label: "Timeline", glyph: "▭", order: 30 },
   { id: "connectors", label: "Connectors", glyph: "◈", order: 60 },

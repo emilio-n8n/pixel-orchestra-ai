@@ -3,7 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { usePanelStore } from "@/stores/panels";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
-import { Inspector } from "./Inspector";
+import { RightPanel } from "./RightPanel";
 import { BottomDock } from "./BottomDock";
 import { StatusBar } from "./StatusBar";
 import { CenterView } from "./CenterView";
@@ -64,7 +64,7 @@ export function WorkspaceShell({
                     maxSize={50}
                     onResize={(size) => setLayout({ inspector: size })}
                   >
-                    <Inspector />
+                    <RightPanel />
                   </Panel>
                 </>
               )}

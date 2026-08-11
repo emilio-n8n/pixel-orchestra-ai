@@ -6,7 +6,6 @@ import { PendingAssetView } from "@/plugins/library/PendingAssetView";
 import type { ViewerAsset } from "@/kernel";
 
 const MODULE_TITLES: Record<string, string> = {
-  director: "Director",
   library: "Library",
   timeline: "Timeline",
   connectors: "Connectors",
