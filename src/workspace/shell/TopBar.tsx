@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Settings } from "lucide-react";
+import { Bell, ChevronRight, Download, Search, Settings, Undo2, Redo2 } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { usePanelStore } from "@/stores/panels";
 
 export function TopBar({
   workspaceId,
@@ -13,18 +14,20 @@ export function TopBar({
 }) {
   const ws = useWorkspaceStore((s) => (workspaceId ? s.getWorkspace(workspaceId) : undefined));
   const project = useWorkspaceStore((s) => (projectId ? s.getProject(projectId) : undefined));
+  const active = usePanelStore((s) => s.activeModule);
+  const setActive = usePanelStore((s) => s.setActiveModule);
   const navigate = useNavigate();
 
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--line)] bg-[var(--rail)] px-2">
-      <div className="flex items-center gap-1">
+    <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-[var(--line)] bg-[var(--rail)] px-3">
+      <div className="flex min-w-0 items-center gap-1">
         <Link
           to="/"
-          className="flex h-7 items-center gap-2 rounded-md px-2 text-[13px] font-semibold text-[var(--text)] hover:bg-[var(--surface-3)]"
+          className="flex h-8 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold tracking-tight text-[var(--text)] transition-colors hover:bg-[var(--surface-2)]"
         >
           <span
             aria-hidden
-            className="inline-block h-4 w-4 rounded-[4px]"
+            className="inline-block h-[18px] w-[18px] rounded-[6px]"
             style={{
               background:
                 "conic-gradient(from 210deg, var(--accent-strong), var(--accent), var(--accent-quiet), var(--accent))",
@@ -32,49 +35,91 @@ export function TopBar({
           />
           Lilium
         </Link>
-        <Crumb>/</Crumb>
+        <Crumb />
         {ws ? (
           <button
             onClick={() => navigate({ to: "/w/$wsId", params: { wsId: ws.id } })}
-            className="rounded-md px-2 py-1 text-[13px] text-[var(--text-muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
+            className="max-w-[160px] truncate rounded-lg px-2 py-1 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >
             {ws.name}
           </button>
         ) : (
-          <span className="px-2 py-1 text-[13px] text-[var(--text-dim)]">no workspace</span>
+          <span className="px-2 py-1 text-[12.5px] text-[var(--text-dim)]">Aucun espace</span>
         )}
         {project ? (
           <>
-            <Crumb>/</Crumb>
-            <span className="rounded-md px-2 py-1 text-[13px] text-[var(--text)]">
+            <Crumb />
+            <span className="max-w-[220px] truncate rounded-lg px-2 py-1 text-[12.5px] font-medium text-[var(--text)]">
               {project.name}
             </span>
           </>
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
-        <Link
-          to="/settings"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
-          title="Settings"
+      <nav className="flex items-center gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5">
+        <SegmentTab label="Éditeur" active={active === "timeline"} onClick={() => setActive("timeline")} />
+        <SegmentTab label="Bibliothèque" active={active === "library"} onClick={() => setActive("library")} />
+        <SegmentTab label="Rendus" active={active === "jobs"} onClick={() => setActive("jobs")} />
+      </nav>
+
+      <div className="flex items-center gap-1">
+        <button className="ghost-btn h-8 w-8 opacity-50" title="Annuler" disabled>
+          <Undo2 size={14} />
+        </button>
+        <button className="ghost-btn h-8 w-8 opacity-50" title="Rétablir" disabled>
+          <Redo2 size={14} />
+        </button>
+        <span className="mx-1 h-4 w-px bg-[var(--line)]" />
+        <button
+          onClick={onOpenCommand}
+          className="flex h-8 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2.5 text-[12px] text-[var(--text-dim)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)]"
         >
+          <Search size={13} />
+          <span>Rechercher</span>
+          <kbd className="rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">⌘K</kbd>
+        </button>
+        <button className="ghost-btn h-8 w-8" title="Notifications">
+          <Bell size={14} />
+        </button>
+        <Link to="/settings" className="ghost-btn h-8 w-8" title="Paramètres">
           <Settings size={14} />
         </Link>
         <button
-          onClick={onOpenCommand}
-          className="flex h-7 items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-2 text-[12px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)]"
+          onClick={() => setActive("timeline")}
+          className="ml-1 flex h-8 items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 text-[12px] font-medium text-[var(--accent-fg)] transition-all duration-150 ease-out hover:bg-[var(--accent-strong)] active:scale-[0.98]"
+          title="Exporter la vidéo finale depuis l'éditeur"
         >
-          <span>Search or run…</span>
-          <kbd className="mono rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
-            ⌘K
-          </kbd>
+          <Download size={13} />
+          Exporter
         </button>
       </div>
-    </div>
+    </header>
   );
 }
 
-function Crumb({ children }: { children: React.ReactNode }) {
-  return <span className="px-0.5 text-[var(--text-dim)]">{children}</span>;
+function Crumb() {
+  return <ChevronRight size={13} className="shrink-0 text-[var(--text-dim)] opacity-60" />;
+}
+
+function SegmentTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-7 rounded-[7px] px-3 text-[12px] transition-colors duration-150 ease-out ${
+        active
+          ? "bg-[var(--surface-4)] text-[var(--text)]"
+          : "text-[var(--text-dim)] hover:text-[var(--text-muted)]"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
