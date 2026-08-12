@@ -582,6 +582,40 @@ export async function insertSilenceClip(
 }
 
 /**
+ * Edit a subtitle clip: replace its text and/or its style
+ * (font, size px, color, position: bottom|center|top). Stored in the
+ * clip's meta — the timeline renders it from there.
+ */
+export async function editSubtitles(
+  ctx: DirectorCtx,
+  clipId: string,
+  text: string,
+  style?: { font?: string; size?: number; color?: string; position?: "bottom" | "center" | "top" },
+) {
+  const { data: existing, error: getErr } = await ctx.supabase
+    .from("timeline_clips")
+    .select("id, meta")
+    .eq("id", clipId)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .maybeSingle();
+  if (getErr || !existing) throw new Error("clip not found");
+
+  const meta = { ...((existing.meta ?? {}) as Record<string, unknown>), text };
+  if (style) meta.style = style;
+  const { data, error } = await ctx.supabase
+    .from("timeline_clips")
+    .update({ meta })
+    .eq("id", clipId)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .select("id, track, start_ms, duration_ms, meta")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
  * Edit an existing clip: shift it (start_ms), resize it (duration_ms), move
  * it to another track, or apply volume fades (fade_in_ms / fade_out_ms,
  * stored in meta and honoured by the preview + export). Returns a _warning

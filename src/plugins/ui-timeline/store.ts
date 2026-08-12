@@ -16,11 +16,14 @@ export interface TimelineClip {
 
 interface TimelineUiState {
   selectedClipId: string | null;
+  /** Full clip object behind selectedClipId — kept in sync by the panel. */
+  selectedClip: TimelineClip | null;
   selectClip: (id: string | null) => void;
 }
 
 export const useTimelineUi = create<TimelineUiState>((set) => ({
   selectedClipId: null,
+  selectedClip: null,
   selectClip: (id) => set({ selectedClipId: id }),
 }));
 

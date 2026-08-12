@@ -96,6 +96,8 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "SILENCE CLIPS: for pauses, pacing and \"rhythmic narration\" templates, use insert_silence_clip (duration_ms + optional start_ms) — never compute start_ms gaps by hand. A silence clip on a track blocks that time range: other clips placed after it are shifted right by the anti-overlap system automatically. Use silences to create natural pacing between voiceover lines, or to reserve space before/after sounds." +
           "\n\n" +
+          "SUBTITLES: generate_subtitles transcribes a voice and places the captions. To fix a word or restyle captions (font, size, color, position) use edit_subtitles on the subtitle clip — the timeline renders text from the clip meta. Never resize subtitle clips manually; their duration comes from the voice." +
+          "\n\n" +
           "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
           "\n\n" +
           "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.";
@@ -187,6 +189,23 @@ export const Route = createFileRoute("/api/director")({
               start_ms: z.number().int().min(0).optional(),
             }),
             execute: (args) => H.insertSilenceClip(ctx, args),
+          }),
+          edit_subtitles: tool({
+            description:
+              "Edit a subtitle clip's text and/or style (font, size, color, position: bottom|center|top). Use when the transcription has an error, or to restyle captions. The timeline renders subtitles from the clip's meta, so no asset change is needed.",
+            inputSchema: z.object({
+              clip_id: z.string(),
+              text: z.string(),
+              style: z
+                .object({
+                  font: z.string().optional(),
+                  size: z.number().int().min(10).max(120).optional(),
+                  color: z.string().optional(),
+                  position: z.enum(["bottom", "center", "top"]).optional(),
+                })
+                .optional(),
+            }),
+            execute: ({ clip_id, text, style }) => H.editSubtitles(ctx, clip_id, text, style),
           }),
           update_timeline_clip: tool({
             description:

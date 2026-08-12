@@ -1,25 +1,51 @@
 import { useCallback, useEffect, useState } from "react";
-import { MousePointerSquareDashed, Code2, Upload, X } from "lucide-react";
+import { MousePointerSquareDashed, Code2, Upload, X, Type as TypeIcon } from "lucide-react";
 import { useRegistrySnapshot } from "@/kernel/react";
 import { useLibrary } from "@/plugins/library/store";
 import { replaceAsset, updateHtmlAsset, getAssetBytes } from "@/plugins/library/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { kindLabel } from "@/lib/ui/labels";
 import { usePanelStore } from "@/stores/panels";
+import { supabase } from "@/integrations/supabase/client";
+import { useTimelineUi, type TimelineClip } from "@/plugins/ui-timeline/store";
 import type { AssetRow } from "@/plugins/library/types";
+
+const FONT_OPTIONS = [
+  { value: "system-ui, sans-serif", label: "Système" },
+  { value: "Arial, sans-serif", label: "Arial" },
+  { value: "Helvetica, sans-serif", label: "Helvetica" },
+  { value: "Georgia, serif", label: "Georgia" },
+  { value: "Courier New, monospace", label: "Courier" },
+  { value: "Verdana, sans-serif", label: "Verdana" },
+  { value: "Impact, sans-serif", label: "Impact" },
+];
+
+const POSITION_OPTIONS = [
+  { value: "bottom", label: "Bas" },
+  { value: "center", label: "Centre" },
+  { value: "top", label: "Haut" },
+];
 
 export function Inspector() {
   const registry = useRegistrySnapshot();
   const panels = registry.panelsForSlot("inspector");
   const selected = useLibrary((s) => s.selected);
   const setSelected = useLibrary((s) => s.setSelected);
+  const selectedClip = useTimelineUi((s) => s.selectedClip);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-2)]">
       <div className="flex-1 overflow-auto">
+        {selectedClip ? (
+          selectedClip.track === "Subtitles" ? (
+            <SubtitleClipEditor key={selectedClip.id} clip={selectedClip} />
+          ) : (
+            <ClipSummary clip={selectedClip} />
+          )
+        ) : null}
         {selected ? (
           <AssetInspector asset={selected} onClose={() => setSelected(null)} />
-        ) : (
+        ) : selectedClip ? null : (
           <EmptyState
             compact
             icon={MousePointerSquareDashed}
@@ -31,6 +57,171 @@ export function Inspector() {
           const Comp = p.component;
           return <Comp key={p.id} />;
         })}
+      </div>
+    </div>
+  );
+}
+
+/** Generic info card for a selected timeline clip (non-subtitle). */
+function ClipSummary({ clip }: { clip: TimelineClip }) {
+  const selectClip = useTimelineUi((s) => s.selectClip);
+  const isSilence = clip.meta?.silence === true;
+  return (
+    <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
+      <div className="flex items-center justify-between">
+        <div className="t-meta">Plan sélectionné</div>
+        <button onClick={() => selectClip(null)} title="Désélectionner" className="ghost-btn h-6 w-6">
+          <X size={12} />
+        </button>
+      </div>
+      <div className="mt-2.5 space-y-1.5">
+        <Row k="Piste" v={clip.track} />
+        <Row k="Début" v={`${((clip.start_ms ?? 0) / 1000).toFixed(2)} s`} />
+        <Row k="Durée" v={`${((clip.duration_ms ?? 0) / 1000).toFixed(2)} s`} />
+        <Row k="Contenu" v={isSilence ? "Silence" : kindLabel(clip.assets?.kind ?? "other")} />
+        {clip.assets?.prompt ? (
+          <div className="pt-1">
+            <div className="text-[11px] text-[var(--text-dim)]">Prompt</div>
+            <div className="mt-0.5 line-clamp-3 whitespace-pre-wrap text-[11.5px] text-[var(--text)]">
+              {clip.assets.prompt}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Inline subtitle editor: text + style (font, size, color, position). */
+function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
+  const selectClip = useTimelineUi((s) => s.selectClip);
+  const meta = clip.meta ?? {};
+  const prevStyle = (meta.style ?? {}) as {
+    font?: string;
+    size?: number;
+    color?: string;
+    position?: string;
+  };
+  const [text, setText] = useState<string>(
+    (meta.text as string | undefined) ?? clip.assets?.prompt ?? "",
+  );
+  const [font, setFont] = useState(prevStyle.font ?? "system-ui, sans-serif");
+  const [size, setSize] = useState(prevStyle.size ?? 28);
+  const [color, setColor] = useState(prevStyle.color ?? "#ffffff");
+  const [position, setPosition] = useState(prevStyle.position ?? "bottom");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const nextMeta = { ...meta, text, style: { font, size, color, position } };
+      await supabase.from("timeline_clips").update({ meta: nextMeta }).eq("id", clip.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [clip.id, meta, text, font, size, color, position]);
+
+  return (
+    <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
+      <div className="flex items-center justify-between">
+        <div className="t-meta flex items-center gap-1.5">
+          <TypeIcon size={11} /> Sous-titre
+        </div>
+        <button onClick={() => selectClip(null)} title="Désélectionner" className="ghost-btn h-6 w-6">
+          <X size={12} />
+        </button>
+      </div>
+
+      <div className="mt-2.5 space-y-2">
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Texte</div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            className="w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Police</div>
+            <select
+              value={font}
+              onChange={(e) => setFont(e.target.value)}
+              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none"
+            >
+              {FONT_OPTIONS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Taille</div>
+            <input
+              type="number"
+              min={10}
+              max={120}
+              value={size}
+              onChange={(e) => setSize(Number(e.target.value))}
+              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none"
+            />
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Couleur</div>
+            <div className="flex h-7 items-center gap-1.5 rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5">
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-4 w-6 cursor-pointer border-none bg-transparent p-0"
+              />
+              <span className="mono text-[10px] text-[var(--text-muted)]">{color}</span>
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Position</div>
+            <select
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none"
+            >
+              {POSITION_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={() => selectClip(null)}
+            className="h-7 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={save}
+            disabled={busy}
+            className="h-7 rounded-lg bg-[var(--accent)] px-3 text-[11.5px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+          >
+            {busy ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </div>
+
+        {error ? (
+          <div className="rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[10px] text-[var(--status-err)]">
+            {error}
+          </div>
+        ) : null}
       </div>
     </div>
   );

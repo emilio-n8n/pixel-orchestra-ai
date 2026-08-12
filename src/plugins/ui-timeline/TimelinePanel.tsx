@@ -82,7 +82,9 @@ export function TimelinePanel() {
 
   // Keep the Inspector's selection in sync when clips reload (realtime).
   useEffect(() => {
-    if (selectedClipId && !clips.some((c) => c.id === selectedClipId)) selectClip(null);
+    const clip = clips.find((c) => c.id === selectedClipId) ?? null;
+    useTimelineUi.setState({ selectedClip: clip });
+    if (selectedClipId && !clip) selectClip(null);
   }, [clips, selectedClipId, selectClip]);
 
   // --------------- load + subscribe clips ---------------
@@ -228,16 +230,36 @@ export function TimelinePanel() {
       const sub = clipsRef.current.find(
         (c) => c.track === "Subtitles" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms,
       );
-      if (sub?.assets?.prompt) {
-        ctx.fillStyle = "rgba(0,0,0,0.55)";
-        ctx.font = "28px system-ui, sans-serif";
-        const text = sub.assets.prompt.slice(0, 120);
-        const tw = ctx.measureText(text).width;
-        ctx.fillRect((canvas.width - tw) / 2 - 12, canvas.height - 70, tw + 24, 44);
-        ctx.fillStyle = "#fff";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(text, canvas.width / 2, canvas.height - 34);
+      if (sub) {
+        const rawText = (sub.meta?.text as string | undefined) ?? sub.assets?.prompt;
+        if (rawText) {
+          const style = (sub.meta?.style ?? {}) as {
+            font?: string;
+            size?: number;
+            color?: string;
+            position?: string;
+          };
+          const size = style.size ?? 28;
+          const font = style.font ? `${size}px ${style.font}` : `${size}px system-ui, sans-serif`;
+          const color = style.color ?? "#fff";
+          const position = style.position ?? "bottom";
+          const text = rawText.slice(0, 120);
+          ctx.font = font;
+          const tw = ctx.measureText(text).width;
+          const boxH = size + 16;
+          const y =
+            position === "top"
+              ? 70
+              : position === "center"
+                ? canvas.height / 2 - boxH / 2
+                : canvas.height - 70 - boxH;
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillRect((canvas.width - tw) / 2 - 12, y, tw + 24, boxH);
+          ctx.fillStyle = color;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(text, canvas.width / 2, y + boxH - 8);
+        }
       }
     },
     [],
