@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Pause, Square, Download, Loader2, Maximize2, Minimize2, VolumeX } from "lucide-react";
+import { Play, Pause, Square, Download, Loader2, Maximize2, Minimize2, VolumeX, Trash2 } from "lucide-react";
 import html2canvas from "html2canvas";
 import { useTimelineUi, clipFades, type TimelineClip } from "./store";
 import { insertSilenceClip } from "./server";
@@ -336,6 +336,47 @@ export function TimelinePanel() {
       setAddingSilence(false);
     }
   }
+
+  /** Delete the selected clip. With ripple, later clips on the track slide left. */
+  async function deleteSelected(ripple: boolean) {
+    const id = selectedClipId;
+    if (!id) return;
+    const clip = clipsRef.current.find((c) => c.id === id);
+    if (!clip) return;
+    try {
+      await supabase.from("timeline_clips").delete().eq("id", id);
+      if (ripple) {
+        const removedEnd = (clip.start_ms ?? 0) + (clip.duration_ms ?? 0);
+        const later = clipsRef.current.filter(
+          (c) => c.track === clip.track && (c.start_ms ?? 0) >= removedEnd && c.id !== id,
+        );
+        for (const c of later) {
+          await supabase
+            .from("timeline_clips")
+            .update({ start_ms: Math.max(0, (c.start_ms ?? 0) - (clip.duration_ms ?? 0)) })
+            .eq("id", c.id);
+        }
+      }
+      selectClip(null);
+    } catch (e) {
+      console.error("[timeline] delete failed", e);
+    }
+  }
+
+  // Keyboard: Delete = remove, Shift+Delete = ripple remove. Never while typing.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedClipId) {
+        e.preventDefault();
+        void deleteSelected(e.shiftKey);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClipId]);
 
   function handleClipDragStart(e: React.DragEvent, clip: TimelineClip) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -795,6 +836,17 @@ export function TimelinePanel() {
           className="flex-1 accent-[var(--accent)]"
         />
         <div className="text-[11px] text-[var(--text-dim)]">{clips.length} clips</div>
+        {selectedClipId ? (
+          <button
+            onClick={() => void deleteSelected(false)}
+            onShiftClick={() => void deleteSelected(true)}
+            title="Supprimer le clip sélectionné — ⇧Suppr ou Maj+clic pour compacter (ripple)"
+            className="ml-1 flex h-6 items-center gap-1 rounded border border-[var(--status-err)]/40 px-2 text-[10px] font-medium text-[var(--status-err)] transition-colors hover:bg-[var(--status-err)]/10 disabled:opacity-40"
+          >
+            <Trash2 size={10} />
+            Supprimer
+          </button>
+        ) : null}
         <div className="ml-1 flex items-center gap-1 rounded border border-[var(--line)] bg-[var(--surface-2)] px-1 py-0.5">
           <input
             value={silenceSecs}
