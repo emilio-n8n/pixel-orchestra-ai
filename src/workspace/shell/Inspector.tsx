@@ -62,6 +62,137 @@ export function Inspector() {
   );
 }
 
+/** A/B/C take switcher for multi-take voice assets (generate_voice_takes). */
+function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
+  const takeGroup = typeof asset.meta?.take_group === "string" ? asset.meta.take_group : null;
+  const currentIndex =
+    typeof asset.meta?.take_index === "number" ? asset.meta.take_index : null;
+  const [takes, setTakes] = useState<
+    Array<{ id: string; url: string | null; name: string | null; meta: unknown; created_at: string }>
+  >([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [placed, setPlaced] = useState(false);
+
+  useEffect(() => {
+    if (!takeGroup) return;
+    let alive = true;
+    supabase
+      .from("assets")
+      .select("id, url, name, meta, created_at")
+      .eq("meta->>take_group", takeGroup)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (alive) setTakes((data ?? []) as typeof takes);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [takeGroup]);
+
+  const useTake = useCallback(
+    async (takeId: string) => {
+      setBusyId(takeId);
+      setError(null);
+      try {
+        const { data: clip } = await supabase
+          .from("timeline_clips")
+          .select("id, duration_ms")
+          .eq("asset_id", asset.id)
+          .maybeSingle();
+        if (!clip) {
+          setError("Ce take n'est pas encore posé sur la timeline — ajoutez-le depuis la médiathèque.");
+          return;
+        }
+        const t = takes.find((x) => x.id === takeId);
+        const tMeta = (t?.meta ?? {}) as Record<string, unknown>;
+        await supabase
+          .from("timeline_clips")
+          .update({
+            asset_id: takeId,
+            ...(typeof tMeta.duration_ms === "number" && tMeta.duration_ms > 0
+              ? { duration_ms: tMeta.duration_ms }
+              : {}),
+          })
+          .eq("id", clip.id);
+        setPlaced(true);
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [asset.id, takes],
+  );
+
+  if (!takeGroup) return null;
+
+  return (
+    <div className="mt-3 rounded border border-[var(--line)] bg-[var(--surface-1)] p-2">
+      <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
+        Prises de voix ({takes.length})
+      </div>
+      <div className="space-y-1.5">
+        {takes.map((t, i) => {
+          const label = ["A", "B", "C", "D", "E"][i] ?? `${i + 1}`;
+          const isCurrent = t.id === asset.id;
+          const tMeta = (t.meta ?? {}) as Record<string, unknown>;
+          const tDur =
+            typeof tMeta.duration_ms === "number"
+              ? `${(tMeta.duration_ms / 1000).toFixed(1)}s`
+              : null;
+          return (
+            <div
+              key={t.id}
+              className={`rounded border p-1.5 ${isCurrent ? "border-[var(--accent)]/60 bg-[var(--accent-quiet)]" : "border-[var(--line)]"}`}
+            >
+              <div className="mb-1 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[11px] text-[var(--text)]">
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
+                      isCurrent ? "bg-[var(--accent)] text-[var(--accent-fg)]" : "bg-[var(--surface-3)] text-[var(--text-muted)]"
+                    }`}
+                  >
+                    {label}
+                  </span>
+                  <span className="truncate">{t.name ?? `Take ${i + 1}`}</span>
+                  {tDur ? <span className="mono text-[10px] text-[var(--text-dim)]">{tDur}</span> : null}
+                  {isCurrent ? (
+                    <span className="text-[9px] uppercase tracking-widest text-[var(--accent-strong)]">
+                      actif
+                    </span>
+                  ) : null}
+                </div>
+                {!isCurrent ? (
+                  <button
+                    onClick={() => void useTake(t.id)}
+                    disabled={busyId !== null}
+                    className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40"
+                    title="Remplacer ce take sur le clip de la timeline"
+                  >
+                    {busyId === t.id ? "…" : "Utiliser"}
+                  </button>
+                ) : null}
+              </div>
+              {t.url ? <audio controls src={t.url} className="h-7 w-full" preload="none" /> : null}
+            </div>
+          );
+        })}
+      </div>
+      {placed ? (
+        <div className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+          Take appliqué — le clip garde sa position et sa durée a été ajustée.
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mt-1.5 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-1.5 text-[10px] text-[var(--status-err)]">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Generic info card for a selected timeline clip (non-subtitle). */
 function ClipSummary({ clip }: { clip: TimelineClip }) {
   const selectClip = useTimelineUi((s) => s.selectClip);
@@ -313,6 +444,10 @@ function AssetInspector({
           </>
         ) : null}
       </div>
+
+      {asset.kind === "audio" && asset.meta?.take_group ? (
+        <VoiceTakeSwitcher key={asset.id} asset={asset} />
+      ) : null}
 
       {asset.status !== "pending" ? (
         <div className="mt-3 flex flex-wrap gap-2">

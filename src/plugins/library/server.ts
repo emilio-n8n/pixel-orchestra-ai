@@ -66,6 +66,7 @@ function rowToAsset(r: RawRow): AssetRow {
     thumbnailHash: r.thumbnail_hash,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    meta: meta as AssetRow["meta"],
   };
   if (r.kind === "pending") {
     base.status = "pending";
@@ -107,6 +108,7 @@ function cloudRowToAsset(r: {
     status: "ready",
     supabaseId: r.id,
     url: r.url,
+    meta: r.meta as AssetRow["meta"],
   };
 }
 

@@ -98,6 +98,8 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "SUBTITLES: generate_subtitles transcribes a voice and places the captions. To fix a word or restyle captions (font, size, color, position) use edit_subtitles on the subtitle clip — the timeline renders text from the clip meta. Never resize subtitle clips manually; their duration comes from the voice." +
           "\n\n" +
+          "VOICE TAKES: when the user wants options or you're unsure about delivery, call generate_voice_takes (3 variations of the same line, one take_group). Place the takes on the Audio track for A/B, or leave them in the Library and tell the user to pick; once chosen, swap the winner onto the clip with replace_clip_asset (it keeps the position and resizes to the real duration)." +
+          "\n\n" +
           "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
           "\n\n" +
           "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.";
@@ -147,6 +149,16 @@ export const Route = createFileRoute("/api/director")({
               voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional(),
             }),
             execute: ({ text, voice }) => H.generateVoice(ctx, text, voice),
+          }),
+          generate_voice_takes: tool({
+            description:
+              "Generate n (default 3) variations of the SAME line so the user can pick the best one. Use when the user wants options, or for narration you want to A/B. All takes share a take_group; place them all on the Audio track (or leave them in the Library) and tell the user to pick — then swap the winner with replace_clip_asset.",
+            inputSchema: z.object({
+              text: z.string(),
+              voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional(),
+              n: z.number().int().min(1).max(5).optional(),
+            }),
+            execute: ({ text, voice, n }) => H.generateVoiceTakes(ctx, text, voice, n),
           }),
           generate_html_card: tool({
             description:

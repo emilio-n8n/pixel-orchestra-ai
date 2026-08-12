@@ -233,47 +233,92 @@ export async function generateImage(
 }
 
 // -------- tts / voice ----------
+async function generateVoiceInner(
+  ctx: DirectorCtx,
+  text: string,
+  voice: string = "alloy",
+  opts: { takeGroup?: string; takeIndex?: number } = {},
+) {
+  const { takeGroup, takeIndex } = opts;
+  const res = await fetch(`${LOVABLE_AI_URL}/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${requireKey()}`,
+    },
+    body: JSON.stringify({
+      model: "openai/gpt-4o-mini-tts",
+      voice,
+      input: text,
+      response_format: "mp3",
+    }),
+  });
+  if (!res.ok) throw new Error(`tts failed: ${res.status} ${await res.text()}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const durationMs = measureMp3DurationMs(bytes);
+  const meta: Record<string, unknown> = { voice, duration_ms: durationMs };
+  if (takeGroup) meta.take_group = takeGroup;
+  if (takeIndex != null) meta.take_index = takeIndex;
+  meta.name = takeIndex != null ? `Director Take ${takeIndex + 1} — ${text.slice(0, 24)}` : null;
+  const { url: storedUrl, storagePath } = await uploadBinaryAsset(
+    ctx.supabase,
+    ctx.userId,
+    ctx.projectId,
+    bytes,
+    "audio/mpeg",
+    "mp3",
+  );
+  const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
+    kind: "audio",
+    mime: "audio/mpeg",
+    url: storedUrl,
+    prompt: text,
+    meta: { ...meta, storage_path: storagePath },
+  });
+  recordProvenance(ctx, row.id, takeIndex != null ? "director.generate_voice_take" : "director.generate_voice", { text, voice, take_index: takeIndex ?? null, take_group: takeGroup ?? null });
+  const localMeta: Record<string, unknown> = { ...meta, storage_path: storagePath, supabase_id: row.id };
+  delete localMeta.name;
+  storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, localMeta);
+  return row;
+}
+
 export async function generateVoice(
   ctx: DirectorCtx,
   text: string,
   voice: string = "alloy",
 ) {
-  return recordJob(ctx, "generate_voice", text, async () => {
-    const res = await fetch(`${LOVABLE_AI_URL}/audio/speech`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${requireKey()}`,
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini-tts",
-        voice,
-        input: text,
-        response_format: "mp3",
-      }),
-    });
-    if (!res.ok) throw new Error(`tts failed: ${res.status} ${await res.text()}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    const durationMs = measureMp3DurationMs(bytes);
-    const meta = { voice, duration_ms: durationMs };
-    const { url: storedUrl, storagePath } = await uploadBinaryAsset(
-      ctx.supabase,
-      ctx.userId,
-      ctx.projectId,
-      bytes,
-      "audio/mpeg",
-      "mp3",
-    );
-    const row = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
-      kind: "audio",
-      mime: "audio/mpeg",
-      url: storedUrl,
-      prompt: text,
-      meta: { ...meta, storage_path: storagePath },
-    });
-    recordProvenance(ctx, row.id, "director.generate_voice", { text, voice });
-    storeInLocalKernel(ctx.projectId, "audio", `Director Voice — ${text.slice(0, 40)}`, "audio/mpeg", bytes, text, { ...meta, storage_path: storagePath, supabase_id: row.id });
-    return row;
+  return recordJob(ctx, "generate_voice", text, () => generateVoiceInner(ctx, text, voice));
+}
+
+/**
+ * Generate n variations (takes) of the same line. All takes share a
+ * take_group id and carry take_index 0..n-1 — the Library/Inspector groups
+ * them so the user can A/B them and swap the chosen one onto the clip.
+ */
+export async function generateVoiceTakes(
+  ctx: DirectorCtx,
+  text: string,
+  voice: string = "alloy",
+  n: number = 3,
+) {
+  return recordJob(ctx, "generate_voice_takes", text, async () => {
+    const count = Math.max(1, Math.min(5, Math.floor(n)));
+    const takeGroup = `takes_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const takes = [];
+    for (let i = 0; i < count; i++) {
+      takes.push(await generateVoiceInner(ctx, text, voice, { takeGroup, takeIndex: i }));
+    }
+    return {
+      text,
+      voice,
+      take_group: takeGroup,
+      takes: takes.map((t) => ({
+        id: t.id,
+        take_index: t.meta?.take_index ?? 0,
+        duration_ms: t.meta?.duration_ms ?? null,
+        url: t.url,
+      })),
+    };
   });
 }
 

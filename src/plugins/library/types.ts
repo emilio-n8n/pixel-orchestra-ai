@@ -44,6 +44,8 @@ export interface AssetRow {
   supabaseId?: string | null;
   /** Durable signed URL used by published builds and remote viewers. */
   url?: string | null;
+  /** Wire-safe subset of the asset metadata (voice takes, duration_ms…). */
+  meta?: JsonObject | null;
 }
 
 export interface ImportAssetInput {
