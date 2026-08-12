@@ -92,7 +92,9 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. \"fade-in + slide-up title with a slow gradient shift and pulsing glow\"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles." +
           "\n\n" +
-          "TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear. Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to \"start the music at Xs with a fade-in\", use update_timeline_clip with start_ms + fade_in_ms on the music clip." +
+          "TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear (pass ripple:true to close the gap — later clips on the track slide left). Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to \"start the music at Xs with a fade-in\", use update_timeline_clip with start_ms + fade_in_ms on the music clip." +
+          "\n\n" +
+          "SILENCE CLIPS: for pauses, pacing and \"rhythmic narration\" templates, use insert_silence_clip (duration_ms + optional start_ms) — never compute start_ms gaps by hand. A silence clip on a track blocks that time range: other clips placed after it are shifted right by the anti-overlap system automatically. Use silences to create natural pacing between voiceover lines, or to reserve space before/after sounds." +
           "\n\n" +
           "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
           "\n\n" +
@@ -168,9 +170,23 @@ export const Route = createFileRoute("/api/director")({
             execute: (args) => H.addToTimeline(ctx, args),
           }),
           remove_from_timeline: tool({
-            description: "Remove a clip from the timeline by its id.",
-            inputSchema: z.object({ clip_id: z.string() }),
-            execute: ({ clip_id }) => H.removeFromTimeline(ctx, clip_id),
+            description:
+              "Remove a clip from the timeline by its id. Pass ripple:true to also shift every later clip on the same track left by the removed clip's duration (closing the gap).",
+            inputSchema: z.object({
+              clip_id: z.string(),
+              ripple: z.boolean().optional(),
+            }),
+            execute: ({ clip_id, ripple }) => H.removeFromTimeline(ctx, clip_id, { ripple }),
+          }),
+          insert_silence_clip: tool({
+            description:
+              "Insert a native SILENCE clip on an audio track (Audio, Music, SFX). This is a pause with no asset — it occupies space on the track so nothing plays during its duration. Use it instead of manually computing start_ms gaps between clips: pass duration_ms (e.g. 1200) and optionally start_ms (default: 0; if the spot is occupied the silence is shifted right).",
+            inputSchema: z.object({
+              duration_ms: z.number().int().positive(),
+              track: z.enum(["Audio", "Music", "SFX"]),
+              start_ms: z.number().int().min(0).optional(),
+            }),
+            execute: (args) => H.insertSilenceClip(ctx, args),
           }),
           update_timeline_clip: tool({
             description:

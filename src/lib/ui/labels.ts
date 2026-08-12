@@ -104,6 +104,7 @@ export const KIND_LABELS: Record<string, string> = {
   doc: "Document",
   other: "Fichier",
   pending: "En attente",
+  silence: "Silence",
 };
 
 export function kindLabel(kind: string): string {

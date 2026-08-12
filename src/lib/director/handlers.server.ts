@@ -475,7 +475,24 @@ export async function addToTimeline(
   return { ...data, duration_ms: desiredDuration, _warning: warning };
 }
 
-export async function removeFromTimeline(ctx: DirectorCtx, clipId: string) {
+/**
+ * Remove a clip. With `ripple`, every later clip on the same track is shifted
+ * left by the removed clip's duration (closing the gap).
+ */
+export async function removeFromTimeline(
+  ctx: DirectorCtx,
+  clipId: string,
+  opts: { ripple?: boolean } = {},
+) {
+  const { data: existing, error: getErr } = await ctx.supabase
+    .from("timeline_clips")
+    .select("id, track, start_ms, duration_ms")
+    .eq("id", clipId)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .maybeSingle();
+  if (getErr || !existing) throw new Error("clip not found");
+
   const { data, error } = await ctx.supabase
     .from("timeline_clips")
     .delete()
@@ -485,7 +502,83 @@ export async function removeFromTimeline(ctx: DirectorCtx, clipId: string) {
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+
+  if (opts.ripple) {
+    const removedEnd = (existing.start_ms ?? 0) + (existing.duration_ms ?? 0);
+    const { data: later } = await ctx.supabase
+      .from("timeline_clips")
+      .select("id, start_ms")
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .eq("track", existing.track)
+      .gte("start_ms", removedEnd);
+    for (const c of later ?? []) {
+      await ctx.supabase
+        .from("timeline_clips")
+        .update({ start_ms: Math.max(0, (c.start_ms ?? 0) - (existing.duration_ms ?? 0)) })
+        .eq("id", c.id)
+        .eq("owner_id", ctx.userId)
+        .eq("project_id", ctx.projectId);
+    }
+  }
   return data;
+}
+
+/**
+ * Insert a native silence clip on any track. No asset is involved — the clip
+ * holds `meta.silence = true` and simply occupies space (and mutes audio)
+ * for its duration. Overlapping clips on the same track shift it right, same
+ * as add_to_timeline.
+ */
+export async function insertSilenceClip(
+  ctx: DirectorCtx,
+  args: { duration_ms: number; track: string; start_ms?: number },
+) {
+  return recordJob(ctx, "insert_silence_clip", `silence ${args.duration_ms}ms`, async () => {
+    if (!(args.duration_ms > 0)) throw new Error("duration_ms must be positive");
+    const desiredStart = args.start_ms ?? 0;
+
+    const { data: existing } = await ctx.supabase
+      .from("timeline_clips")
+      .select("start_ms, duration_ms")
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .eq("track", args.track)
+      .order("start_ms", { ascending: true });
+
+    let start = desiredStart;
+    let overlapDetected = false;
+    for (const clip of existing ?? []) {
+      const clipEnd = (clip.start_ms ?? 0) + (clip.duration_ms ?? 3000);
+      if (start < clipEnd && start + args.duration_ms > clip.start_ms) {
+        overlapDetected = true;
+        start = clipEnd;
+      }
+    }
+
+    const { data, error } = await ctx.supabase
+      .from("timeline_clips")
+      .insert({
+        owner_id: ctx.userId,
+        project_id: ctx.projectId,
+        track: args.track,
+        asset_id: null,
+        start_ms: start,
+        duration_ms: args.duration_ms,
+        meta: {
+          silence: true,
+          prompt: `Silence — ${(args.duration_ms / 1000).toFixed(1)}s`,
+        },
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    const warning = overlapDetected
+      ? `⚠️ overlap detected on "${args.track}" — silence shifted to ${start}ms (from ${desiredStart}ms).`
+      : null;
+    return { ...data, _warning: warning };
+  });
 }
 
 /**

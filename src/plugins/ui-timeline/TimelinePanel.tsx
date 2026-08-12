@@ -1,29 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Pause, Square, Download, Loader2, Maximize2, Minimize2 } from "lucide-react";
+import { Play, Pause, Square, Download, Loader2, Maximize2, Minimize2, VolumeX } from "lucide-react";
 import html2canvas from "html2canvas";
+import { useTimelineUi, clipFades, type TimelineClip } from "./store";
+import { insertSilenceClip } from "./server";
 
 const TRACKS = ["Video", "Audio", "Music", "SFX", "Subtitles"] as const;
 const AUDIO_TRACKS = new Set(["Audio", "Music", "SFX"]);
 const PX_PER_MS = 0.08;
-
-type Clip = {
-  id: string;
-  track: string;
-  start_ms: number;
-  duration_ms: number;
-  asset_id: string | null;
-  assets: { kind: string; url: string; prompt: string | null } | null;
-  meta?: Record<string, unknown> | null;
-};
-
-function clipFades(c: Clip): { fadeInMs: number; fadeOutMs: number } {
-  const meta = c.meta ?? {};
-  const fadeInMs = typeof meta.fade_in_ms === "number" ? meta.fade_in_ms : 0;
-  const fadeOutMs = typeof meta.fade_out_ms === "number" ? meta.fade_out_ms : 0;
-  return { fadeInMs, fadeOutMs };
-}
 
 /** Linear volume ramp for preview playback (HTMLAudioElement.volume). */
 function rampVolume(a: HTMLAudioElement, from: number, to: number, ms: number) {
@@ -61,13 +46,17 @@ function isHttpUrl(url: string | null | undefined): url is string {
 
 export function TimelinePanel() {
   const pid = useLibraryProject();
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<TimelineClip[]>([]);
   const [playing, setPlaying] = useState(false);
   const [playhead, setPlayhead] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportPct, setExportPct] = useState(0);
-  const [activeHtmlClip, setActiveHtmlClip] = useState<Clip | null>(null);
+  const [activeHtmlClip, setActiveHtmlClip] = useState<TimelineClip | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [silenceSecs, setSilenceSecs] = useState("1.5");
+  const [addingSilence, setAddingSilence] = useState(false);
+  const selectedClipId = useTimelineUi((s) => s.selectedClipId);
+  const selectClip = useTimelineUi((s) => s.selectClip);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -75,7 +64,7 @@ export function TimelinePanel() {
   const rafRef = useRef<number | null>(null);
   const audiosRef = useRef<HTMLAudioElement[]>([]);
   const timersRef = useRef<number[]>([]);
-  const clipsRef = useRef<Clip[]>([]);
+  const clipsRef = useRef<TimelineClip[]>([]);
   const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
   const prerenderedRef = useRef<Map<string, string>>(new Map());
   const htmlVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -91,6 +80,11 @@ export function TimelinePanel() {
   const [dragOverTrack, setDragOverTrack] = useState<string | null>(null);
   clipsRef.current = clips;
 
+  // Keep the Inspector's selection in sync when clips reload (realtime).
+  useEffect(() => {
+    if (selectedClipId && !clips.some((c) => c.id === selectedClipId)) selectClip(null);
+  }, [clips, selectedClipId, selectClip]);
+
   // --------------- load + subscribe clips ---------------
   useEffect(() => {
     if (!pid) return;
@@ -103,7 +97,7 @@ export function TimelinePanel() {
         .eq("project_id", projectId)
         .order("track")
         .order("start_ms");
-      if (alive) setClips((data ?? []) as unknown as Clip[]);
+      if (alive) setClips((data ?? []) as unknown as TimelineClip[]);
     }
     load();
     const ch = supabase
@@ -306,7 +300,7 @@ export function TimelinePanel() {
     return start;
   }
 
-  function patchClipLocal(id: string, patch: Partial<Clip>) {
+  function patchClipLocal(id: string, patch: Partial<TimelineClip>) {
     setClips((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
@@ -318,7 +312,32 @@ export function TimelinePanel() {
     }
   }
 
-  function handleClipDragStart(e: React.DragEvent, clip: Clip) {
+  /** Insert a native silence clip on the Audio track (server fn → RLS owner). */
+  async function addSilence() {
+    if (!pid) return;
+    const secs = parseFloat(silenceSecs.replace(",", "."));
+    if (!Number.isFinite(secs) || secs <= 0) return;
+    setAddingSilence(true);
+    try {
+      await insertSilenceClip({
+        data: {
+          projectId: pid,
+          track: "Audio",
+          duration_ms: Math.round(secs * 1000),
+          start_ms: clipsRef.current.reduce(
+            (max, c) => (c.track === "Audio" ? Math.max(max, c.start_ms + c.duration_ms) : max),
+            0,
+          ),
+        },
+      });
+    } catch (e) {
+      console.error("[timeline] insert silence failed", e);
+    } finally {
+      setAddingSilence(false);
+    }
+  }
+
+  function handleClipDragStart(e: React.DragEvent, clip: TimelineClip) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     dragRef.current = { clipId: clip.id, offsetMs: (e.clientX - rect.left) / PX_PER_MS };
     e.dataTransfer.setData("text/plain", clip.id);
@@ -338,7 +357,7 @@ export function TimelinePanel() {
     void updateClip(clip.id, { start_ms: start, track });
   }
 
-  function handleResizeStart(e: React.MouseEvent, clip: Clip, side: "left" | "right") {
+  function handleResizeStart(e: React.MouseEvent, clip: TimelineClip, side: "left" | "right") {
     e.preventDefault();
     e.stopPropagation();
     resizeRef.current = {
@@ -465,7 +484,7 @@ export function TimelinePanel() {
   useEffect(() => () => stop(), [stop]);
 
   // --------------- pre-render HTML clip to video ---------------
-  async function prerenderHtmlClip(clip: Clip): Promise<string | null> {
+  async function prerenderHtmlClip(clip: TimelineClip): Promise<string | null> {
     const url = clip.assets?.url;
     if (!isHttpUrl(url)) return null;
 
@@ -776,6 +795,25 @@ export function TimelinePanel() {
           className="flex-1 accent-[var(--accent)]"
         />
         <div className="text-[11px] text-[var(--text-dim)]">{clips.length} clips</div>
+        <div className="ml-1 flex items-center gap-1 rounded border border-[var(--line)] bg-[var(--surface-2)] px-1 py-0.5">
+          <input
+            value={silenceSecs}
+            onChange={(e) => setSilenceSecs(e.target.value)}
+            disabled={exporting || addingSilence}
+            title="Durée du silence en secondes"
+            className="w-9 bg-transparent text-center text-[10.5px] text-[var(--text)] outline-none"
+            inputMode="decimal"
+          />
+          <button
+            onClick={addSilence}
+            disabled={exporting || addingSilence || !pid}
+            title="Insérer un silence (Audio) à la fin de la piste"
+            className="flex h-6 items-center gap-1 rounded bg-[var(--surface-3)] px-1.5 text-[10px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-40"
+          >
+            <VolumeX size={10} />
+            Silence
+          </button>
+        </div>
         <button
           onClick={toggleFullscreen}
           disabled={exporting}
@@ -823,41 +861,62 @@ export function TimelinePanel() {
                       dragOverTrack === t ? "bg-[var(--accent-quiet)]" : "bg-[var(--surface-2)]"
                     }`}
                   >
-                    {rowClips.map((c) => (
-                      <div
-                        key={c.id}
-                        draggable
-                        onDragStart={(e) => handleClipDragStart(e, c)}
-                        className="absolute top-1 h-10 cursor-grab overflow-hidden rounded border border-[var(--accent)]/40 bg-[var(--surface-3)] text-[10px] active:cursor-grabbing"
-                        style={{
-                          left: c.start_ms * PX_PER_MS,
-                          width: Math.max(24, c.duration_ms * PX_PER_MS),
-                        }}
-                        title={c.assets?.prompt ?? ""}
-                      >
-                        {c.assets?.kind === "image" && isHttpUrl(c.assets.url) ? (
-                          <img
-                            src={c.assets.url}
-                            alt=""
-                            className="h-full w-full object-cover opacity-80"
+                    {rowClips.map((c) => {
+                      const isSilence = c.meta?.silence === true;
+                      const isSelected = selectedClipId === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          draggable={!isSilence}
+                          onDragStart={(e) => handleClipDragStart(e, c)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectClip(isSelected ? null : c.id);
+                          }}
+                          className={`absolute top-1 h-10 cursor-grab overflow-hidden rounded border bg-[var(--surface-3)] text-[10px] active:cursor-grabbing ${
+                            isSilence
+                              ? "border-dashed border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--text-dim)]"
+                              : "border-[var(--accent)]/40"
+                          } ${isSelected ? "ring-2 ring-[var(--accent)]" : ""}`}
+                          style={{
+                            left: c.start_ms * PX_PER_MS,
+                            width: Math.max(24, c.duration_ms * PX_PER_MS),
+                          }}
+                          title={c.assets?.prompt ?? c.meta?.prompt ?? ""}
+                        >
+                          {isSilence ? (
+                            <div className="flex h-full items-center gap-1 px-1">
+                              <VolumeX size={11} className="shrink-0" />
+                              <span className="truncate">
+                                Silence {(c.duration_ms / 1000).toFixed(1)}s
+                              </span>
+                            </div>
+                          ) : c.assets?.kind === "image" && isHttpUrl(c.assets.url) ? (
+                            <img
+                              src={c.assets.url}
+                              alt=""
+                              className="h-full w-full object-cover opacity-80"
+                            />
+                          ) : c.assets?.kind === "html" ? (
+                            <div className="flex h-full items-center justify-center bg-white/10 p-1 text-[9px] uppercase tracking-wider text-white/70">
+                              HTML
+                            </div>
+                          ) : (
+                            <div className="truncate p-1">{c.assets?.kind ?? "?"}</div>
+                          )}
+                          {!isSilence && (
+                            <div
+                              onMouseDown={(e) => handleResizeStart(e, c, "left")}
+                              className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
+                            />
+                          )}
+                          <div
+                            onMouseDown={(e) => handleResizeStart(e, c, "right")}
+                            className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
                           />
-                        ) : c.assets?.kind === "html" ? (
-                          <div className="flex h-full items-center justify-center bg-white/10 p-1 text-[9px] uppercase tracking-wider text-white/70">
-                            HTML
-                          </div>
-                        ) : (
-                          <div className="truncate p-1">{c.assets?.kind ?? "?"}</div>
-                        )}
-                        <div
-                          onMouseDown={(e) => handleResizeStart(e, c, "left")}
-                          className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
-                        />
-                        <div
-                          onMouseDown={(e) => handleResizeStart(e, c, "right")}
-                          className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
-                        />
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
