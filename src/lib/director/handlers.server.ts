@@ -725,6 +725,78 @@ export async function applyDucking(
 }
 
 /**
+ * Crossfade two clips on the same track: clip B is pulled to overlap the
+ * tail of clip A by `ms`. For video clips this becomes a dissolve (the
+ * renderer blends both while they overlap); for audio it becomes a volume
+ * cross-fade via fade_out_ms/fade_in_ms. Single-clip fades to/from black
+ * (video) or volume fades (audio) are done with update_timeline_clip's
+ * fade_in_ms/fade_out_ms.
+ */
+export async function setClipTransitions(
+  ctx: DirectorCtx,
+  args: { clip_a_id: string; clip_b_id: string; ms: number },
+) {
+  return recordJob(ctx, "set_clip_transitions", `crossfade ${args.ms}ms`, async () => {
+    const ms = Math.max(50, Math.floor(args.ms));
+    const { data: a, error: aErr } = await ctx.supabase
+      .from("timeline_clips")
+      .select("id, track, start_ms, duration_ms, meta")
+      .eq("id", args.clip_a_id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .maybeSingle();
+    if (aErr || !a) throw new Error("clip A not found");
+    const { data: b, error: bErr } = await ctx.supabase
+      .from("timeline_clips")
+      .select("id, track, start_ms, duration_ms, meta")
+      .eq("id", args.clip_b_id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .maybeSingle();
+    if (bErr || !b) throw new Error("clip B not found");
+    if (a.track !== b.track) throw new Error("crossfade requires two clips on the same track");
+
+    const newStart = (a.start_ms ?? 0) + (a.duration_ms ?? 0) - ms;
+    if (newStart < 0) throw new Error("transition is longer than clip A — shorten ms or move the clips");
+
+    const isVideo = a.track === "Video";
+    const aMeta = { ...((a.meta ?? {}) as Record<string, unknown>) };
+    const bMeta = { ...((b.meta ?? {}) as Record<string, unknown>) };
+    if (isVideo) {
+      aMeta.transition_out_ms = ms;
+      bMeta.transition_in_ms = ms;
+    } else {
+      aMeta.fade_out_ms = ms;
+      bMeta.fade_in_ms = ms;
+    }
+
+    const { error: ua } = await ctx.supabase
+      .from("timeline_clips")
+      .update({ meta: aMeta })
+      .eq("id", a.id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId);
+    if (ua) throw new Error(ua.message);
+    const { error: ub } = await ctx.supabase
+      .from("timeline_clips")
+      .update({ start_ms: newStart, meta: bMeta })
+      .eq("id", b.id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId);
+    if (ub) throw new Error(ub.message);
+
+    return {
+      clip_a_id: a.id,
+      clip_b_id: b.id,
+      ms,
+      track: a.track,
+      kind: isVideo ? "dissolve" : "audio crossfade",
+      clip_b_start_ms: newStart,
+    };
+  });
+}
+
+/**
  * Edit a subtitle clip: replace its text and/or its style
  * (font, size px, color, position: bottom|center|top). Stored in the
  * clip's meta — the timeline renders it from there.

@@ -193,42 +193,68 @@ export function TimelinePanel() {
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw video / image clips
-      const vlist = clipsRef.current
+      // Draw video / image clips — supports a dissolve when two clips
+      // overlap on the Video track (set via set_clip_transitions).
+      const activeVideos = clipsRef.current
         .filter((c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms)
-        .sort((a, b) => b.start_ms - a.start_ms);
-      const active = vlist[0];
-      if (active?.assets?.kind === "image" && active.assets.url) {
-        const img = imgCacheRef.current.get(active.assets.url);
-        if (img && img.complete && img.naturalWidth) {
-          const iw = img.naturalWidth, ih = img.naturalHeight;
-          const cw = canvas.width, ch = canvas.height;
-          const scale = Math.min(cw / iw, ch / ih);
-          const w = iw * scale, h = ih * scale;
-          ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
-        }
-      }
+        .sort((a, b) => a.start_ms - b.start_ms);
 
-      // Draw pre-rendered HTML video (during export)
-      if (active?.assets?.kind === "html" && htmlVideoMap) {
-        const vidUrl = htmlVideoMap.get(active.id);
-        if (vidUrl) {
-          let ve = htmlVideoElsRef.current.get(active.id);
-          if (!ve) {
-            ve = document.createElement("video");
-            ve.src = vidUrl;
-            ve.preload = "auto";
-            ve.muted = true;
-            htmlVideoElsRef.current.set(active.id, ve);
+      const drawV = (c: TimelineClip, alpha: number) => {
+        ctx.save();
+        if (alpha < 1) ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        if (c.assets?.kind === "image" && c.assets.url) {
+          const img = imgCacheRef.current.get(c.assets.url);
+          if (img && img.complete && img.naturalWidth) {
+            const iw = img.naturalWidth, ih = img.naturalHeight;
+            const cw = canvas.width, ch = canvas.height;
+            const scale = Math.min(cw / iw, ch / ih);
+            const w = iw * scale, h = ih * scale;
+            ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
           }
-          const offset = ms - active.start_ms;
-          const frames = Math.ceil(active.duration_ms / 33.33);
-          const frameDuration = active.duration_ms / frames;
-          const frame = Math.min(frames - 1, Math.floor(offset / frameDuration));
-          ve.currentTime = frame * (frameDuration / 1000);
+        } else if (c.assets?.kind === "html" && htmlVideoMap) {
+          const vidUrl = htmlVideoMap.get(c.id);
+          if (vidUrl) {
+            let ve = htmlVideoElsRef.current.get(c.id);
+            if (!ve) {
+              ve = document.createElement("video");
+              ve.src = vidUrl;
+              ve.preload = "auto";
+              ve.muted = true;
+              htmlVideoElsRef.current.set(c.id, ve);
+            }
+            const offset = ms - c.start_ms;
+            const frames = Math.ceil(c.duration_ms / 33.33);
+            const frameDuration = c.duration_ms / frames;
+            const frame = Math.min(frames - 1, Math.floor(offset / frameDuration));
+            ve.currentTime = frame * (frameDuration / 1000);
+            const cw = canvas.width, ch = canvas.height;
+            ctx.drawImage(ve, 0, 0, cw, ch);
+          }
+        }
+        ctx.restore();
+      };
 
-          const cw = canvas.width, ch = canvas.height;
-          ctx.drawImage(ve, 0, 0, cw, ch);
+      if (activeVideos.length >= 2) {
+        const a = activeVideos[activeVideos.length - 2];
+        const b = activeVideos[activeVideos.length - 1];
+        const span = a.start_ms + a.duration_ms - b.start_ms;
+        const prog = span > 0 ? (ms - b.start_ms) / span : 1;
+        drawV(a, 1 - prog);
+        drawV(b, prog);
+      } else if (activeVideos.length === 1) {
+        const c = activeVideos[0];
+        drawV(c, 1);
+        // Fade to/from black (transition_in_ms / transition_out_ms).
+        const local = ms - c.start_ms;
+        const inMs = typeof c.meta?.transition_in_ms === "number" ? c.meta.transition_in_ms : 0;
+        const outMs = typeof c.meta?.transition_out_ms === "number" ? c.meta.transition_out_ms : 0;
+        let blackAlpha = 0;
+        if (inMs > 0 && local < inMs) blackAlpha = Math.max(blackAlpha, 1 - local / inMs);
+        const untilEnd = c.start_ms + c.duration_ms - ms;
+        if (outMs > 0 && untilEnd < outMs) blackAlpha = Math.max(blackAlpha, untilEnd / outMs);
+        if (blackAlpha > 0) {
+          ctx.fillStyle = `rgba(0,0,0,${blackAlpha})`;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
       }
 
@@ -951,6 +977,13 @@ export function TimelinePanel() {
                     {rowClips.map((c) => {
                       const isSilence = c.meta?.silence === true;
                       const isSelected = selectedClipId === c.id;
+                      const meta = c.meta ?? {};
+                      const fadeInMs = typeof meta.fade_in_ms === "number" ? meta.fade_in_ms : 0;
+                      const fadeOutMs = typeof meta.fade_out_ms === "number" ? meta.fade_out_ms : 0;
+                      const tInMs = typeof meta.transition_in_ms === "number" ? meta.transition_in_ms : 0;
+                      const tOutMs = typeof meta.transition_out_ms === "number" ? meta.transition_out_ms : 0;
+                      const hasFadeIn = fadeInMs > 0 || tInMs > 0;
+                      const hasFadeOut = fadeOutMs > 0 || tOutMs > 0;
                       return (
                         <div
                           key={c.id}
@@ -997,6 +1030,18 @@ export function TimelinePanel() {
                               className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
                             />
                           )}
+                          {hasFadeIn ? (
+                            <div
+                              className="absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]/80"
+                              title={`Fondu d'entrée ${Math.max(fadeInMs, tInMs)}ms`}
+                            />
+                          ) : null}
+                          {hasFadeOut ? (
+                            <div
+                              className="absolute inset-y-0 right-0 w-[3px] bg-[var(--accent)]/80"
+                              title={`Fondu de sortie ${Math.max(fadeOutMs, tOutMs)}ms`}
+                            />
+                          ) : null}
                           <div
                             onMouseDown={(e) => handleResizeStart(e, c, "right")}
                             className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"

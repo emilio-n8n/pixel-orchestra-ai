@@ -102,6 +102,8 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "DUCKING: once voice (Audio) and music (Music) are both placed, call apply_ducking ONCE — the music automatically drops under the voice with smooth attack/release (default -12 dB, 200ms attack, 400ms release). You do NOT need to manage music fades manually when ducking is on. If the user later moves clips, call apply_ducking again to recompute the curve." +
           "\n\n" +
+          "TRANSITIONS: to crossfade between two clips on the same track (a dissolve for video, a volume cross-fade for audio), call set_clip_transitions with both clip ids and the overlap ms — clip B is moved automatically to overlap clip A's tail. For a simple fade to black at the start/end of one video clip, use update_timeline_clip (fade_in_ms/fade_out_ms on audio, transition_in_ms/transition_out_ms on video clips)." +
+          "\n\n" +
           "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
           "\n\n" +
           "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.";
@@ -232,6 +234,16 @@ export const Route = createFileRoute("/api/director")({
               release_ms: z.number().int().min(0).max(4000).optional(),
             }),
             execute: (args) => H.applyDucking(ctx, args),
+          }),
+          set_clip_transitions: tool({
+            description:
+              "Crossfade two clips on the SAME track: clip B is pulled to overlap the tail of clip A by ms. Video → dissolve (both blend while overlapping, or fade to/from black). Audio → volume cross-fade (fade_out on A, fade_in on B). For a simple fade to/from black on one video clip (no second clip), use update_timeline_clip — but the tool needs both clips.",
+            inputSchema: z.object({
+              clip_a_id: z.string(),
+              clip_b_id: z.string(),
+              ms: z.number().int().min(50).max(5000),
+            }),
+            execute: (args) => H.setClipTransitions(ctx, args),
           }),
           update_timeline_clip: tool({
             description:
