@@ -7,6 +7,7 @@ import { getStorage } from "@/kernel/storage";
 import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
 import { measureMp3DurationMs } from "./audio-duration";
+import { computeDuckingCurve } from "./ducking";
 import { generateImageCloudflare, generateImageLovable, transcribeAudioGroq, type ModelCreds } from "@/lib/models/providers.server";
 import type { DirectorModel } from "@/lib/models/catalog";
 
@@ -624,6 +625,103 @@ export async function insertSilenceClip(
       : null;
     return { ...data, _warning: warning };
   });
+}
+
+/**
+ * Automatic ducking: while the source track (voice) plays, the target track
+ * (music) drops to `attenuation_db` with a smooth attack/release. The gain
+ * curve is computed server-side and stored on every target clip
+ * (meta.ducking) — preview and export both honour it.
+ */
+export async function applyDucking(
+  ctx: DirectorCtx,
+  args: {
+    source_track?: string;
+    target_track?: string;
+    attenuation_db?: number;
+    attack_ms?: number;
+    release_ms?: number;
+  },
+) {
+  return recordJob(
+    ctx,
+    "apply_ducking",
+    `duck ${args.target_track ?? "Music"} under ${args.source_track ?? "Audio"}`,
+    async () => {
+      const sourceTrack = args.source_track ?? "Audio";
+      const targetTrack = args.target_track ?? "Music";
+      const attenuationDb = args.attenuation_db ?? -12;
+      const attackMs = args.attack_ms ?? 200;
+      const releaseMs = args.release_ms ?? 400;
+      if (attenuationDb > 0 || attenuationDb < -40) {
+        throw new Error("attenuation_db must be between -40 and 0 dB");
+      }
+
+      const { data: all } = await ctx.supabase
+        .from("timeline_clips")
+        .select("id, track, start_ms, duration_ms, meta")
+        .eq("owner_id", ctx.userId)
+        .eq("project_id", ctx.projectId);
+
+      const sourceClips = (all ?? []).filter((c) => c.track === sourceTrack);
+      const targetClips = (all ?? []).filter((c) => c.track === targetTrack);
+      if (targetClips.length === 0) {
+        throw new Error(`no clips on target track "${targetTrack}" — nothing to duck`);
+      }
+      const totalMs = (all ?? []).reduce(
+        (m, c) => Math.max(m, (c.start_ms ?? 0) + (c.duration_ms ?? 0)),
+        10000,
+      );
+
+      const curve = computeDuckingCurve({
+        sourceIntervals: sourceClips.map((c) => ({
+          start_ms: c.start_ms ?? 0,
+          end_ms: (c.start_ms ?? 0) + (c.duration_ms ?? 3000),
+        })),
+        totalMs,
+        attenuationDb,
+        attackMs,
+        releaseMs,
+      });
+
+      const ducking = {
+        source_track: sourceTrack,
+        attenuation_db: attenuationDb,
+        attack_ms: attackMs,
+        release_ms: releaseMs,
+        curve,
+      };
+      const updated: string[] = [];
+      for (const c of targetClips) {
+        const { data: fresh } = await ctx.supabase
+          .from("timeline_clips")
+          .select("meta")
+          .eq("id", c.id)
+          .maybeSingle();
+        const meta = {
+          ...((fresh?.meta ?? {}) as Record<string, unknown>),
+          ducking,
+        };
+        const { error } = await ctx.supabase
+          .from("timeline_clips")
+          .update({ meta })
+          .eq("id", c.id)
+          .eq("owner_id", ctx.userId)
+          .eq("project_id", ctx.projectId);
+        if (!error) updated.push(c.id);
+      }
+
+      return {
+        source_track: sourceTrack,
+        target_track: targetTrack,
+        attenuation_db: attenuationDb,
+        attack_ms: attackMs,
+        release_ms: releaseMs,
+        curve_points: curve.length,
+        target_clips: updated,
+      };
+    },
+  );
 }
 
 /**

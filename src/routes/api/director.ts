@@ -100,6 +100,8 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "VOICE TAKES: when the user wants options or you're unsure about delivery, call generate_voice_takes (3 variations of the same line, one take_group). Place the takes on the Audio track for A/B, or leave them in the Library and tell the user to pick; once chosen, swap the winner onto the clip with replace_clip_asset (it keeps the position and resizes to the real duration)." +
           "\n\n" +
+          "DUCKING: once voice (Audio) and music (Music) are both placed, call apply_ducking ONCE — the music automatically drops under the voice with smooth attack/release (default -12 dB, 200ms attack, 400ms release). You do NOT need to manage music fades manually when ducking is on. If the user later moves clips, call apply_ducking again to recompute the curve." +
+          "\n\n" +
           "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
           "\n\n" +
           "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.";
@@ -218,6 +220,18 @@ export const Route = createFileRoute("/api/director")({
                 .optional(),
             }),
             execute: ({ clip_id, text, style }) => H.editSubtitles(ctx, clip_id, text, style),
+          }),
+          apply_ducking: tool({
+            description:
+              "Automatic ducking: while the source track (default Audio = voiceover) is playing, the target track (default Music) drops by attenuation_db (default -12, i.e. ~25% volume) with a smooth attack/release. Call this once after placing voice + music so the music breathes under the voice — no manual fades needed. Returns the number of curve points and the target clips it touched.",
+            inputSchema: z.object({
+              source_track: z.enum(["Audio", "Music", "SFX"]).optional(),
+              target_track: z.enum(["Audio", "Music", "SFX"]).optional(),
+              attenuation_db: z.number().min(-40).max(0).optional(),
+              attack_ms: z.number().int().min(0).max(2000).optional(),
+              release_ms: z.number().int().min(0).max(4000).optional(),
+            }),
+            execute: (args) => H.applyDucking(ctx, args),
           }),
           update_timeline_clip: tool({
             description:

@@ -5,26 +5,31 @@ import { Play, Pause, Square, Download, Loader2, Maximize2, Minimize2, VolumeX, 
 import html2canvas from "html2canvas";
 import { useTimelineUi, clipFades, type TimelineClip } from "./store";
 import { insertSilenceClip } from "./server";
+import { duckGainAt } from "@/lib/director/ducking";
 
 const TRACKS = ["Video", "Audio", "Music", "SFX", "Subtitles"] as const;
 const AUDIO_TRACKS = new Set(["Audio", "Music", "SFX"]);
 const PX_PER_MS = 0.08;
 
-/** Linear volume ramp for preview playback (HTMLAudioElement.volume). */
-function rampVolume(a: HTMLAudioElement, from: number, to: number, ms: number) {
-  if (ms <= 0) {
-    a.volume = to;
-    return;
-  }
-  const start = performance.now();
-  const step = (now: number) => {
-    const p = Math.min(1, (now - start) / ms);
-    a.volume = from + (to - from) * p;
-    if (p < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+/**
+ * Combined volume envelope of a clip at absolute time `absMs`:
+ * fade-in/out (clipFades) × ducking gain (meta.ducking.curve).
+ * Used by both the preview loop and the export envelope.
+ */
+function volAt(c: TimelineClip, absMs: number): number {
+  const local = absMs - c.start_ms;
+  if (local < 0 || local > c.duration_ms) return 0;
+  let v = 1;
+  const { fadeInMs, fadeOutMs } = clipFades(c);
+  if (fadeInMs > 0 && local < fadeInMs) v *= local / fadeInMs;
+  const untilEnd = c.duration_ms - local;
+  if (fadeOutMs > 0 && untilEnd < fadeOutMs) v *= Math.max(0, untilEnd / fadeOutMs);
+  const ducking = (c.meta?.ducking ?? null) as { curve?: Array<{ t_ms: number; gain: number }> } | null;
+  if (ducking?.curve) v *= duckGainAt(ducking.curve, absMs);
+  return Math.max(0, Math.min(1, v));
 }
 
+/** mm:ss formatting for the playhead readout. */
 function fmt(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60);
@@ -63,6 +68,7 @@ export function TimelinePanel() {
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const rafRef = useRef<number | null>(null);
   const audiosRef = useRef<HTMLAudioElement[]>([]);
+  const audioMapRef = useRef<Map<string, { el: HTMLAudioElement; clip: TimelineClip }>>(new Map());
   const timersRef = useRef<number[]>([]);
   const clipsRef = useRef<TimelineClip[]>([]);
   const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
@@ -477,6 +483,7 @@ export function TimelinePanel() {
     audiosRef.current = [];
     timersRef.current.forEach((t) => clearTimeout(t));
     timersRef.current = [];
+    audioMapRef.current.clear();
   }, []);
 
   const stop = useCallback(() => {
@@ -495,32 +502,21 @@ export function TimelinePanel() {
       if (!AUDIO_TRACKS.has(c.track) || !isHttpUrl(c.assets?.url)) continue;
       const a = new Audio(c.assets!.url);
       a.crossOrigin = "anonymous";
-      const { fadeInMs, fadeOutMs } = clipFades(c);
       const offset = (startFrom - c.start_ms) / 1000;
-      const scheduleFadeIn = () => {
-        if (fadeInMs > 0) rampVolume(a, 0, 1, fadeInMs);
-      };
       if (startFrom >= c.start_ms && startFrom < c.start_ms + c.duration_ms) {
         a.currentTime = Math.max(0, offset);
-        a.play().then(scheduleFadeIn).catch(() => {});
+        a.volume = volAt(c, startFrom);
+        a.play().catch(() => {});
         audiosRef.current.push(a);
+        audioMapRef.current.set(c.id, { el: a, clip: c });
       } else if (startFrom < c.start_ms) {
         const t = window.setTimeout(() => {
-          a.play().then(scheduleFadeIn).catch(() => {});
+          a.volume = volAt(c, c.start_ms);
+          a.play().catch(() => {});
         }, c.start_ms - startFrom);
         timersRef.current.push(t);
         audiosRef.current.push(a);
-      }
-      if (fadeOutMs > 0) {
-        const tick = () => {
-          const remainingMs = (a.duration - a.currentTime) * 1000;
-          if (remainingMs <= fadeOutMs && remainingMs > 0) {
-            rampVolume(a, a.volume, 0, Math.max(1, remainingMs));
-            return;
-          }
-          if (!a.paused && !a.ended) requestAnimationFrame(tick);
-        };
-        a.addEventListener("play", () => requestAnimationFrame(tick));
+        audioMapRef.current.set(c.id, { el: a, clip: c });
       }
     }
 
@@ -531,6 +527,12 @@ export function TimelinePanel() {
         setPlaying(false);
         stopAudios();
         return;
+      }
+      // Volume envelope each frame: fades + ducking gain.
+      for (const [, entry] of audioMapRef.current) {
+        try {
+          entry.el.volume = volAt(entry.clip, p);
+        } catch { /* element already gone */ }
       }
       setPlayhead(p);
       rafRef.current = requestAnimationFrame(tick);
@@ -661,17 +663,17 @@ export function TimelinePanel() {
       for (const item of decoded) {
         if (!item) continue;
         const c = item.c;
-        const { fadeInMs, fadeOutMs } = clipFades(c);
         const src = ac.createBufferSource();
         src.buffer = item.audio;
         const gain = ac.createGain();
         const t0 = startAt + c.start_ms / 1000;
-        const tEnd = t0 + item.audio.duration;
-        gain.gain.setValueAtTime(0, t0);
-        gain.gain.linearRampToValueAtTime(1, t0 + Math.min(fadeInMs, item.audio.duration * 1000) / 1000);
-        if (fadeOutMs > 0) {
-          gain.gain.setValueAtTime(1, Math.max(t0, tEnd - fadeOutMs / 1000));
-          gain.gain.linearRampToValueAtTime(0, tEnd);
+        // Envelope: fade-in/out × ducking gain, sampled every 50ms.
+        const durMs = item.audio.duration * 1000;
+        const STEP = 50;
+        for (let t = 0; t <= durMs + STEP; t += STEP) {
+          const v = volAt(c, c.start_ms + t);
+          if (t === 0) gain.gain.setValueAtTime(v, t0);
+          else gain.gain.linearRampToValueAtTime(v, t0 + Math.min(t, durMs) / 1000);
         }
         src.connect(gain);
         gain.connect(dest);
@@ -912,14 +914,25 @@ export function TimelinePanel() {
       <div className="relative h-[42%] shrink-0 overflow-auto bg-[var(--surface-1)] p-3">
         <div className="flex gap-3">
           <div className="w-20 shrink-0 space-y-1">
-            {TRACKS.map((t) => (
-              <div
-                key={t}
-                className="flex h-12 items-center rounded bg-[var(--surface-2)] px-2 text-[10px] uppercase tracking-widest text-[var(--text-dim)]"
-              >
-                {t}
-              </div>
-            ))}
+            {TRACKS.map((t) => {
+              const ducked = clips.some((c) => c.track === t && c.meta?.ducking);
+              return (
+                <div
+                  key={t}
+                  className="flex h-12 items-center gap-1 rounded bg-[var(--surface-2)] px-2 text-[10px] uppercase tracking-widest text-[var(--text-dim)]"
+                >
+                  <span>{t}</span>
+                  {ducked ? (
+                    <span
+                      className="rounded bg-[var(--accent-quiet)] px-1 py-px text-[8px] font-bold tracking-widest text-[var(--accent-strong)]"
+                      title="Ducking appliqué sur cette piste"
+                    >
+                      duck
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
           <div className="relative flex-1" style={{ minWidth: totalMs * PX_PER_MS }} ref={trackAreaRef}>
             <div className="space-y-1">
@@ -1008,3 +1021,4 @@ export function TimelinePanel() {
     </div>
   );
 }
+                                                                                                                                                                                                                                                                                                                                                                                   
