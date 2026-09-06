@@ -393,7 +393,23 @@ export const Route = createFileRoute("/api/director")({
             }
           } else detail = String(err);
           console.error("[/api/director] manual-loop error:", detail);
-          const message = `Director stopped: ${(err as Error)?.message ?? String(err)}`;
+          // Surface the provider's own diagnostics (status + response body)
+          // so a 500 from the LLM gateway is actionable from the UI.
+          const eRec = (err ?? {}) as Record<string, unknown>;
+          const statusCode =
+            typeof eRec.statusCode === "number" ? ` [HTTP ${eRec.statusCode}]` : "";
+          let providerBody = "";
+          const rawBody = eRec.responseBody;
+          if (typeof rawBody === "string" && rawBody.length > 0) {
+            providerBody = `\nProvider said: ${rawBody.slice(0, 500)}`;
+          } else if (rawBody != null) {
+            try {
+              providerBody = `\nProvider said: ${JSON.stringify(rawBody).slice(0, 500)}`;
+            } catch {
+              /* ignore */
+            }
+          }
+          const message = `Director stopped: ${(err as Error)?.message ?? String(err)}${statusCode}${providerBody}`;
           const stream = createUIMessageStream({
             execute: ({ writer }) => {
               writer.write({ type: "text-start", id: "err" } as never);
