@@ -49,7 +49,10 @@ export const Route = createFileRoute("/api/director")({
         if (userErr || !userData.user) return new Response("Unauthorized", { status: 401 });
         const userId = userData.user.id;
         const projectId = body.projectId;
-        const modelId = body.model ?? "kimi-k2.7-code";
+        // Trim: a pasted model id or API key with stray whitespace
+        // produces an opaque provider 500 — fail clean instead.
+        const modelId = (body.model ?? "kimi-k2.7-code").trim() || "kimi-k2.7-code";
+        const apiKey = (body.apiKey ?? "").trim();
 
         // Unified catalogue = builtin + user custom models.
         const models = [...CATALOG, ...(body.customModels ?? [])];
@@ -63,7 +66,7 @@ export const Route = createFileRoute("/api/director")({
         const ctx = { supabase, userId, projectId, models, creds };
 
         const { createOpenCodeGoProvider } = await import("@/lib/opencode-go-provider.server");
-        const provider = createOpenCodeGoProvider(body.apiKey);
+        const provider = createOpenCodeGoProvider(apiKey);
         const model = provider(modelId);
 
         const { generateHtmlCard } = await import("@/lib/director/html-cards.server");

@@ -20,6 +20,7 @@ export const OPENCODE_GO_MODELS = [
   { id: "qwen3.7-max", label: "Qwen3.7 Max" },
   { id: "qwen3.7-plus", label: "Qwen3.7 Plus" },
   { id: "qwen3.6-plus", label: "Qwen3.6 Plus" },
+  { id: "muse-spark-1.3-contributor", label: "Muse Spark 1.3" },
 ] as const;
 
 export interface Conversation {

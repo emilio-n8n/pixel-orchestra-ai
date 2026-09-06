@@ -27,6 +27,7 @@ export const CATALOG: DirectorModel[] = [
   { id: "opencode-go/glm-5.2", provider: "opencode-go", modelId: "glm-5.2", label: "GLM-5.2", capabilities: ["chat"] },
   { id: "opencode-go/grok-4.5", provider: "opencode-go", modelId: "grok-4.5", label: "Grok 4.5", capabilities: ["chat"] },
   { id: "opencode-go/qwen3.7-max", provider: "opencode-go", modelId: "qwen3.7-max", label: "Qwen3.7 Max", capabilities: ["chat"] },
+  { id: "opencode-go/muse-spark-1.3-contributor", provider: "opencode-go", modelId: "muse-spark-1.3-contributor", label: "Muse Spark 1.3", capabilities: ["chat"] },
   // ---- image (Cloudflare Workers AI) ----
   { id: "cloudflare/flux-1-schnell", provider: "cloudflare", modelId: "@cf/black-forest-labs/flux-1-schnell", label: "Flux 1 Schnell (Cloudflare)", capabilities: ["image"] },
   { id: "cloudflare/sd-xl-base", provider: "cloudflare", modelId: "@cf/stabilityai/stable-diffusion-xl-base-1.0", label: "Stable Diffusion XL (Cloudflare)", capabilities: ["image"] },
