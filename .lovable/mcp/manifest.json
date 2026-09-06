@@ -83,6 +83,49 @@
         "outputSchema": null
       },
       {
+        "name": "generate_voice_takes",
+        "title": "Generate voice takes",
+        "description": "Generate n (default 3) variations of the SAME line so the user can pick the best one. Takes share a take_group id; the Library/Inspector groups them for A/B.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "voice": {
+              "type": "string",
+              "enum": [
+                "alloy",
+                "echo",
+                "fable",
+                "onyx",
+                "nova",
+                "shimmer"
+              ]
+            },
+            "n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          "required": [
+            "project_id",
+            "text"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "generate_html_card",
         "title": "Generate HTML title card",
         "description": "Generate an ANIMATED HTML card (title, lower third, credits, transition) — ships with CSS keyframes (entrance + ambient motion) that become real video motion at export. Pass the text, vibe, colors and the motion in the brief.",
@@ -155,7 +198,7 @@
       {
         "name": "remove_from_timeline",
         "title": "Remove from timeline",
-        "description": "Remove a clip from the timeline by its id.",
+        "description": "Remove a clip from the timeline by its id. Pass ripple:true to also shift later clips on the same track left (closing the gap).",
         "annotations": {
           "readOnlyHint": false
         },
@@ -167,11 +210,198 @@
             },
             "clip_id": {
               "type": "string"
+            },
+            "ripple": {
+              "type": "boolean"
             }
           },
           "required": [
             "project_id",
             "clip_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "insert_silence_clip",
+        "title": "Insert silence clip",
+        "description": "Insert a native SILENCE clip on an audio track (Audio, Music, SFX). A pause with no asset — it occupies space so nothing plays during its duration. Use for pacing instead of computing start_ms gaps by hand.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "duration_ms": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "track": {
+              "type": "string",
+              "enum": [
+                "Audio",
+                "Music",
+                "SFX"
+              ]
+            },
+            "start_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "project_id",
+            "duration_ms",
+            "track"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "edit_subtitles",
+        "title": "Edit subtitles",
+        "description": "Edit a subtitle clip's text and/or style (font, size, color, position). The timeline renders subtitles from the clip meta.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "clip_id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "style": {
+              "type": "object",
+              "properties": {
+                "font": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 10,
+                  "maximum": 120
+                },
+                "color": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "string",
+                  "enum": [
+                    "bottom",
+                    "center",
+                    "top"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "project_id",
+            "clip_id",
+            "text"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "apply_ducking",
+        "title": "Apply ducking",
+        "description": "Automatic ducking: while the source track (default Audio) plays, the target track (default Music) drops by attenuation_db with a smooth attack/release. Call once after placing voice + music.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "source_track": {
+              "type": "string",
+              "enum": [
+                "Audio",
+                "Music",
+                "SFX"
+              ]
+            },
+            "target_track": {
+              "type": "string",
+              "enum": [
+                "Audio",
+                "Music",
+                "SFX"
+              ]
+            },
+            "attenuation_db": {
+              "type": "number",
+              "minimum": -40,
+              "maximum": 0
+            },
+            "attack_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "release_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4000
+            }
+          },
+          "required": [
+            "project_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "set_clip_transitions",
+        "title": "Crossfade clips",
+        "description": "Crossfade two clips on the SAME track: clip B is pulled to overlap the tail of clip A by ms. Video → dissolve, audio → volume cross-fade.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "clip_a_id": {
+              "type": "string"
+            },
+            "clip_b_id": {
+              "type": "string"
+            },
+            "ms": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 5000
+            }
+          },
+          "required": [
+            "project_id",
+            "clip_a_id",
+            "clip_b_id",
+            "ms"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"

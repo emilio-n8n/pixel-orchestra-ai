@@ -188,3 +188,100 @@ Push : `git push origin main`.
 ```sh
 git push origin main
 ```
+
+---
+
+## Agent sprint — Production audio, édition timeline, voix multi-takes (2026-09-06)
+
+> Feedback du Director lui-même (frustrations d'agent, 3 priorités) →
+> livré en 6 features, scopes réduits sur décision user : undo/redo
+> annulé (trop complexe pour rien), providers vidéo externes annulés
+> (on garde les pending assets), Sprint 4 (Runway/Veo/Kling/Suno/…) en
+> attente. Aucune migration Supabase nécessaire — tout tient dans
+> `timeline_clips.meta` JSONB + clips `asset_id: null`.
+
+**Commits** : `47ba387` (silence), `5a2d8ab` (ripple UI), `4f99140`
+(sous-titres), `f2dab2e` (multi-takes), `47ec2fc` (ducking),
+`007f428` (transitions), `994d4fc` (MCP).
+
+### F1 — Clips de silence natifs (`47ba387`)
+- `handlers.server.ts` → `insertSilenceClip` : clip `asset_id: null` +
+  `meta.silence = true`, anti-overlap identique à `add_to_timeline`.
+- `plugins/ui-timeline/server.ts` (nouveau) → server fn du même nom
+  pour l'UI (RLS `owner_id` via `requireSupabaseAuth`).
+- UI : champ durée + bouton "Silence" dans la barre transport,
+  chips pointillés sur la piste Audio (icône `VolumeX`, non-draggable à
+  gauche), preview/export déjà corrects (pas d'URL = muet).
+- Tool Director `insert_silence_clip` + § SILENCE CLIPS dans le system
+  prompt. `KIND_LABELS.silence = "Silence"`.
+
+### F2 — Ripple delete (`47ba387` server + `5a2d8ab` UI)
+- `removeFromTimeline(ctx, clipId, { ripple })` : décale les clips
+  suivants de la piste de `removed.duration_ms`. Tool et MCP gagnent
+  le champ optionnel `ripple`.
+- UI : clic = sélection (anneau accent), `Delete` = supprimer,
+  `⇧+Delete` = compacter, bouton "Supprimer" dans le transport
+  (ignoré dans les inputs). Realtime recharge après delete.
+- Pas de undo — le user a annulé le scope (voir questions de cadrage).
+
+### F3 — Sous-titres éditables (`4f99140`)
+- Tool `editSubtitles` → `meta.text` + `meta.style
+  {font,size,color,position}` sur le clip Subtitles.
+- Canvas : lit `meta.text ?? assets.prompt`, taille/police/couleur/
+  position (bas/centre/haut).
+- Inspector : éditeur "Sous-titre" (textarea + police/taille/couleur/
+  position) + carte générique "Plan sélectionné" pour les autres clips.
+- `useTimelineUi` expose désormais le clip complet (`selectedClip`),
+  synchronisé par le panneau sur chaque reload realtime.
+
+### F4 — Voix multi-takes (`f2dab2e`)
+- `generateVoice` refactoré en `generateVoiceInner` + `generateVoiceTakes`
+  (tool) : n takes avec `meta.take_group` partagé + `take_index`,
+  `meta.name = "Director Take N — …"`, borné 1–5, un seul `recordJob`
+  (pas de jobs imbriqués).
+- `AssetRow.meta` exposé (cloud + local) pour que l'Inspector voie
+  `take_group`/`take_index`.
+- Inspector : sélecteur "Prises de voix" (A/B/C, preview `<audio>`,
+  durée, "Utiliser" → `replace_clip_asset` manuel via Supabase sur le
+  clip qui porte le take courant).
+
+### F5 — Ducking automatique (`47ec2fc`)
+- `lib/director/ducking.ts` (pur, importable client) :
+  `computeDuckingCurve` (one-pole attack/release, pas 25ms) +
+  `duckGainAt` (interpolation). Tool `applyDucking` : stocke la courbe
+  dans `meta.ducking` de chaque clip de la piste cible
+  (défauts : source Audio, cible Music, −12 dB, 200/400 ms).
+- Preview : volumes pilotés à chaque frame (`volAt` = fades × ducking),
+  `rampVolume` supprimé. Export : enveloppe GainNode échantillonnée
+  tous les 50 ms (les buffers tronqués coupent désormais à la durée
+  du clip — correct).
+- Badge "duck" sur les labels de pistes concernées. § DUCKING dans le
+  prompt (rappeler l'outil après déplacement de clips).
+
+### F6 — Transitions (`007f428`)
+- Tool `setClipTransitions` : chevauche B sur la fin de A de `ms`
+  (50–5000, même piste requise). Vidéo → `transition_in/out_ms` +
+  rendu dissolve (blend alpha pendant l'overlap) + fondu au noir pour
+  clip unique. Audio → `fade_out/in_ms` (enveloppe existante).
+- Marqueurs de fondu sur les bords des chips, § TRANSITIONS dans le
+  prompt. Drag & drop UI ne crée pas d'overlap (seul le tool le peut).
+
+### MCP (`994d4fc` + manifest)
+- 5 nouveaux tools `src/lib/mcp/tools/` (mêmes handlers que
+  `/api/director`) : `insert_silence_clip`, `edit_subtitles`,
+  `generate_voice_takes`, `apply_ducking`, `set_clip_transitions` ;
+  `remove_from_timeline` accepte `ripple`.
+- `.lovable/mcp/manifest.json` passé de 7 à 12 tools (ripple ajouté) ;
+  instructions MCP élargies (takes, silence, sous-titres, ducking,
+  transitions, ripple).
+
+### Labels produit
+- `TOOL_LABELS`/`TOOL_ICONS` pour les 10 tools agent
+  (ex. "Silence inséré", "Ducking appliqué", "Transition posée").
+
+### Ce qui reste (bloqué ou reporté)
+- **Sprint 4** (providers vidéo/musique/SFX externes) : en attente,
+  décision user. Les pendings restent le flux actuel.
+- Undo/redo : annulé par le user.
+- Validation locale impossible (`node_modules` absent) → typecheck/lint
+  via le build Lovable au prochain publish.
