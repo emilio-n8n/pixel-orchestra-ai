@@ -285,3 +285,25 @@ git push origin main
 - Undo/redo : annulé par le user.
 - Validation locale impossible (`node_modules` absent) → typecheck/lint
   via le build Lovable au prochain publish.
+
+### ⚠️ INCIDENT — production serves a stale bundle (2026-09-06, Lovable action needed)
+- Symptom: `pixel-orchestra-ai.lovable.app` serves frontend bundle
+  `/assets/index-CmrJxwbg.js` (+ route chunk `w._wsId.p._pid-BODG91j5.js`)
+  which contains `Copy diagnostics` (commit `5ee1fdb`, pre-sprint) but
+  NONE of the strings shipped in `47ba387..4b37a87` (`Sous-titre`,
+  `Prises de voix`, `Ducking appliqué`, `Silence ins…`,
+  `Transition pos…`, `Muse Spark`, `insert_silence`, `apply_ducking`,
+  `set_clip_transitions`, `generate_voice_takes`). Verified by
+  downloading the production chunks and grepping.
+- The Director agent running against production also reports the 5 new
+  API tools as missing → the server bundle is stale too.
+- Current `x-deployment-id`: `445997c9d271eed926c68d95230d2aed92f10bad4207adef1dbbc6ccb5525388`.
+- All commits ARE on the connected branch `origin/main` (verified via
+  git, `main` == `origin/main` @ `4b37a87`). No DB migration is pending
+  (sprint uses `timeline_clips.meta` only).
+- Republish from the editor does not update production (recurring —
+  same class of incident as the earlier "publishing not working").
+- **Ask**: (1) confirm the GitHub→editor sync picked up
+  `47ba387..4b37a87`; (2) confirm whether the latest production build
+  succeeded or failed (and surface the error); (3) force a fresh
+  production deploy of `origin/main` HEAD.
