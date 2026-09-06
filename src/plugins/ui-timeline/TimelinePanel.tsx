@@ -888,8 +888,7 @@ export function TimelinePanel() {
         <div className="text-[11px] text-[var(--text-dim)]">{clips.length} clips</div>
         {selectedClipId ? (
           <button
-            onClick={() => void deleteSelected(false)}
-            onShiftClick={() => void deleteSelected(true)}
+            onClick={(e) => void deleteSelected(e.shiftKey)}
             title="Supprimer le clip sélectionné — ⇧Suppr ou Maj+clic pour compacter (ripple)"
             className="ml-1 flex h-6 items-center gap-1 rounded border border-[var(--status-err)]/40 px-2 text-[10px] font-medium text-[var(--status-err)] transition-colors hover:bg-[var(--status-err)]/10 disabled:opacity-40"
           >
