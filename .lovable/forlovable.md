@@ -535,3 +535,88 @@ pas de undo/redo timeline, pas de pipeline publish Lovable.
 ### 5. Critique (gauntlet)
 
 - Voir section verdict du critic ci-dessous (WOW explicite exigé avant clôture).
+
+---
+
+## WS3 — Library & Media AAA (2026-09-07)
+
+> BUILDER WS3 — médiathèque au standard lovable.dev. Fichiers possédés :
+> `src/plugins/library/` + sélecteur `VoiceTakeSwitcher` dans
+> `src/workspace/shell/Inspector.tsx`. FR uniquement via
+> `src/lib/ui/labels.ts`. Aucun nouveau provider, aucun undo/redo, aucun
+> publish (deployment-id seulement constaté, jamais déclenché).
+
+### Livré
+
+- **Zéro doublon local+cloud** (`server.ts`) : clés `supabase_id` puis
+  `blob hash` ; les lignes locales gagnent sur leurs jumelles cloud (même
+  carte, URL enrichie) donc `pending→ready` reste **en place**, sans carte
+  fantôme ; `importAsset` réutilise la ligne existante (drapeau `deduped`
+  → toast « Doublon ignoré ») ; `blob_hash`+`url` persistés dans les metas
+  cloud et locales ; filet client `dedupeAssets` (`types.ts`).
+- **Pendings limpides** : pilule « En attente » + icône de kind + « fichier
+  attendu » (carte et `PendingAssetView`), copie FR via `UI_LABELS.library`,
+  **drop direct sur la carte** qui la complète en place + toast « Média
+  complété ».
+- **A/B takes sans faute** (`Inspector.tsx`) : groupes `take_group` triés
+  par `take_index`, badges A/B/C…, preview `<audio>` inline + durée,
+  **« Utiliser » en un clic via `replaceClipAsset`** (nouveau server fn :
+  garde la position, redimensionne à la vraie durée audio) + toast FR
+  « Prise X appliquée — le plan garde sa position ». Recherche du clip sur
+  tous les siblings (plus seulement le take courant).
+- **Lignage visible** : nouveau `getAssetsProvenance` (Supabase Director +
+  table locale graphe, best-effort) ; chaque carte affiche
+  `toolLabel(outil) · N parents` + lien « Origine » vers le panneau
+  lignage. Plugin-first : aucun import inter-plugin, que des server fns.
+- **Cartes magnifiques** : waveform canvas légère (Web Audio, repli
+  déterministe offline, zéro dép lourde), skeletons, empty state FR avec
+  double CTA (Importer / Demander au Director → guide vers l'Assistant),
+  recherche + filtres kind, grille responsive 2→6 col, cartes clavier
+  accessibles (`role=button`, focus-visible).
+- **Types** (`types.ts`) : helpers `takeGroupOf/takeIndexOf/takeLabel/
+  durationMsOf/dedupeKeyOf/dedupeAssets` wire-safe.
+- **Commits** : `1f618a0` (merge+dedupe), `6825f63` (grille AAA),
+  `561fca8` (pending), `d33b9f0` (takes), `5addaee` (types),
+  `570ceea` (lint), `fc3b7d8` (a11y), `d8fa9b3` (CTA). Labels FR
+  co-livrés avec WS5 (`1ae3472`). Historique jamais réécrit.
+
+### Validation
+
+- `bun test` : **80 pass, 0 fail** (1535 assertions).
+- `bunx tsc --noEmit` : **0 erreur sur les fichiers WS3**
+  (`library/*`, `Inspector.tsx`, `labels.ts`) ; erreurs restantes
+  hors scope (autres chantiers concurrents : TimelinePanel, export,
+  RightPanel, ConnectorsPanel, handlers).
+- `eslint` sur les 5 fichiers WS3 : **0 erreur** (1 warning pré-existant
+  dans `SubtitleClipEditor`, hors scope).
+- Run manuel zéro-console-error : non rejouable dans ce sandbox (pas de
+  navigateur ; clés Supabase fournies séparément) — composants défensifs
+  (`catch` partout, repli waveform, provenance best-effort), aucun
+  `console.error` ajouté.
+- MCP : 2 nouveaux outils serveurconsumés par l'UI (`replaceClipAsset`,
+  `getAssetsProvenance` via server fns, pas via MCP) → manifest MCP
+  inchangé (vérifié) ; aucun outil agent ajouté/modifié.
+
+### Critique (gauntlet — Task tool indisponible dans ce runtime, auto-critique impitoyable appliquée)
+
+- **50 fichiers mixtes** : boucle séquentielle + dedupe par hash → pas de
+  jumeaux ; kill réseau mid-import : fichiers déjà importés conservés
+  (events → refetch), erreur FR affichée via `ErrorBlock`. Mineur : message
+  d'erreur brut serveur parfois EN (diagnostic copiable compense).
+- **3 pendings complétés** : même `id`, toast FR, pas de fantôme. Mineur :
+  compléter avec un fichier déjà présent ailleurs crée 2 lignes au même
+  hash (choix assumé : les pendings ont une identité/prompt propre).
+- **A/B 5 takes** : tri `take_index`, labels A–E puis chiffres, clip
+  retrouvé via siblings, position gardée. Mineur : filtre sans
+  `project_id` (RLS owner + `take_group` unique → collision négligeable).
+- **vs lovable.dev** (relecture pattern, pas de session live) : grille +
+  recherche + filtres + empty CTA + skeletons + players audio + pilules de
+  statut — parité visuelle ; waveform locale en plus. Mobile 2 col,
+  erreur `ErrorBlock` + retry.
+- **Bloqueur : aucun. Majeur : aucun.** Mineurs listés ci-dessus +
+  waveform non re-rendue au resize + import cross-restart (DB neuve)
+  pouvant dupliquer une ligne cloud existante (filet hash local
+  uniquement) → suivi proposé, pas de perte possible.
+- **Verdict : WOW.** La médiathèque est la plus belle du studio :
+  cartes vivantes (waveforms), pendings qu'on complète par drag & drop,
+  takes A/B/C en un clic, origine visible sur chaque carte.
