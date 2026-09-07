@@ -78,12 +78,13 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
   useEffect(() => {
     if (!takeGroup) return;
     let alive = true;
-    supabase
-      .from("assets")
-      .select("id, url, prompt, meta, created_at")
-      .eq("meta->>take_group", takeGroup)
-      .order("created_at", { ascending: true })
-      .then(({ data, error: qErr }) => {
+    void (async () => {
+      try {
+        const { data, error: qErr } = await supabase
+          .from("assets")
+          .select("id, url, prompt, meta, created_at")
+          .eq("meta->>take_group", takeGroup)
+          .order("created_at", { ascending: true });
         if (!alive) return;
         if (qErr) {
           setError(qErr.message);
@@ -97,10 +98,10 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
           return ai - bi;
         });
         setTakes(rows);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (alive) setError((e as Error).message);
-      });
+      }
+    })();
     return () => {
       alive = false;
     };

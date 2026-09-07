@@ -613,13 +613,14 @@ export const replaceClipAsset = createServerFn({ method: "POST" })
       .maybeSingle();
     if (assetErr || !asset) throw new Error("média introuvable");
     const meta = (asset.meta ?? {}) as Record<string, unknown>;
-    const patch: Record<string, unknown> = { asset_id: data.newAssetId };
+    const patch: { asset_id: string; duration_ms?: number } = { asset_id: data.newAssetId };
     if (asset.kind === "audio" && typeof meta.duration_ms === "number" && meta.duration_ms > 0) {
       patch.duration_ms = meta.duration_ms;
     }
     const { data: clip, error } = await context.supabase
       .from("timeline_clips")
-      .update(patch)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .update(patch as any)
       .eq("id", data.clipId)
       .eq("owner_id", context.userId)
       .select("id, track, start_ms, duration_ms, asset_id")
