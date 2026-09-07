@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useKernel, useRegistrySnapshot } from "@/kernel/react";
+import { UI_LABELS, categoryLabel } from "@/lib/ui/labels";
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const registry = useRegistrySnapshot();
@@ -7,12 +8,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [q, setQ] = useState("");
   const [i, setI] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const items = useMemo(() => {
     const all = registry.commands.map((c) => ({
       id: c.id,
       title: c.title,
-      category: c.category ?? "General",
+      category: categoryLabel(c.category ?? UI_LABELS.palette.categorieDefaut),
       run: c.run,
       pluginId: c.pluginId,
     }));
@@ -28,6 +30,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       queueMicrotask(() => inputRef.current?.focus());
     }
   }, [open]);
+
+  // Keep the active row visible while navigating with ↑↓.
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-idx="${i}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [i]);
 
   if (!open) return null;
 
@@ -53,6 +60,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={UI_LABELS.palette.placeholder}
         className="w-[560px] max-w-[90vw] overflow-hidden rounded-xl border border-[var(--line-strong)] bg-[var(--surface-3)] shadow-[var(--shadow-pop)]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -78,23 +88,40 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             }
             if (e.key === "Escape") onClose();
           }}
-          placeholder="Search commands…"
-          className="w-full bg-transparent px-4 py-3 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-dim)]"
+          placeholder={UI_LABELS.palette.placeholder}
+          aria-label={UI_LABELS.palette.placeholder}
+          role="combobox"
+          aria-expanded
+          aria-controls="palette-list"
+          aria-activedescendant={items[i] ? `palette-${items[i].id}` : undefined}
+          className="w-full bg-transparent px-4 py-3 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-dim)] focus-visible:bg-[var(--accent-quiet)]/40"
         />
-        <div className="max-h-[50vh] overflow-auto border-t border-[var(--line)]">
+        <div
+          ref={listRef}
+          id="palette-list"
+          role="listbox"
+          className="max-h-[50vh] overflow-auto border-t border-[var(--line)]"
+        >
           {items.length === 0 ? (
-            <div className="px-4 py-6 text-center text-xs text-[var(--text-dim)]">no matches</div>
+            <div className="px-4 py-6 text-center text-xs text-[var(--text-dim)]">
+              {UI_LABELS.palette.aucunResultat}
+            </div>
           ) : (
             items.map((c, idx) => (
               <button
                 key={c.id}
+                id={`palette-${c.id}`}
+                data-idx={idx}
+                role="option"
+                aria-selected={idx === i}
                 onMouseEnter={() => setI(idx)}
+                onFocus={() => setI(idx)}
                 onClick={() => exec(c)}
-                className={`flex w-full items-center justify-between px-4 py-2 text-left text-[13px] ${
+                className={`flex w-full items-center justify-between px-4 py-2 text-left text-[13px] outline-none transition-colors ${
                   idx === i
                     ? "bg-[var(--accent-quiet)] text-[var(--text)]"
                     : "text-[var(--text-muted)]"
-                }`}
+                } focus-visible:bg-[var(--accent-quiet)] focus-visible:text-[var(--text)]`}
               >
                 <span>{c.title}</span>
                 <span className="mono text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
@@ -103,6 +130,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               </button>
             ))
           )}
+        </div>
+        <div className="border-t border-[var(--line)] px-4 py-1.5 text-[10px] text-[var(--text-dim)]">
+          {UI_LABELS.palette.aideClavier}
         </div>
       </div>
     </div>
