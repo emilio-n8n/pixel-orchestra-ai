@@ -15,6 +15,8 @@ import {
 import { Settings, History, Plus, Trash2 } from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
 import type { DirectorModel } from "@/lib/models/catalog";
+import { UI_LABELS, toolLabel } from "@/lib/ui/labels";
+import { ErrorBlock } from "@/components/ui/error-block";
 
 export function DirectorPanel() {
   const pid = useLibraryProject();
@@ -146,18 +148,21 @@ export function DirectorPanel() {
   function handleDeleteConversation(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     if (!pid) return;
-    if (!confirm("Delete this conversation?")) return;
+    if (!confirm(UI_LABELS.director.supprimerConversation)) return;
     deleteConversation(pid, id);
     markHydrating();
   }
 
-  const currentTitle = conversations.find((c) => c.id === currentId)?.title ?? "Director";
+  const currentTitle = conversations.find((c) => c.id === currentId)?.title ?? UI_LABELS.director.titre;
 
-  if (!pid) return <div className="p-6 text-sm text-[var(--text-muted)]">No project.</div>;
+  if (!pid) return <div className="p-6 text-sm text-[var(--text-muted)]">{UI_LABELS.director.sansProjet}</div>;
   if (!token)
     return (
       <div className="p-6 text-sm text-[var(--text-muted)]">
-        Sign in to use the Director. <a href="/auth" className="underline">Sign in</a>
+        {UI_LABELS.director.connexionRequise}{" "}
+        <a href="/auth" className="underline">
+          {UI_LABELS.director.seConnecter}
+        </a>
       </div>
     );
 
@@ -169,33 +174,36 @@ export function DirectorPanel() {
           className={`flex-1 cursor-pointer truncate pr-2 text-[11px] font-medium uppercase tracking-[0.16em] ${
             showHistory ? "text-[var(--text)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
           }`}
-          title="Past conversations"
+          title={UI_LABELS.director.conversationsTitre}
         >
           {currentTitle}
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={handleNewConversation}
-            className="rounded p-1 text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
-            title="New conversation"
+            className="rounded p-1 text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            title={UI_LABELS.director.nouvelleConversation}
+            aria-label={UI_LABELS.director.nouvelleConversation}
           >
             <Plus size={14} />
           </button>
           <button
             onClick={() => { setShowHistory(!showHistory); setShowSettings(false); }}
-            className={`rounded p-1 hover:bg-[var(--surface-3)] ${
+            className={`rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
               showHistory ? "text-[var(--text)] bg-[var(--surface-3)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
-            title="History"
+            title={UI_LABELS.director.historique}
+            aria-label={UI_LABELS.director.historique}
           >
             <History size={14} />
           </button>
           <button
             onClick={() => { setShowSettings(!showSettings); setShowHistory(false); }}
-            className={`rounded p-1 hover:bg-[var(--surface-3)] ${
+            className={`rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
               showSettings ? "text-[var(--text)] bg-[var(--surface-3)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
-            title="Settings"
+            title={UI_LABELS.director.reglages}
+            aria-label={UI_LABELS.director.reglages}
           >
             <Settings size={14} />
           </button>
@@ -206,15 +214,15 @@ export function DirectorPanel() {
         <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-2 text-xs">
           <button
             onClick={handleNewConversation}
-            className="mb-2 flex w-full items-center gap-1.5 rounded border border-dashed border-[var(--line)] px-2 py-1.5 text-[var(--text-dim)] hover:border-[var(--accent)] hover:text-[var(--text)]"
+            className="mb-2 flex w-full items-center gap-1.5 rounded border border-dashed border-[var(--line)] px-2 py-1.5 text-[var(--text-dim)] hover:border-[var(--accent)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
           >
             <Plus size={12} />
-            New chat
+            {UI_LABELS.director.nouveauMessage}
           </button>
           <div className="max-h-64 space-y-0.5 overflow-auto">
             {conversations.length === 0 ? (
               <div className="px-2 py-2 text-[11px] text-[var(--text-dim)]">
-                No conversations yet.
+                {UI_LABELS.director.aucuneConversation}
               </div>
             ) : (
               conversations.map((c) => (
@@ -228,12 +236,13 @@ export function DirectorPanel() {
                   }`}
                 >
                   <div className="flex-1 truncate text-[11px]">
-                    {c.title || "New conversation"}
+                    {c.title || UI_LABELS.director.conversationSansTitre}
                   </div>
                   <button
                     onClick={(e) => handleDeleteConversation(c.id, e)}
-                    className="rounded p-0.5 text-[var(--text-dim)] opacity-0 hover:text-red-400 group-hover:opacity-100"
-                    title="Delete"
+                    className="rounded p-0.5 text-[var(--text-dim)] opacity-0 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] group-hover:opacity-100"
+                    title={UI_LABELS.director.effacer}
+                    aria-label={UI_LABELS.director.effacer}
                   >
                     <Trash2 size={11} />
                   </button>
@@ -248,7 +257,7 @@ export function DirectorPanel() {
         <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-3 space-y-2 text-xs">
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
-              OpenCode Go API Key
+              {UI_LABELS.director.cleApi}
             </label>
             <Input
               type="password"
@@ -260,7 +269,7 @@ export function DirectorPanel() {
           </div>
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
-              Model
+              {UI_LABELS.director.modele}
             </label>
             <Select value={model} onValueChange={setModel}>
               <SelectTrigger className="h-7 text-xs">
@@ -273,7 +282,7 @@ export function DirectorPanel() {
                   </SelectItem>
                 ))}
                 <SelectItem value="__custom__" className="text-xs">
-                  Other…
+                  {UI_LABELS.director.autreModele}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -282,7 +291,7 @@ export function DirectorPanel() {
                 type="text"
                 value={customModel}
                 onChange={(e) => setCustomModel(e.target.value)}
-                placeholder="model-id (e.g. deepseek-v4-flash)"
+                placeholder={UI_LABELS.director.modelePersoPlaceholder}
                 className="mt-1 h-7 text-xs"
               />
             )}
@@ -290,49 +299,49 @@ export function DirectorPanel() {
 
           <div className="border-t border-[var(--line)] pt-2">
             <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
-              Cloudflare (image generation)
+              {UI_LABELS.director.cloudflareTitre}
             </div>
             <Input
               type="text"
               value={cloudflareAccountId}
               onChange={(e) => setCloudflareAccountId(e.target.value)}
-              placeholder="Account ID"
+              placeholder={UI_LABELS.director.compteId}
               className="mb-1.5 h-7 text-xs"
             />
             <Input
               type="password"
               value={cloudflareApiKey}
               onChange={(e) => setCloudflareApiKey(e.target.value)}
-              placeholder="API Token"
+              placeholder={UI_LABELS.director.jetonApi}
               className="h-7 text-xs"
             />
             <p className="mt-1 text-[10px] text-[var(--text-dim)]">
-              Used for image models (flux-1-schnell…). Chat always stays on OpenCode Go.
+              {UI_LABELS.director.cloudflareAide}
             </p>
           </div>
 
           <div className="border-t border-[var(--line)] pt-2">
             <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
-              Groq (subtitles)
+              {UI_LABELS.director.groqTitre}
             </div>
             <Input
               type="password"
               value={groqApiKey}
               onChange={(e) => setGroqApiKey(e.target.value)}
-              placeholder="Groq API Key"
+              placeholder={UI_LABELS.director.jetonApi}
               className="h-7 text-xs"
             />
             <p className="mt-1 text-[10px] text-[var(--text-dim)]">
-              whisper-large-v3 (pré-configuré) — transcription des narrations en sous-titres.
+              {UI_LABELS.director.groqAide}
             </p>
           </div>
 
           <div className="border-t border-[var(--line)] pt-2">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
-                My models
+                {UI_LABELS.director.mesModeles}
               </span>
-              <span className="text-[10px] text-[var(--text-dim)]">{customModels.length} custom</span>
+              <span className="text-[10px] text-[var(--text-dim)]">{UI_LABELS.director.modelePersoCompteur(customModels.length)}</span>
             </div>
             {customModels.length > 0 && (
               <div className="mb-2 space-y-1">
@@ -349,8 +358,9 @@ export function DirectorPanel() {
                     </div>
                     <button
                       onClick={() => removeCustomModel(m.id)}
-                      className="ml-1 shrink-0 rounded p-0.5 text-[var(--text-dim)] hover:text-red-400"
-                      title="Remove"
+                      className="ml-1 shrink-0 rounded p-0.5 text-[var(--text-dim)] hover:text-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                      title={UI_LABELS.director.retirer}
+                      aria-label={UI_LABELS.director.retirer}
                     >
                       <Trash2 size={11} />
                     </button>
@@ -366,27 +376,25 @@ export function DirectorPanel() {
       <div className="flex-1 space-y-3 overflow-auto p-4 text-sm">
         {!apiKey && (
           <div className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3 text-xs text-[var(--text-muted)]">
-            Configure your OpenCode Go API key in the Director settings (gear icon above) to start
-            chatting.
+            {UI_LABELS.director.cleRequise}
           </div>
         )}
         {messages.length === 0 && apiKey && (
           <div className="text-[var(--text-muted)]">
-            Ask the Director to build a scene. Example: "Create a 3-shot opening: sunset over
-            mountains, a lone rider, a title card 'LILIUM'. Add narration."
+            {UI_LABELS.director.exempleInvite}
           </div>
         )}
         {messages.map((m) => (
           <div key={m.id} className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3">
             <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
-              {m.role}
+              {m.role === "user" ? "Vous" : UI_LABELS.director.titre}
             </div>
             {m.parts.map((p, i) => {
               if (p.type === "text") return <div key={i} className="whitespace-pre-wrap">{p.text}</div>;
               if (typeof p.type === "string" && p.type.startsWith("tool-"))
                 return (
                   <div key={i} className="mt-1 rounded bg-[var(--surface-3)] px-2 py-1 text-[11px] text-[var(--text-muted)]">
-                    ⚙ {p.type.replace("tool-", "")}
+                    ⚙ {toolLabel(p.type)}
                   </div>
                 );
               return null;
@@ -394,25 +402,12 @@ export function DirectorPanel() {
           </div>
         ))}
         {error ? (
-          <div className="mx-3 mb-3 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-xs text-[var(--status-err)]">
-            <div className="font-medium">{String(error.message || "Director request failed.")}</div>
-            <button
-              onClick={() => {
-                const diag = [
-                  `time: ${new Date().toISOString()}`,
-                  `url: ${typeof window !== "undefined" ? window.location.href : "n/a"}`,
-                  `deployment: ${document.querySelector('meta[name="x-deployment-id"]')?.getAttribute("content") ?? "unknown"}`,
-                  `error: ${String(error.message ?? "(no message)")}`,
-                  `stack: ${error.stack ? error.stack.split("\n").slice(0, 3).join(" | ") : "(none)"}`,
-                ].join("\n");
-                if (navigator.clipboard?.writeText) {
-                  navigator.clipboard.writeText(diag).catch(() => {});
-                }
-              }}
-              className="mt-1.5 rounded border border-[var(--status-err)]/40 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-[var(--status-err)]/15"
-            >
-              Copy diagnostics
-            </button>
+          <div className="mx-3 mb-3">
+            <ErrorBlock
+              message={String((error as Error)?.message || UI_LABELS.director.erreurGenerique)}
+              error={error}
+              context="director.chat"
+            />
           </div>
         ) : null}
       </div>
@@ -428,11 +423,12 @@ export function DirectorPanel() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Direct the AI…"
-          className="flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+          placeholder={UI_LABELS.director.invitePlaceholder}
+          aria-label={UI_LABELS.director.invitePlaceholder}
+          className="flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
         />
         <Button type="submit" size="sm" disabled={busy || !apiKey}>
-          {busy ? "…" : "Send"}
+          {busy ? "…" : UI_LABELS.director.envoyer}
         </Button>
       </form>
     </div>
@@ -441,8 +437,8 @@ export function DirectorPanel() {
 
 const CAP_OPTIONS: { value: DirectorModel["capabilities"][number]; label: string }[] = [
   { value: "image", label: "Image" },
-  { value: "audio.speech", label: "Voice" },
-  { value: "audio.transcribe", label: "Subtitles" },
+  { value: "audio.speech", label: UI_LABELS.director.voix },
+  { value: "audio.transcribe", label: UI_LABELS.director.sousTitres },
 ];
 
 /** Form to add a custom model (Cloudflare by id, or a Gradio endpoint). */
@@ -468,7 +464,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
       id: `custom/${provider}/${idVal}`,
       provider,
       modelId: idVal,
-      label: label.trim() || (provider === "gradio" ? "Gradio endpoint" : idVal),
+      label: label.trim() || (provider === "gradio" ? "Point Gradio" : idVal),
       capabilities: [...caps] as DirectorModel["capabilities"],
       custom: true,
     });
@@ -485,13 +481,13 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           className="h-6 rounded border border-[var(--line)] bg-[var(--surface-3)] px-1.5 text-[10px] text-[var(--text-muted)]"
         >
           <option value="cloudflare">Cloudflare</option>
-          <option value="gradio">Gradio endpoint</option>
+          <option value="gradio">Point Gradio</option>
         </select>
         <Input
           type="text"
           value={modelId}
           onChange={(e) => setModelId(e.target.value)}
-          placeholder={provider === "cloudflare" ? "model id (e.g. @cf/black-forest-labs/flux-1-schnell)" : "endpoint URL"}
+          placeholder={provider === "cloudflare" ? "identifiant du modèle (p. ex. @cf/…/flux-1-schnell)" : "URL du point d’accès"}
           className="h-6 flex-1 text-[10px]"
         />
       </div>
@@ -500,7 +496,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Label (optional)"
+          placeholder="Libellé (facultatif)"
           className="h-6 flex-1 text-[10px]"
         />
         <div className="flex items-center gap-2">
@@ -517,7 +513,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           ))}
         </div>
         <Button size="sm" onClick={submit} disabled={!modelId.trim()} className="h-6 px-2 text-[10px]">
-          Add
+          {UI_LABELS.common.ajouter}
         </Button>
       </div>
     </div>

@@ -53,12 +53,12 @@ function makeId() {
 
 function defaultTitleFromMessages(messages: UIMessage[]): string {
   const first = messages.find((m) => m.role === "user");
-  if (!first) return "New conversation";
+  if (!first) return "Nouvelle conversation";
   const text = first.parts
     .map((p) => (p.type === "text" ? p.text : ""))
     .join(" ")
     .trim();
-  return text.length > 0 ? text.slice(0, 60) : "New conversation";
+  return text.length > 0 ? text.slice(0, 60) : "Nouvelle conversation";
 }
 
 interface DirectorStore {
@@ -134,7 +134,7 @@ export const useDirectorStore = create<DirectorStore>()(
         } else {
           const idx = conversations.findIndex((c) => c.id === currentId);
           const title =
-            idx >= 0 && conversations[idx].title !== "New conversation"
+            idx >= 0 && conversations[idx].title !== "Nouvelle conversation"
               ? conversations[idx].title
               : defaultTitleFromMessages(msgs);
           const updated: Conversation = {
@@ -161,7 +161,7 @@ export const useDirectorStore = create<DirectorStore>()(
           conversationsByProject: {
             ...s.conversationsByProject,
             [projectId]: [
-              { id, title: "New conversation", createdAt: now, updatedAt: now, messages: [] },
+              { id, title: "Nouvelle conversation", createdAt: now, updatedAt: now, messages: [] },
               ...(s.conversationsByProject[projectId] ?? []),
             ],
           },
