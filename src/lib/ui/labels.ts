@@ -138,3 +138,326 @@ export const TRACK_LABELS: Record<string, string> = {
   SFX: "Effets",
   Subtitles: "Texte",
 };
+
+/**
+ * 100% French product strings for the shell, jobs, lineage, palette,
+ * connectors, toasts, empty states and shortcuts.
+ *
+ * Rule: every user-visible literal lives here. Components import from
+ * this module — raw English is reserved for server / console logs.
+ */
+export const UI_LABELS = {
+  common: {
+    annuler: "Annuler",
+    ajouter: "Ajouter",
+    ajout: "Ajout…",
+    fermer: "Fermer",
+    enregistrer: "Enregistrer",
+    enregistrement: "Enregistrement…",
+    envoyer: "Envoi…",
+    reessayer: "Réessayer",
+    retour: "Retour",
+    supprimer: "Supprimer",
+    utiliser: "Utiliser",
+    executer: "Exécuter",
+    enCours: "En cours…",
+    valider: "Valider",
+    comprendre: "Compris",
+  },
+  palette: {
+    placeholder: "Rechercher une commande…",
+    aucunResultat: "Aucune commande correspondante",
+    categorieDefaut: "Général",
+    aideClavier: "↑↓ pour naviguer · Entrée pour lancer · Échap pour fermer",
+  },
+  jobs: {
+    titre: "Rendus",
+    enCours: "en cours",
+    total: "au total",
+    videTitre: "Aucun rendu pour l’instant",
+    videDescription:
+      "Demandez au Director de générer un média, ou lancez un flux créatif depuis le panneau Flux.",
+    graphe: "flux",
+    statistiqueVide: "—",
+  },
+  lineage: {
+    titre: "Origines",
+    chargement: "Chargement des origines…",
+    erreur: "Impossible de charger les origines de ce média.",
+    noeudProducteur: "Nœud producteur",
+    moteur: "Moteur créatif",
+    sourcesDirectes: (n: number) => `Sources directes (${n})`,
+    ancetres: "Médias parents",
+    descendants: "Médias dérivés",
+    racine: "aucun parent — média racine",
+    rejouer: "Rejouer",
+    dupliquer: "Dupliquer",
+    comparer: "Comparer",
+    astuceRejouer: "Relance le flux qui a produit ce média (bientôt disponible)",
+    astuceDupliquer: "Duplique le média avec un nouvel identifiant, en gardant l’origine",
+    astuceComparer: "Affiche les paramètres modifiés par rapport au parent (bientôt disponible)",
+  },
+  connectors: {
+    titre: "Connexions",
+    ajouter: "+ Ajouter",
+    annuler: "Annuler",
+    vide: "Aucune connexion. Ajoutez un point d’accès Gradio pour commencer.",
+    formulaireTitre: "Ajouter une connexion Gradio",
+    nomAffiche: "Nom d’affichage",
+    nomDefaut: "Mon point d’accès Gradio",
+    urlPlaceholder: "https://xxx.gradio.live/ ou https://gpu.exemple.fr/",
+    authPlaceholder: "Autorisation : Bearer … (facultatif)",
+    ajoutBouton: "Ajouter",
+    ajoutEnCours: "Ajout…",
+    tester: "Tester",
+    testEnCours: "Test…",
+    capacites: "Capacités",
+    effacer: "Retirer",
+    fermer: "Fermer",
+    appeler: "Appeler",
+    lancer: "Lancer",
+    executionEnCours: "Exécution…",
+    enLigne: (ms: number) => `en ligne · ${ms} ms`,
+    horsLigne: (msg: string) => `hors ligne · ${msg}`,
+    erreur: (msg: string) => `erreur · ${msg}`,
+    okSansSortie: "ok · (aucune sortie)",
+    erreurInconnue: "erreur · cause inconnue",
+  },
+  director: {
+    titre: "Assistant",
+    sansProjet: "Aucun projet ouvert.",
+    connexionRequise: "Connectez-vous pour utiliser l’Assistant.",
+    seConnecter: "Se connecter",
+    nouvelleConversation: "Nouvelle conversation",
+    nouveauMessage: "Nouvelle discussion",
+    historique: "Historique",
+    reglages: "Réglages",
+    conversationsTitre: "Conversations passées",
+    aucuneConversation: "Aucune conversation pour l’instant.",
+    conversationSansTitre: "Nouvelle conversation",
+    supprimerConversation: "Supprimer cette conversation ?",
+    effacer: "Supprimer",
+    cleApi: "Clé API OpenCode Go",
+    modele: "Modèle",
+    autreModele: "Autre…",
+    modelePersoPlaceholder: "identifiant du modèle (p. ex. deepseek-v4-flash)",
+    cloudflareTitre: "Cloudflare (génération d’images)",
+    compteId: "Identifiant de compte",
+    jetonApi: "Jeton API",
+    cloudflareAide: "Utilisé pour les modèles d’image (flux-1-schnell…). La discussion reste sur OpenCode Go.",
+    groqTitre: "Groq (sous-titres)",
+    groqAide: "whisper-large-v3 (pré-configuré) — transcription des narrations en sous-titres.",
+    mesModeles: "Mes modèles",
+    modelePersoCompteur: (n: number) => `${n} perso.`,
+    retirer: "Retirer",
+    cleRequise:
+      "Configurez votre clé API OpenCode Go dans les réglages de l’Assistant (icône d’engrenage ci-dessus) pour commencer.",
+    exempleInvite:
+      "Demandez à l’Assistant de construire une scène. Exemple : « Crée une ouverture en 3 plans : coucher de soleil sur les montagnes, un cavalier solitaire, un carton titre “LILIUM”. Ajoute une narration. »",
+    invitePlaceholder: "Dirigez l’IA…",
+    envoyer: "Envoyer",
+    erreurGenerique: "La requête à l’Assistant a échoué.",
+    voix: "Voix",
+    sousTitres: "Sous-titres",
+  },
+  library: {
+    sansProjet: "Aucun projet ouvert.",
+    choisirEspace: "Choisir un espace",
+    depot: "Déposez vos fichiers ici ou",
+    parcourir: "parcourez",
+    formats: "images · vidéos · audio · html · docs",
+    vide: "Aucun média. Importez un fichier ci-dessus.",
+    videTitre: "Aucun média pour l’instant",
+    videDescription:
+      "Importez vos fichiers ou demandez au Director de générer images, voix et musiques.",
+    importer: "Importer",
+    demanderDirector: "Demander au Director",
+    rechercher: "Rechercher un média…",
+    filtreTous: "Tous",
+    importEnCours: "Import…",
+    chargerPlus: (n: number, total: number) => `Charger plus (${n}/${total})`,
+    chargement: "Chargement…",
+    echecChargement: "Impossible de charger les médias",
+    echecImport: "Échec de l’import",
+    enAttente: "En attente",
+    fichierAttendu: "fichier attendu",
+    enAttenteFichier: "en attente du fichier",
+    pendingTitre: (kind: string) => `En attente — ${kind}`,
+    inviteGeneration: "Prompt de génération",
+    sansPrompt: "(sans prompt)",
+    aidePending: (kind: string) =>
+      `Générez ce ${kind} avec l’outil de votre choix (Cloudflare, une IA locale, un service en ligne…), puis déposez le fichier ici — ou cliquez pour parcourir.`,
+    depotFichier: "Déposez le fichier généré ici",
+    depotEnCours: "Enregistrement…",
+    depotCompleter: "Déposez pour compléter ce média en attente",
+    mediaComplete: "Média complété — prêt à l’emploi.",
+    doublonIgnore: "Doublon ignoré — déjà dans la médiathèque.",
+    toutFormat: (kind: string) => `${kind} · tout format`,
+    origine: "Origine",
+    voirOrigine: "Voir l’origine",
+    prises: (n: number) => `${n} prise${n > 1 ? "s" : ""}`,
+    priseBadge: (label: string) => `Prise ${label}`,
+    duree: (s: string) => `${s}s`,
+  },
+  timeline: {
+    sansProjet: "Aucun projet ouvert.",
+    lecture: "Lecture",
+    pause: "Pause",
+    arret: "Arrêter",
+    pleinEcran: "Plein écran",
+    quitterPleinEcran: "Quitter le plein écran",
+    aidePleinEcran: "Aperçu plein écran (capture avec Cmd+Maj+5)",
+    exportMp4: "Exporter MP4",
+    exportVideo: "Exporter la vidéo finale",
+    enregistrementExport: (pct: number) => `Enregistrement… ${Math.round(pct * 100)} %`,
+    plans: (n: number) => `${n} plan${n > 1 ? "s" : ""}`,
+    silenceDuree: "Durée du silence en secondes",
+    insererSilence: "Insérer un silence (Audio) à la fin de la piste",
+    duckBadge: "Atténuation active sur cette piste",
+  },
+  shell: {
+    aucunEspace: "Aucun espace",
+    rechercher: "Rechercher",
+    notifications: "Notifications",
+    parametres: "Paramètres",
+    exporter: "Exporter",
+    aideExporter: "Exporter la vidéo finale depuis l’éditeur",
+    annulerAction: "Annuler",
+    retablirAction: "Rétablir",
+    replier: "Replier",
+    deplierMenu: "Déplier le menu",
+    replierMenu: "Replier le menu",
+    proprietes: "Propriétés",
+    espaceMontage: "Espace de montage",
+    aideMontage: "Ouvrez l’Éditeur pour composer votre séquence sur la timeline.",
+    arriveBientot: (label: string) => `${label} arrive bientôt`,
+    aideBientot: "Cet espace de travail est en cours de préparation. Utilisez l’Éditeur et la médiathèque en attendant.",
+    aucuneSelection: "Aucune sélection",
+    aideSelection: "Sélectionnez un média ou un plan de la timeline pour ajuster ses propriétés.",
+    mediaSelectionne: "Média sélectionné",
+    planSelectionne: "Plan sélectionné",
+    deselectionner: "Désélectionner",
+    studioPret: "Studio prêt",
+    renduCloud: "Rendu cloud",
+    stockage: "Stockage",
+    aucuneTache: "Aucune tâche",
+    tachesEnCours: (n: number) => `${n} tâche${n > 1 ? "s" : ""} en cours`,
+    journalDev: "Journal développeur",
+    aucunEvenement: "Aucun évènement.",
+    basculeTimeline: "Afficher / masquer la timeline",
+    basculePanneau: "Afficher / masquer le panneau IA",
+    modeDev: "Mode développeur",
+  },
+  inspector: {
+    piste: "Piste",
+    debut: "Début",
+    duree: "Durée",
+    contenu: "Contenu",
+    nom: "Nom",
+    type: "Type",
+    poids: "Poids",
+    creeLe: "Créé le",
+    modifierVisuel: "Modifier le visuel",
+    remplacerFichier: "Remplacer le fichier",
+    prisesVoix: (n: number) => `Prises de voix (${n})`,
+    remplacerTake: "Remplacer ce take sur le clip de la timeline",
+    takeApplique: "Take appliqué — le clip garde sa position et sa durée a été ajustée.",
+    takeSansTimeline: "Ce take n’est pas encore posé sur la timeline — ajoutez-le depuis la médiathèque.",
+    priseAppliquee: (label: string) => `Prise ${label} appliquée — le plan garde sa position.`,
+    ecouterPrise: (label: string) => `Écouter la prise ${label}`,
+    sousTitre: "Sous-titre",
+    texte: "Texte",
+    police: "Police",
+    taille: "Taille",
+    couleur: "Couleur",
+    position: "Position",
+  },
+  diagnostics: {
+    copier: "Copier le diagnostic",
+    copie: "Diagnostic copié",
+    erreurCopie: "Échec de la copie",
+  },
+  toasts: {
+    biblioActualisee: "Actualisation de la médiathèque demandée",
+    pingEmis: "Ping émis",
+    pingsEmis: "5 pings émis",
+    mediaPret: "Média prêt — disponible dans la médiathèque.",
+    priseUtilisee: "Prise appliquée sur le plan.",
+  },
+  etat: {
+    enAttente: "En attente",
+    enCours: "En cours",
+    termine: "Terminé",
+    echoue: "Échoué",
+  },
+  raccourcis: {
+    titre: "Raccourcis clavier",
+    description: "Naviguez dans le studio sans quitter le clavier.",
+    palette: "Palette de commandes",
+    lecture: "Lecture / pause de l’aperçu",
+    supprimer: "Supprimer le plan sélectionné",
+    compacter: "Supprimer + compacter (ripple)",
+    fermer: "Fermer / désélectionner",
+    aide: "Afficher cette aide",
+  },
+} as const;
+
+/** French label for a palette command category. */
+const CATEGORY_LABELS: Record<string, string> = {
+  General: "Général",
+  Library: "Médias",
+  Debug: "Débogage",
+};
+
+export function categoryLabel(raw: string): string {
+  return CATEGORY_LABELS[raw] ?? raw;
+}
+
+/** French label for a job / graph-run status. */
+export function jobStatusLabel(status: string): string {
+  switch (status) {
+    case "queued":
+      return UI_LABELS.etat.enAttente;
+    case "running":
+      return UI_LABELS.etat.enCours;
+    case "completed":
+    case "ok":
+      return UI_LABELS.etat.termine;
+    case "failed":
+    case "error":
+      return UI_LABELS.etat.echoue;
+    default:
+      return UI_LABELS.etat.enAttente;
+  }
+}
+
+/** Connection / realtime status pill (WS6 — single pill, no error storm). */
+export const CONN_LABELS = {
+  reconnecting: "Reconnexion…",
+  offline: "Hors ligne — reconnexion auto…",
+} as const;
+
+/** Jobs panel strings (WS6 — minimal FR touch, WS5 owns the rest). */
+export const JOBS_LABELS = {
+  title: "Rendus",
+  running: "en cours",
+  total: "total",
+  empty: "Aucun rendu pour l'instant. Demandez au Director de générer un média, ou lancez un flux créatif.",
+  showMore: "Afficher plus",
+} as const;
+
+/** Lineage DAG strings (WS6). */
+export const LINEAGE_LABELS = {
+  title: "Origine",
+  parents: "Sources",
+  seed: "Sélection",
+  children: "Réutilisé dans",
+  root: "aucune source — média d'origine",
+  rerun: "Rejouer",
+  fork: "Dupliquer",
+  diff: "Comparer",
+  rerunHint: "Bientôt — rejoue le flux qui a produit ce média",
+  forkHint: "Bientôt — duplique ce média en gardant son origine",
+  diffHint: "Bientôt — compare les paramètres avec le parent",
+  loading: "Chargement de l'origine…",
+} as const;
