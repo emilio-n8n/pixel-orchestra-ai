@@ -281,6 +281,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Dedicated offscreen 1920×1080 encode canvas (never the live preview). */
+function makeExportCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = EXPORT_WIDTH;
+  canvas.height = EXPORT_HEIGHT;
+  return canvas;
+}
+
 /* ---------------- canvas renderer (preview + file share it) ---------------- */
 
 export interface RenderFrameOpts {
@@ -292,11 +300,13 @@ export interface RenderFrameOpts {
   getImage: (url: string) => HTMLImageElement | undefined;
   /** Absent in preview (the live iframe overlay shows the card instead). */
   htmlVideoMap?: Map<string, string>;
-  htmlVideoEls: Map<string, HTMLVideoElement>;
+  /** Optional: only touched when htmlVideoMap is present (export). */
+  htmlVideoEls?: Map<string, HTMLVideoElement>;
 }
 
 export function renderTimelineFrame(opts: RenderFrameOpts): void {
-  const { ctx, width, height, clips, ms, getImage, htmlVideoMap, htmlVideoEls } = opts;
+  const { ctx, width, height, clips, ms, getImage, htmlVideoMap } = opts;
+  const htmlVideoEls = opts.htmlVideoEls ?? new Map<string, HTMLVideoElement>();
 
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, width, height);
@@ -431,9 +441,9 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
     // Pause every Web Animation (CSS keyframes + transitions are all
     // Animation objects) so each frame seeks deterministically. Cards
     // without WAAPI support fall back to wall-clock capture.
-    let animations: Array<{ pause: () => void; currentTime: number | null }> = [];
+    let animations: Animation[] = [];
     try {
-      const all = (doc as Document & { getAnimations?: () => Animation[] }).getAnimations?.() ?? [];
+      const all = doc.getAnimations();
       for (const a of all) {
         try {
           a.pause();
@@ -558,6 +568,14 @@ function loadSrcdoc(iframe: HTMLIFrameElement, html: string, timeoutMs = 15_000)
 /* ---------------- full export orchestration ---------------- */
 
 export interface RunExportOpts {
+  /**
+   * Capture canvas. When omitted the engine encodes on a dedicated
+   * offscreen 1920×1080 canvas (deterministic file, preview untouched).
+   * Callers that pass one must provide a dedicated 1920×1080 canvas —
+   * never the live preview canvas (HiDPI backing stores would shift the
+   * file layout and the encode would flash the preview).
+   */
+  canvas?: HTMLCanvasElement;
   clips: TimelineClip[];
   totalMs: number;
   getImage: (url: string) => HTMLImageElement | undefined;
@@ -652,12 +670,10 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
 
     // ---- phase 2: audio graph (volAt envelope, truncated buffers) ----
     onProgress?.({ phase: "audio", done: 0, total: 1 });
-    // Dedicated offscreen canvas: the file is always exactly 1920×1080
-    // regardless of the preview canvas backing store (HiDPI ×dpr), and
-    // the preview never flashes while the file encodes.
-    const canvas = document.createElement("canvas");
-    canvas.width = EXPORT_WIDTH;
-    canvas.height = EXPORT_HEIGHT;
+    // Dedicated offscreen canvas by default: the file is always exactly
+    // 1920×1080 regardless of the preview canvas backing store (HiDPI
+    // ×dpr), and the preview never flashes while the file encodes.
+    const canvas = opts.canvas ?? makeExportCanvas();
     stream = canvas.captureStream(EXPORT_FPS);
     const AC: typeof AudioContext =
       window.AudioContext ||
