@@ -139,6 +139,68 @@ export const TRACK_LABELS: Record<string, string> = {
   Subtitles: "Texte",
 };
 
+/* ------------------------------------------------------------------ */
+/* Export timeline — FR copy, single source.                          */
+/*                                                                    */
+/* The export engine (plugins/ui-timeline/export.ts) and the panel    */
+/* must never hardcode French strings: every user-facing export word  */
+/* goes through the helpers below.                                    */
+/* ------------------------------------------------------------------ */
+
+export type ExportPhase = "prerender" | "audio" | "encode" | "finalize";
+
+export const EXPORT_LABELS = {
+  button: "Export MP4",
+  cancel: "Annuler",
+  dismiss: "Fermer",
+} as const;
+
+/** Per-phase progress line shown under the preview while exporting. */
+export function exportPhaseLabel(phase: ExportPhase, done: number, total: number, pct: number): string {
+  switch (phase) {
+    case "prerender":
+      return total > 0 ? `Pré-rendu des cartes… ${done}/${total}` : "Pré-rendu des cartes…";
+    case "audio":
+      return "Préparation de l'audio…";
+    case "encode":
+      return `Encodage… ${pct}%`;
+    case "finalize":
+      return "Finalisation…";
+  }
+}
+
+/** Download filename — the extension always matches the container. */
+export function exportFileName(ext: "mp4" | "webm"): string {
+  return `lilium-timeline.${ext}`;
+}
+
+/**
+ * Actionable FR error for every export failure path. `detail` names the
+ * offending clip (track + time) so the creator knows what to fix.
+ * Never a silent skip: the engine throws these instead of dropping media.
+ */
+export function exportErrorMessage(code: string, detail?: string): string {
+  const what = detail ? ` (${detail})` : "";
+  switch (code) {
+    case "cancelled":
+      return "Export annulé.";
+    case "no-clips":
+      return "Aucun plan à exporter — ajoutez des médias à la timeline puis relancez l'export.";
+    case "relative-url":
+      return `Média sans URL signée${what} — régénérez-le ou réimportez le fichier, puis relancez l'export.`;
+    case "fetch-failed":
+      return `Téléchargement impossible${what} — l'URL signée a peut-être expiré, régénérez le média puis relancez l'export.`;
+    case "decode-failed":
+      return `Audio illisible${what} — régénérez le fichier audio puis relancez l'export.`;
+    case "prerender-failed":
+      return `Pré-rendu impossible${what} — vérifiez le contenu de la carte puis relancez l'export.`;
+    case "recorder-unsupported":
+      return "Export impossible — ce navigateur ne supporte pas l'enregistrement vidéo, réessayez avec Chrome.";
+    default:
+      return `Export impossible${what} — réessayez, et signalez le problème si l'erreur persiste.`;
+  }
+}
+
 /**
  * 100% French product strings for the shell, jobs, lineage, palette,
  * connectors, toasts, empty states and shortcuts.
