@@ -6,7 +6,9 @@
  *
  * PREVIEW → FILE PARITY, by construction. The preview loop and the file
  * encode share the same single sources:
- * - canvas size/style ............ EXPORT_WIDTH / EXPORT_HEIGHT / EXPORT_FPS
+ * - canvas layout .............. logical 1920×1080 space (the preview canvas
+ *                                may use a ×dpr HiDPI backing store; the file
+ *                                is always exactly EXPORT_W×H — same geometry)
  * - volume envelope .............. volAt (fades × ducking, § below)
  * - video dissolves .............. dissolveMix (overlap blend)
  * - fade to/from black ........... blackFadeAlpha (transition_in/out_ms)
@@ -364,7 +366,8 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
       ctx.fillRect(layout.box.x, layout.box.y, layout.box.w, layout.box.h);
       ctx.fillStyle = layout.color;
       ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
+      // "alphabetic" — matches the preview canvas exactly (same renderer).
+      ctx.textBaseline = "alphabetic";
       ctx.fillText(layout.text, layout.textPos.x, layout.textPos.y);
     }
   }
@@ -555,7 +558,6 @@ function loadSrcdoc(iframe: HTMLIFrameElement, html: string, timeoutMs = 15_000)
 /* ---------------- full export orchestration ---------------- */
 
 export interface RunExportOpts {
-  canvas: HTMLCanvasElement;
   clips: TimelineClip[];
   totalMs: number;
   getImage: (url: string) => HTMLImageElement | undefined;
@@ -586,7 +588,7 @@ export interface RunExportResult {
  * `finally`, including on cancel and on failure.
  */
 export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
-  const { canvas, clips, totalMs, getImage, signal, onProgress } = opts;
+  const { clips, totalMs, getImage, signal, onProgress } = opts;
   if (clips.length === 0) throw new ExportError("no-clips");
   if (typeof MediaRecorder === "undefined") throw new ExportError("recorder-unsupported");
 
@@ -650,6 +652,12 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
 
     // ---- phase 2: audio graph (volAt envelope, truncated buffers) ----
     onProgress?.({ phase: "audio", done: 0, total: 1 });
+    // Dedicated offscreen canvas: the file is always exactly 1920×1080
+    // regardless of the preview canvas backing store (HiDPI ×dpr), and
+    // the preview never flashes while the file encodes.
+    const canvas = document.createElement("canvas");
+    canvas.width = EXPORT_WIDTH;
+    canvas.height = EXPORT_HEIGHT;
     stream = canvas.captureStream(EXPORT_FPS);
     const AC: typeof AudioContext =
       window.AudioContext ||
