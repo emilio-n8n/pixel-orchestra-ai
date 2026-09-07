@@ -52,7 +52,7 @@ const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1";
 
 function requireKey() {
   const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY is not configured");
+  if (!key) throw new Error("Clé Lovable non configurée (LOVABLE_API_KEY manquante)");
   return key;
 }
 
@@ -69,7 +69,7 @@ async function uploadBinaryAsset(
     contentType: mime,
     upsert: false,
   });
-  if (error) throw new Error(`upload failed: ${error.message}`);
+  if (error) throw new Error(`Envoi du média impossible — ${error.message}`);
   const { data, error: signErr } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
   if (signErr || !data?.signedUrl) {
     console.warn(`[director] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename, timeline will skip it`);
@@ -254,7 +254,10 @@ async function generateVoiceInner(
       response_format: "mp3",
     }),
   });
-  if (!res.ok) throw new Error(`tts failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 500);
+    throw new Error(`Lovable (voix) a répondu HTTP ${res.status} — ${body}`);
+  }
   const bytes = new Uint8Array(await res.arrayBuffer());
   const durationMs = measureMp3DurationMs(bytes);
   const meta: Record<string, unknown> = { voice, duration_ms: durationMs };
@@ -332,24 +335,27 @@ export async function generateVoiceTakes(
 export async function transcribeAudio(ctx: DirectorCtx, assetId: string) {
   return recordJob(ctx, "generate_subtitles", null, async () => {
     const groqApiKey = ctx.creds?.groqApiKey;
-    if (!groqApiKey) throw new Error("Groq API key not configured (Director settings → Groq)");
+    if (!groqApiKey) throw new Error("Clé Groq non configurée (Réglages de l’Assistant → Groq)");
 
     const { data: asset, error: assetErr } = await ctx.supabase
       .from("assets")
       .select("id, kind, mime, url, meta")
       .eq("id", assetId)
       .maybeSingle();
-    if (assetErr || !asset) throw new Error("asset not found");
+    if (assetErr || !asset) throw new Error("Média introuvable — vérifiez l’identifiant puis réessayez");
     const mime = asset.mime ?? "audio/mpeg";
     if (!asset.url || !/^https?:\/\//i.test(asset.url)) {
-      throw new Error("asset has no usable url (signed url missing) — replace the file or regenerate the voice");
+      throw new Error("Média sans URL signée — régénérez la voix ou réimportez le fichier");
     }
     const res = await fetch(asset.url);
-    if (!res.ok) throw new Error(`failed to fetch audio: ${res.status}`);
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 500);
+      throw new Error(`Téléchargement audio impossible — HTTP ${res.status} — ${body}`);
+    }
     const bytes = new Uint8Array(await res.arrayBuffer());
 
     const { text } = await transcribeAudioGroq(bytes, mime, groqApiKey);
-    if (!text) throw new Error("transcription returned empty text");
+    if (!text) throw new Error("Transcription vide — l’audio est peut-être silencieux ou illisible");
 
     // Store the transcript as an asset (kind html so the viewer can open it).
     const transcriptBytes = new TextEncoder().encode(text);
@@ -407,7 +413,10 @@ export async function generateHtmlCard(ctx: DirectorCtx, brief: string) {
         ],
       }),
     });
-    if (!res.ok) throw new Error(`html gen failed: ${res.status}`);
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 500);
+      throw new Error(`Lovable (carte titre) a répondu HTTP ${res.status} — ${body}`);
+    }
     const data = await res.json();
     const html: string = data?.choices?.[0]?.message?.content ?? "";
     const cleaned = html.replace(/^```html\n?/i, "").replace(/```\s*$/i, "").trim();
@@ -537,7 +546,7 @@ export async function removeFromTimeline(
     .eq("owner_id", ctx.userId)
     .eq("project_id", ctx.projectId)
     .maybeSingle();
-  if (getErr || !existing) throw new Error("clip not found");
+  if (getErr || !existing) throw new Error("Plan introuvable — vérifiez l’identifiant du clip");
 
   const { data, error } = await ctx.supabase
     .from("timeline_clips")
@@ -581,7 +590,7 @@ export async function insertSilenceClip(
   args: { duration_ms: number; track: string; start_ms?: number },
 ) {
   return recordJob(ctx, "insert_silence_clip", `silence ${args.duration_ms}ms`, async () => {
-    if (!(args.duration_ms > 0)) throw new Error("duration_ms must be positive");
+    if (!(args.duration_ms > 0)) throw new Error("La durée doit être positive (duration_ms > 0)");
     const desiredStart = args.start_ms ?? 0;
 
     const { data: existing } = await ctx.supabase
@@ -654,7 +663,7 @@ export async function applyDucking(
       const attackMs = args.attack_ms ?? 200;
       const releaseMs = args.release_ms ?? 400;
       if (attenuationDb > 0 || attenuationDb < -40) {
-        throw new Error("attenuation_db must be between -40 and 0 dB");
+        throw new Error("L’atténuation doit être entre −40 et 0 dB");
       }
 
       const { data: all } = await ctx.supabase
@@ -666,7 +675,7 @@ export async function applyDucking(
       const sourceClips = (all ?? []).filter((c) => c.track === sourceTrack);
       const targetClips = (all ?? []).filter((c) => c.track === targetTrack);
       if (targetClips.length === 0) {
-        throw new Error(`no clips on target track "${targetTrack}" — nothing to duck`);
+        throw new Error(`Aucun plan sur la piste cible « ${targetTrack} » — rien à atténuer`);
       }
       const totalMs = (all ?? []).reduce(
         (m, c) => Math.max(m, (c.start_ms ?? 0) + (c.duration_ms ?? 0)),
@@ -745,7 +754,7 @@ export async function setClipTransitions(
       .eq("owner_id", ctx.userId)
       .eq("project_id", ctx.projectId)
       .maybeSingle();
-    if (aErr || !a) throw new Error("clip A not found");
+    if (aErr || !a) throw new Error("Plan A introuvable — vérifiez son identifiant");
     const { data: b, error: bErr } = await ctx.supabase
       .from("timeline_clips")
       .select("id, track, start_ms, duration_ms, meta")
@@ -753,11 +762,11 @@ export async function setClipTransitions(
       .eq("owner_id", ctx.userId)
       .eq("project_id", ctx.projectId)
       .maybeSingle();
-    if (bErr || !b) throw new Error("clip B not found");
-    if (a.track !== b.track) throw new Error("crossfade requires two clips on the same track");
+    if (bErr || !b) throw new Error("Plan B introuvable — vérifiez son identifiant");
+    if (a.track !== b.track) throw new Error("La transition exige deux plans sur la même piste");
 
     const newStart = (a.start_ms ?? 0) + (a.duration_ms ?? 0) - ms;
-    if (newStart < 0) throw new Error("transition is longer than clip A — shorten ms or move the clips");
+    if (newStart < 0) throw new Error("Transition plus longue que le plan A — réduisez la durée ou déplacez les plans");
 
     const isVideo = a.track === "Video";
     const aMeta = { ...((a.meta ?? {}) as Record<string, unknown>) };
@@ -814,7 +823,7 @@ export async function editSubtitles(
     .eq("owner_id", ctx.userId)
     .eq("project_id", ctx.projectId)
     .maybeSingle();
-  if (getErr || !existing) throw new Error("clip not found");
+  if (getErr || !existing) throw new Error("Plan introuvable — vérifiez l’identifiant du clip");
 
   const meta = { ...((existing.meta ?? {}) as Record<string, unknown>), text };
   if (style) meta.style = style;
@@ -854,7 +863,7 @@ export async function updateTimelineClip(
     .eq("owner_id", ctx.userId)
     .eq("project_id", ctx.projectId)
     .maybeSingle();
-  if (getErr || !existing) throw new Error("clip not found");
+  if (getErr || !existing) throw new Error("Plan introuvable — vérifiez l’identifiant du clip");
 
   const patch: Record<string, unknown> = {};
   if (args.start_ms != null) patch.start_ms = args.start_ms;
@@ -908,7 +917,7 @@ export async function replaceClipAsset(ctx: DirectorCtx, clipId: string, newAsse
     .eq("id", newAssetId)
     .eq("owner_id", ctx.userId)
     .maybeSingle();
-  if (assetErr || !asset) throw new Error("asset not found");
+  if (assetErr || !asset) throw new Error("Média introuvable — vérifiez son identifiant");
 
   const patch: Record<string, unknown> = { asset_id: newAssetId };
   const meta = (asset.meta ?? {}) as Record<string, unknown>;

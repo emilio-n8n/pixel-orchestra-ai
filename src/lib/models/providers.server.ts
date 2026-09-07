@@ -28,7 +28,7 @@ export async function generateImageCloudflare(
   creds: ModelCreds,
 ): Promise<{ mime: string; bytes: Uint8Array }> {
   if (!creds.cloudflareAccountId || !creds.cloudflareApiKey) {
-    throw new Error("Cloudflare not configured (account id + API token required)");
+    throw new Error("Cloudflare non configuré (identifiant de compte + jeton API requis)");
   }
   const url = `https://api.cloudflare.com/client/v4/accounts/${creds.cloudflareAccountId}/ai/run/${model.modelId}`;
   const res = await fetch(url, {
@@ -40,7 +40,8 @@ export async function generateImageCloudflare(
     body: JSON.stringify({ prompt }),
   });
   if (!res.ok) {
-    throw new Error(`cloudflare image failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
+    const body = (await res.text()).slice(0, 500);
+    throw new Error(`Cloudflare (image) a répondu HTTP ${res.status} — ${body}`);
   }
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("image/")) {
@@ -68,7 +69,10 @@ export async function generateImageLovable(prompt: string): Promise<{ mime: stri
       modalities: ["image", "text"],
     }),
   });
-  if (!res.ok) throw new Error(`image gen failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 500);
+    throw new Error(`Lovable (image) a répondu HTTP ${res.status} — ${body}`);
+  }
   const data = await res.json();
   const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
   if (!url || !url.startsWith("data:")) throw new Error("image gen returned no image");
@@ -83,7 +87,7 @@ export async function transcribeAudioGroq(
   mime: string,
   groqApiKey: string,
 ): Promise<{ text: string }> {
-  if (!groqApiKey) throw new Error("Groq API key not configured (Director settings → Groq)");
+  if (!groqApiKey) throw new Error("Clé Groq non configurée (Réglages de l’Assistant → Groq)");
   const form = new FormData();
   const ext = mime.includes("mp3") ? "mp3" : mime.includes("wav") ? "wav" : "m4a";
   form.append("file", new Blob([bytes as unknown as BlobPart], { type: mime }), `audio.${ext}`);
@@ -97,7 +101,8 @@ export async function transcribeAudioGroq(
     body: form,
   });
   if (!res.ok) {
-    throw new Error(`groq transcription failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
+    const body = (await res.text()).slice(0, 500);
+    throw new Error(`Groq (transcription) a répondu HTTP ${res.status} — ${body}`);
   }
   const data = (await res.json()) as { text?: string };
   return { text: (data?.text ?? "").trim() };
