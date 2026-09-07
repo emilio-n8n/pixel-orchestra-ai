@@ -1,25 +1,33 @@
 import { useEffect, useState } from "react";
 import { useLibrary } from "@/plugins/library/store";
 import { getLineage, type LineageView } from "./server";
+import { UI_LABELS } from "@/lib/ui/labels";
+import { ErrorBlock } from "@/components/ui/error-block";
 
 export function LineagePanel() {
   const selected = useLibrary((s) => s.selected);
   const [lineage, setLineage] = useState<LineageView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     if (!selected) {
       setLineage(null);
+      setError(null);
       return;
     }
     let cancelled = false;
     setBusy(true);
+    setError(null);
     getLineage({ data: { assetId: selected.id } })
       .then((r) => {
         if (!cancelled) setLineage(r as unknown as LineageView);
       })
-      .catch(() => {
-        if (!cancelled) setLineage(null);
+      .catch((e) => {
+        if (!cancelled) {
+          setLineage(null);
+          setError(e);
+        }
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -33,7 +41,14 @@ export function LineagePanel() {
   if (busy && !lineage) {
     return (
       <div className="border-b border-[var(--line)] p-3 text-[10px] text-[var(--text-dim)]">
-        Loading lineage…
+        {UI_LABELS.lineage.chargement}
+      </div>
+    );
+  }
+  if (error && !lineage) {
+    return (
+      <div className="border-b border-[var(--line)] p-3">
+        <ErrorBlock message={UI_LABELS.lineage.erreur} error={error} context="lineage.getLineage" compact />
       </div>
     );
   }
@@ -43,7 +58,7 @@ export function LineagePanel() {
     <div className="border-b border-[var(--line)] p-3 text-[10px] text-[var(--text-muted)]">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Lineage
+          {UI_LABELS.lineage.titre}
         </div>
         <span className="mono text-[9px] text-[var(--text-dim)]">
           {lineage.ancestors.length}↑ · {lineage.descendants.length}↓
@@ -53,7 +68,7 @@ export function LineagePanel() {
       {lineage.nodeRun ? (
         <div className="mb-2">
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-            Producer node
+            {UI_LABELS.lineage.noeudProducteur}
           </div>
           <div className="mono">
             {lineage.nodeRun.nodeId} · {lineage.nodeRun.status}
@@ -64,7 +79,7 @@ export function LineagePanel() {
       {lineage.capabilities.length > 0 ? (
         <div className="mb-2">
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-            Capability
+            {UI_LABELS.lineage.moteur}
           </div>
           {lineage.capabilities.map((c) => (
             <div key={c.id} className="mono truncate" title={c.id}>
@@ -77,7 +92,7 @@ export function LineagePanel() {
       {lineage.directSources.length > 0 ? (
         <div className="mb-2">
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-            Direct sources ({lineage.directSources.length})
+            {UI_LABELS.lineage.sourcesDirectes(lineage.directSources.length)}
           </div>
           {lineage.directSources.map((s) => (
             <div key={s.id} className="mono truncate" title={s.id}>
@@ -86,13 +101,13 @@ export function LineagePanel() {
           ))}
         </div>
       ) : (
-        <div className="mb-2 text-[var(--text-dim)]">no upstream — root asset</div>
+        <div className="mb-2 text-[var(--text-dim)]">{UI_LABELS.lineage.racine}</div>
       )}
 
       {lineage.ancestors.length > 0 ? (
         <div className="mb-2">
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-            Ancestors
+            {UI_LABELS.lineage.ancetres}
           </div>
           {lineage.ancestors.slice(0, 10).map((a) => (
             <div key={a.id} className="mono flex justify-between gap-1 text-[var(--text-muted)]">
@@ -108,7 +123,7 @@ export function LineagePanel() {
       {lineage.descendants.length > 0 ? (
         <div>
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-            Descendants
+            {UI_LABELS.lineage.descendants}
           </div>
           {lineage.descendants.slice(0, 10).map((d) => (
             <div key={d.id} className="mono flex justify-between gap-1 text-[var(--text-muted)]">
@@ -124,24 +139,24 @@ export function LineagePanel() {
       <div className="mt-3 flex flex-wrap gap-1">
         <button
           disabled
-          title="Phase 9 will wire this — re-runs the graph that produced this asset"
+          title={UI_LABELS.lineage.astuceRejouer}
           className="rounded border border-[var(--line)] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[var(--text-dim)] opacity-50"
         >
-          Re-run
+          {UI_LABELS.lineage.rejouer}
         </button>
         <button
           disabled
-          title="Phase 9 — clones the asset with a new id, keeping provenance"
+          title={UI_LABELS.lineage.astuceDupliquer}
           className="rounded border border-[var(--line)] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[var(--text-dim)] opacity-50"
         >
-          Fork
+          {UI_LABELS.lineage.dupliquer}
         </button>
         <button
           disabled
-          title="Phase 9 — shows parameter diff vs parent"
+          title={UI_LABELS.lineage.astuceComparer}
           className="rounded border border-[var(--line)] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[var(--text-dim)] opacity-50"
         >
-          Diff
+          {UI_LABELS.lineage.comparer}
         </button>
       </div>
     </div>

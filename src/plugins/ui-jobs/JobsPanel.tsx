@@ -3,6 +3,8 @@ import { useKernelEvents } from "@/kernel/react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
 import { listGraphRuns } from "@/plugins/ui-node-graph/server";
+import { UI_LABELS, jobStatusLabel, toolLabel } from "@/lib/ui/labels";
+import { ErrorBlock } from "@/components/ui/error-block";
 
 interface GraphRunView {
   id: string;
@@ -42,12 +44,19 @@ export function JobsPanel() {
   const pid = useLibraryProject();
   const [runs, setRuns] = useState<GraphRunView[]>([]);
   const [jobs, setJobs] = useState<DirectorJob[]>([]);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const last = useKernelEvents(1)[0];
 
   useEffect(() => {
     listGraphRuns({ data: { limit: 50 } })
-      .then((r) => setRuns(r.runs as unknown as GraphRunView[]))
-      .catch(() => setRuns([]));
+      .then((r) => {
+        setRuns(r.runs as unknown as GraphRunView[]);
+        setLoadError(null);
+      })
+      .catch((e) => {
+        setRuns([]);
+        setLoadError(e);
+      });
   }, [last]);
 
   // Director agent operations — durable in Supabase, live via realtime.
@@ -96,33 +105,50 @@ export function JobsPanel() {
   }, [pid]);
 
   const total = jobs.length + runs.length;
+  const running = jobs.filter((j) => j.status === "running").length;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-1)]">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Jobs
+          {UI_LABELS.jobs.titre}
         </div>
         <span className="mono text-[10px] text-[var(--text-dim)]">
-          {jobs.filter((j) => j.status === "running").length} running · {total} total
+          {running} {UI_LABELS.jobs.enCours} · {total} {UI_LABELS.jobs.total}
         </span>
       </div>
       <div className="flex-1 overflow-auto p-3 text-xs text-[var(--text-muted)]">
+        {loadError ? (
+          <div className="mb-3">
+            <ErrorBlock
+              message={UI_LABELS.lineage.erreur}
+              error={loadError}
+              context="jobs.listGraphRuns"
+            />
+          </div>
+        ) : null}
         {total === 0 ? (
-          <div className="text-center text-[var(--text-dim)]">
-            No jobs yet. Ask the Director to generate something, or run a graph in the Node Graph
-            panel.
+          <div className="mx-auto max-w-[42ch] py-10 text-center">
+            <div className="text-[13px] font-medium text-[var(--text)]">
+              {UI_LABELS.jobs.videTitre}
+            </div>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--text-dim)]">
+              {UI_LABELS.jobs.videDescription}
+            </p>
           </div>
         ) : (
           <ul className="space-y-2">
             {jobs.map((j) => (
               <li key={j.id} className="rounded border border-[var(--line)] bg-[var(--surface-2)] p-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="mono truncate text-[10px] text-[var(--text-dim)]">
-                    {j.kind}
+                  <span
+                    className="mono truncate text-[10px] text-[var(--text-dim)]"
+                    title={j.kind}
+                  >
+                    {toolLabel(j.kind)}
                   </span>
                   <span className={`rounded px-1.5 py-0.5 text-[9px] uppercase ${jobBadge(j.status)}`}>
-                    {j.status}
+                    {jobStatusLabel(j.status)}
                   </span>
                 </div>
                 {j.prompt ? (
@@ -131,13 +157,13 @@ export function JobsPanel() {
                   </div>
                 ) : null}
                 {j.error ? (
-                  <div className="mt-1 rounded bg-[var(--status-err)]/10 p-1 text-[9px] text-[var(--status-err)]">
-                    {j.error}
+                  <div className="mt-1">
+                    <ErrorBlock message={j.error} error={j.error} context={`jobs.${j.id}`} compact />
                   </div>
                 ) : null}
                 <div className="mono mt-1 text-[9px] text-[var(--text-dim)]">
-                  {new Date(j.created_at).toLocaleTimeString()}
-                  {j.finished_at ? ` → ${new Date(j.finished_at).toLocaleTimeString()}` : ""}
+                  {new Date(j.created_at).toLocaleTimeString("fr-FR")}
+                  {j.finished_at ? ` → ${new Date(j.finished_at).toLocaleTimeString("fr-FR")}` : ""}
                 </div>
               </li>
             ))}
@@ -151,11 +177,12 @@ export function JobsPanel() {
                     {r.id.slice(0, 12)}
                   </span>
                   <span className={`rounded px-1.5 py-0.5 text-[9px] uppercase ${jobBadge(r.status)}`}>
-                    {r.status}
+                    {jobStatusLabel(r.status)}
                   </span>
                 </div>
                 <div className="mono mt-1 text-[9px] text-[var(--text-dim)]">
-                  graph {r.graphId.slice(0, 8)} · {new Date(r.startedAt).toLocaleTimeString()}
+                  {UI_LABELS.jobs.graphe} {r.graphId.slice(0, 8)} ·{" "}
+                  {new Date(r.startedAt).toLocaleTimeString("fr-FR")}
                 </div>
                 {r.stats && Object.keys(r.stats).length > 0 ? (
                   <pre className="mono mt-1 max-h-32 overflow-auto rounded bg-[var(--surface-3)] p-1 text-[9px] text-[var(--text-muted)]">
