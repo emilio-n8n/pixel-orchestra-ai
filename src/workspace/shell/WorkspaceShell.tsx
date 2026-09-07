@@ -8,6 +8,7 @@ import { BottomDock } from "./BottomDock";
 import { StatusBar } from "./StatusBar";
 import { CenterView } from "./CenterView";
 import { CommandPalette } from "./CommandPalette";
+import { ShortcutsDialog } from "./ShortcutsDialog";
 
 export function WorkspaceShell({
   workspaceId,
@@ -21,13 +22,38 @@ export function WorkspaceShell({
   const inspectorCollapsed = usePanelStore((s) => s.inspectorCollapsed);
   const bottomCollapsed = usePanelStore((s) => s.bottomCollapsed);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Mobile first run: collapse to the 52px rail so the canvas keeps room.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    usePanelStore.setState({ sidebarCollapsed: true, bottomCollapsed: true });
+  }, []);
 
   useEffect(() => {
+    function isTypingTarget(t: EventTarget | null) {
+      const el = t as HTMLElement | null;
+      if (!el || typeof (el as HTMLElement).tagName !== "string") return false;
+      const tag = (el as HTMLElement).tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || (el as HTMLElement).isContentEditable;
+    }
     function onKey(e: KeyboardEvent) {
       const isMod = e.metaKey || e.ctrlKey;
       if (isMod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+        return;
+      }
+      // "?" opens the shortcuts sheet when not typing (Shift+/ produces "?").
+      if (e.key === "?" && !isMod && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+        return;
+      }
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+        setShortcutsOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -40,6 +66,7 @@ export function WorkspaceShell({
         workspaceId={workspaceId}
         projectId={projectId}
         onOpenCommand={() => setPaletteOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -88,6 +115,7 @@ export function WorkspaceShell({
 
       <StatusBar />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePanelStore } from "@/stores/panels";
 import { useRegistrySnapshot } from "@/kernel/react";
 import { GROUP_LABELS, moduleMeta, type ModuleMeta } from "@/lib/ui/labels";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 interface NavItem extends ModuleMeta {
   id: string;
@@ -41,18 +42,19 @@ export function Sidebar() {
 
   return (
     <aside
+      aria-label="Navigation principale"
       className={`flex h-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--rail)] transition-[width] duration-200 ease-out ${
-        collapsed ? "w-[52px]" : "w-[186px]"
+        collapsed ? "w-[52px]" : "w-[52px] md:w-[186px]"
       }`}
     >
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
+      <nav className="flex-1 overflow-y-auto px-1.5 py-3 md:px-2">
         {groups.map((g) => {
           const groupItems = items.filter((i) => i.group === g);
           if (groupItems.length === 0) return null;
           return (
             <div key={g} className="mb-4">
               {!collapsed ? (
-                <div className="t-meta px-2 pb-1.5 text-[9.5px]">{GROUP_LABELS[g]}</div>
+                <div className="t-meta hidden px-2 pb-1.5 text-[9.5px] md:block">{GROUP_LABELS[g]}</div>
               ) : null}
               <div className="flex flex-col gap-0.5">
                 {groupItems.map((it) => {
@@ -61,10 +63,12 @@ export function Sidebar() {
                   return (
                     <button
                       key={it.id}
-                      title={it.label}
+                      title={`${it.label} — ${it.group === "create" ? GROUP_LABELS.create : GROUP_LABELS.produce}`}
+                      aria-label={it.label}
+                      aria-current={isActive ? "page" : undefined}
                       onClick={() => setActive(it.id)}
-                      className={`group relative flex h-8 items-center rounded-lg text-[12.5px] transition-colors duration-150 ease-out ${
-                        collapsed ? "justify-center px-0" : "gap-2.5 px-2.5"
+                      className={`group relative flex h-9 items-center rounded-lg text-[12.5px] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:h-8 ${
+                        collapsed ? "justify-center px-0" : "justify-center px-0 md:justify-start md:gap-2.5 md:px-2.5"
                       } ${
                         isActive
                           ? "bg-[var(--surface-3)] text-[var(--text)]"
@@ -76,7 +80,7 @@ export function Sidebar() {
                         strokeWidth={1.7}
                         className={isActive ? "text-[var(--accent-strong)]" : ""}
                       />
-                      {!collapsed ? <span className="truncate">{it.label}</span> : null}
+                      {!collapsed ? <span className="hidden truncate md:inline">{it.label}</span> : null}
                       {isActive ? (
                         <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-[var(--accent)]" />
                       ) : null}
@@ -91,11 +95,13 @@ export function Sidebar() {
 
       <button
         onClick={toggleSidebar}
-        title={collapsed ? "Déplier le menu" : "Replier le menu"}
-        className="ghost-btn m-2 h-7 shrink-0 text-[var(--text-dim)]"
+        title={collapsed ? UI_LABELS.shell.deplierMenu : UI_LABELS.shell.replierMenu}
+        aria-label={collapsed ? UI_LABELS.shell.deplierMenu : UI_LABELS.shell.replierMenu}
+        aria-expanded={!collapsed}
+        className="ghost-btn m-1.5 h-8 shrink-0 text-[var(--text-dim)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:m-2 md:h-7"
       >
         {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-        {!collapsed ? <span className="text-[11px]">Replier</span> : null}
+        {!collapsed ? <span className="hidden text-[11px] md:inline">{UI_LABELS.shell.replier}</span> : null}
       </button>
     </aside>
   );

@@ -2,6 +2,7 @@ import { Cloud, PanelBottom, PanelRight, Terminal } from "lucide-react";
 import { useKernel, useKernelEvents } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
 import { StatusPill } from "@/components/ui/status-pill";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 /**
  * Calm production status bar. Technical internals (plugin count, executors,
@@ -26,19 +27,19 @@ export function StatusBar() {
     <div className="relative shrink-0 border-t border-[var(--line)] bg-[var(--rail)]">
       {devMode ? (
         <div className="animate-fade-in max-h-48 overflow-auto border-b border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
-          <div className="t-meta mb-1.5 flex items-center justify-between">
-            <span>Journal développeur</span>
+          <div className="t-meta mb-1.5 flex items-center justify-between gap-2">
+            <span>{UI_LABELS.shell.journalDev}</span>
             <span>
               {host.count()} plugins · {scheduler.count()} exécuteurs
             </span>
           </div>
           {events.length === 0 ? (
-            <div className="t-caption">Aucun évènement.</div>
+            <div className="t-caption">{UI_LABELS.shell.aucunEvenement}</div>
           ) : (
             <ul className="space-y-0.5">
               {[...events].reverse().map((e, i) => (
                 <li key={i} className="mono text-[10.5px] text-[var(--text-dim)]">
-                  {new Date(e.ts).toLocaleTimeString()} · {e.type}
+                  {new Date(e.ts).toLocaleTimeString("fr-FR")} · {e.type}
                 </li>
               ))}
             </ul>
@@ -46,42 +47,42 @@ export function StatusBar() {
         </div>
       ) : null}
 
-      <div className="flex h-7 items-center justify-between px-3 text-[11px] text-[var(--text-dim)]">
-        <div className="flex items-center gap-4">
-          <StatusPill tone="done">Studio prêt</StatusPill>
-          <span className="flex items-center gap-1.5">
-            <Cloud size={12} /> Rendu cloud
+      <div className="flex h-8 items-center justify-between gap-2 px-2 text-[11px] text-[var(--text-dim)] sm:px-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <StatusPill tone="done">{UI_LABELS.shell.studioPret}</StatusPill>
+          <span className="hidden items-center gap-1.5 sm:flex">
+            <Cloud size={12} /> {UI_LABELS.shell.renduCloud}
           </span>
-          <span className="hidden items-center gap-1.5 md:flex">
-            Stockage <span className="text-[var(--text-muted)]">Lilium Cloud</span>
+          <span className="hidden items-center gap-1.5 lg:flex">
+            {UI_LABELS.shell.stockage} <span className="text-[var(--text-muted)]">Lilium Cloud</span>
           </span>
           {runningJobs > 0 ? (
             <StatusPill tone="running" pulse>
-              {runningJobs} tâche{runningJobs > 1 ? "s" : ""} en cours
+              {UI_LABELS.shell.tachesEnCours(runningJobs)}
             </StatusPill>
           ) : (
-            <span>Aucune tâche</span>
+            <span className="hidden sm:inline">{UI_LABELS.shell.aucuneTache}</span>
           )}
           {devMode && last ? (
-            <span className="mono text-[10.5px] opacity-70">{last.type}</span>
+            <span className="mono hidden text-[10.5px] opacity-70 md:inline">{last.type}</span>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5">
           <IconToggle
-            label="Timeline"
+            label={UI_LABELS.shell.basculeTimeline}
             on={!bottomCollapsed}
             onClick={() => toggle("bottom")}
             icon={<PanelBottom size={13} />}
           />
           <IconToggle
-            label="Panneau IA"
+            label={UI_LABELS.shell.basculePanneau}
             on={!inspectorCollapsed}
             onClick={() => toggle("inspector")}
             icon={<PanelRight size={13} />}
           />
           <IconToggle
-            label="Mode développeur"
+            label={UI_LABELS.shell.modeDev}
             on={devMode}
             onClick={() => setDevMode(!devMode)}
             icon={<Terminal size={13} />}
@@ -107,7 +108,9 @@ function IconToggle({
     <button
       onClick={onClick}
       title={label}
-      className={`ghost-btn h-6 w-6 ${on ? "text-[var(--text)]" : "text-[var(--text-dim)] opacity-60"}`}
+      aria-label={label}
+      aria-pressed={on}
+      className={`ghost-btn h-7 w-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${on ? "text-[var(--text)]" : "text-[var(--text-dim)] opacity-60"}`}
     >
       {icon}
     </button>
