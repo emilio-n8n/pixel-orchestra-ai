@@ -8,6 +8,8 @@ export const uiJobsPlugin: PluginManifest = {
   engines: { lilium: "^0.1.0" },
   description: "File des rendus — derniers flux exécutés, statuts, statistiques.",
   contributes: {
-    panels: [{ id: "jobs.center", title: "Rendus", slot: "center", component: JobsPanel, order: 70 }],
+    panels: [
+      { id: "jobs.center", title: "Rendus", slot: "center", component: JobsPanel, order: 70 },
+    ],
   },
 };

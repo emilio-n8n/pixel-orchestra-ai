@@ -28,7 +28,9 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
-          <div className="text-[13px] font-medium text-[var(--text)]">{UI_LABELS.raccourcis.titre}</div>
+          <div className="text-[13px] font-medium text-[var(--text)]">
+            {UI_LABELS.raccourcis.titre}
+          </div>
           <button
             onClick={onClose}
             title={UI_LABELS.common.fermer}

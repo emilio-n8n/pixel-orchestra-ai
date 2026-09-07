@@ -23,7 +23,13 @@ export const helloPlugin: PluginManifest = {
         component: HelloInspector,
         order: 100,
       },
-      { id: "hello.bottom", title: "Journal Bonjour", slot: "bottom", component: HelloBottom, order: 0 },
+      {
+        id: "hello.bottom",
+        title: "Journal Bonjour",
+        slot: "bottom",
+        component: HelloBottom,
+        order: 0,
+      },
     ],
     commands: [
       {

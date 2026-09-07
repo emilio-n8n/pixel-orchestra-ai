@@ -14,7 +14,15 @@ function moduleIdFromPanelId(panelId: string): string {
   return panelId.split(".")[0] ?? panelId;
 }
 
-const CORE_MODULE_IDS = ["timeline", "library", "storyboard", "characters", "jobs", "graph", "connectors"];
+const CORE_MODULE_IDS = [
+  "timeline",
+  "library",
+  "storyboard",
+  "characters",
+  "jobs",
+  "graph",
+  "connectors",
+];
 
 export function Sidebar() {
   const active = usePanelStore((s) => s.activeModule);
@@ -54,7 +62,9 @@ export function Sidebar() {
           return (
             <div key={g} className="mb-4">
               {!collapsed ? (
-                <div className="t-meta hidden px-2 pb-1.5 text-[9.5px] md:block">{GROUP_LABELS[g]}</div>
+                <div className="t-meta hidden px-2 pb-1.5 text-[9.5px] md:block">
+                  {GROUP_LABELS[g]}
+                </div>
               ) : null}
               <div className="flex flex-col gap-0.5">
                 {groupItems.map((it) => {
@@ -68,7 +78,9 @@ export function Sidebar() {
                       aria-current={isActive ? "page" : undefined}
                       onClick={() => setActive(it.id)}
                       className={`group relative flex h-9 items-center rounded-lg text-[12.5px] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:h-8 ${
-                        collapsed ? "justify-center px-0" : "justify-center px-0 md:justify-start md:gap-2.5 md:px-2.5"
+                        collapsed
+                          ? "justify-center px-0"
+                          : "justify-center px-0 md:justify-start md:gap-2.5 md:px-2.5"
                       } ${
                         isActive
                           ? "bg-[var(--surface-3)] text-[var(--text)]"
@@ -80,7 +92,9 @@ export function Sidebar() {
                         strokeWidth={1.7}
                         className={isActive ? "text-[var(--accent-strong)]" : ""}
                       />
-                      {!collapsed ? <span className="hidden truncate md:inline">{it.label}</span> : null}
+                      {!collapsed ? (
+                        <span className="hidden truncate md:inline">{it.label}</span>
+                      ) : null}
                       {isActive ? (
                         <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-[var(--accent)]" />
                       ) : null}
@@ -101,7 +115,9 @@ export function Sidebar() {
         className="ghost-btn m-1.5 h-8 shrink-0 text-[var(--text-dim)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:m-2 md:h-7"
       >
         {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-        {!collapsed ? <span className="hidden text-[11px] md:inline">{UI_LABELS.shell.replier}</span> : null}
+        {!collapsed ? (
+          <span className="hidden text-[11px] md:inline">{UI_LABELS.shell.replier}</span>
+        ) : null}
       </button>
     </aside>
   );

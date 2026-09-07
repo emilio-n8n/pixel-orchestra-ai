@@ -3,6 +3,7 @@ import { Sparkles, SlidersHorizontal } from "lucide-react";
 import { usePanelStore } from "@/stores/panels";
 import { DirectorPanel } from "@/plugins/director/DirectorPanel";
 import { Inspector } from "./Inspector";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 type Tab = "chat" | "inspect";
 
@@ -26,7 +27,11 @@ export function RightPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]">
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--line)] px-2" role="tablist" aria-label={UI_LABELS.shell.proprietes}>
+      <div
+        className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--line)] px-2"
+        role="tablist"
+        aria-label={UI_LABELS.shell.proprietes}
+      >
         <TabButton
           label={UI_LABELS.director.titre}
           icon={<Sparkles size={13} />}
@@ -40,9 +45,7 @@ export function RightPanel() {
           onClick={() => setOverride("inspect")}
         />
       </div>
-      <div className="min-h-0 flex-1">
-        {tab === "chat" ? <DirectorPanel /> : <Inspector />}
-      </div>
+      <div className="min-h-0 flex-1">{tab === "chat" ? <DirectorPanel /> : <Inspector />}</div>
     </div>
   );
 }

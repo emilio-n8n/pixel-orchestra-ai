@@ -54,7 +54,8 @@ export function StatusBar() {
             <Cloud size={12} /> {UI_LABELS.shell.renduCloud}
           </span>
           <span className="hidden items-center gap-1.5 lg:flex">
-            {UI_LABELS.shell.stockage} <span className="text-[var(--text-muted)]">Lilium Cloud</span>
+            {UI_LABELS.shell.stockage}{" "}
+            <span className="text-[var(--text-muted)]">Lilium Cloud</span>
           </span>
           {runningJobs > 0 ? (
             <StatusPill tone="running" pulse>

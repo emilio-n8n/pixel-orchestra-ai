@@ -44,7 +44,14 @@ export function ConnectorsPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-auto p-3 text-xs text-[var(--text-muted)]">
-        {adding ? <AddForm onDone={() => { setAdding(false); reload(); }} /> : null}
+        {adding ? (
+          <AddForm
+            onDone={() => {
+              setAdding(false);
+              reload();
+            }}
+          />
+        ) : null}
         {connectors.length === 0 && !adding ? (
           <div className="mx-auto max-w-[42ch] py-10 text-center text-[12px] leading-relaxed text-[var(--text-dim)]">
             {UI_LABELS.connectors.vide}
@@ -52,11 +59,7 @@ export function ConnectorsPanel() {
         ) : null}
         <div className="mt-3 space-y-3">
           {connectors.map((c) => (
-            <ConnectorCard
-              key={c.id}
-              connector={c}
-              onDeleted={reload}
-            />
+            <ConnectorCard key={c.id} connector={c} onDeleted={reload} />
           ))}
         </div>
       </div>
@@ -65,7 +68,7 @@ export function ConnectorsPanel() {
 }
 
 function AddForm({ onDone }: { onDone: () => void }) {
-  const [name, setName] = useState(UI_LABELS.connectors.nomDefaut);
+  const [name, setName] = useState<string>(UI_LABELS.connectors.nomDefaut);
   const [baseUrl, setBaseUrl] = useState("");
   const [auth, setAuth] = useState("");
   const [busy, setBusy] = useState(false);
@@ -120,7 +123,12 @@ function AddForm({ onDone }: { onDone: () => void }) {
       </div>
       {error ? (
         <div className="mt-2">
-          <ErrorBlock message={String((error as Error)?.message ?? error)} error={error} context="connectors.add" compact />
+          <ErrorBlock
+            message={String((error as Error)?.message ?? error)}
+            error={error}
+            context="connectors.add"
+            compact
+          />
         </div>
       ) : null}
       <div className="mt-3 flex justify-end gap-2">
@@ -197,7 +205,9 @@ function ConnectorCard({
     <div className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-[var(--text)]">{connector.name}</div>
+          <div className="truncate text-[13px] font-medium text-[var(--text)]">
+            {connector.name}
+          </div>
           <div className="mono mt-0.5 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
             {connector.kind} · {connector.status}
           </div>
@@ -282,7 +292,9 @@ function CapabilityRow({ connectorId, cap }: { connectorId: string; cap: Capabil
     <div className="rounded border border-[var(--line)] bg-[var(--surface-3)] p-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="mono truncate text-[11px] text-[var(--text)]">{cap.displayName || cap.id}</div>
+          <div className="mono truncate text-[11px] text-[var(--text)]">
+            {cap.displayName || cap.id}
+          </div>
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
             {cap.kind} · {cap.media.join(", ") || "—"}
           </div>

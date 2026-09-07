@@ -1,10 +1,20 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronRight, Download, Keyboard, Search, Settings, Undo2, Redo2 } from "lucide-react";
+import {
+  Bell,
+  ChevronRight,
+  Download,
+  Keyboard,
+  Search,
+  Settings,
+  Undo2,
+  Redo2,
+} from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { usePanelStore } from "@/stores/panels";
 import { UI_LABELS, moduleMeta } from "@/lib/ui/labels";
 
-const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+const FOCUS =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
 
 export function TopBar({
   workspaceId,
@@ -49,7 +59,9 @@ export function TopBar({
             {ws.name}
           </button>
         ) : (
-          <span className="px-2 py-1 text-[12.5px] text-[var(--text-dim)]">{UI_LABELS.shell.aucunEspace}</span>
+          <span className="px-2 py-1 text-[12.5px] text-[var(--text-dim)]">
+            {UI_LABELS.shell.aucunEspace}
+          </span>
         )}
         {project ? (
           <>
@@ -65,16 +77,38 @@ export function TopBar({
         aria-label={moduleMeta("timeline").label}
         className="hidden items-center gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5 md:flex"
       >
-        <SegmentTab label={moduleMeta("timeline").label} active={active === "timeline"} onClick={() => setActive("timeline")} />
-        <SegmentTab label={moduleMeta("library").label} active={active === "library"} onClick={() => setActive("library")} />
-        <SegmentTab label={moduleMeta("jobs").label} active={active === "jobs"} onClick={() => setActive("jobs")} />
+        <SegmentTab
+          label={moduleMeta("timeline").label}
+          active={active === "timeline"}
+          onClick={() => setActive("timeline")}
+        />
+        <SegmentTab
+          label={moduleMeta("library").label}
+          active={active === "library"}
+          onClick={() => setActive("library")}
+        />
+        <SegmentTab
+          label={moduleMeta("jobs").label}
+          active={active === "jobs"}
+          onClick={() => setActive("jobs")}
+        />
       </nav>
 
       <div className="flex flex-1 items-center justify-end gap-0.5 sm:gap-1">
-        <button className={`ghost-btn hidden h-8 w-8 opacity-50 sm:flex`} title={UI_LABELS.shell.annulerAction} disabled aria-disabled>
+        <button
+          className={`ghost-btn hidden h-8 w-8 opacity-50 sm:flex`}
+          title={UI_LABELS.shell.annulerAction}
+          disabled
+          aria-disabled
+        >
           <Undo2 size={14} />
         </button>
-        <button className={`ghost-btn hidden h-8 w-8 opacity-50 sm:flex`} title={UI_LABELS.shell.retablirAction} disabled aria-disabled>
+        <button
+          className={`ghost-btn hidden h-8 w-8 opacity-50 sm:flex`}
+          title={UI_LABELS.shell.retablirAction}
+          disabled
+          aria-disabled
+        >
           <Redo2 size={14} />
         </button>
         <span className="mx-1 hidden h-4 w-px bg-[var(--line)] sm:block" />
@@ -85,7 +119,9 @@ export function TopBar({
         >
           <Search size={13} />
           <span className="hidden lg:inline">{UI_LABELS.shell.rechercher}</span>
-          <kbd className="rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">⌘K</kbd>
+          <kbd className="rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+            ⌘K
+          </kbd>
         </button>
         <button
           onClick={onOpenShortcuts}
@@ -95,10 +131,19 @@ export function TopBar({
         >
           <Keyboard size={14} />
         </button>
-        <button className={`ghost-btn hidden h-8 w-8 sm:flex ${FOCUS}`} title={UI_LABELS.shell.notifications} aria-label={UI_LABELS.shell.notifications}>
+        <button
+          className={`ghost-btn hidden h-8 w-8 sm:flex ${FOCUS}`}
+          title={UI_LABELS.shell.notifications}
+          aria-label={UI_LABELS.shell.notifications}
+        >
           <Bell size={14} />
         </button>
-        <Link to="/settings" className={`ghost-btn h-8 w-8 ${FOCUS}`} title={UI_LABELS.shell.parametres} aria-label={UI_LABELS.shell.parametres}>
+        <Link
+          to="/settings"
+          className={`ghost-btn h-8 w-8 ${FOCUS}`}
+          title={UI_LABELS.shell.parametres}
+          aria-label={UI_LABELS.shell.parametres}
+        >
           <Settings size={14} />
         </Link>
         <button

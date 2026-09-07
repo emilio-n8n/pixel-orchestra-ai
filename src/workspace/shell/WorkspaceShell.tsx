@@ -36,7 +36,12 @@ export function WorkspaceShell({
       const el = t as HTMLElement | null;
       if (!el || typeof (el as HTMLElement).tagName !== "string") return false;
       const tag = (el as HTMLElement).tagName.toLowerCase();
-      return tag === "input" || tag === "textarea" || tag === "select" || (el as HTMLElement).isContentEditable;
+      return (
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        (el as HTMLElement).isContentEditable
+      );
     }
     function onKey(e: KeyboardEvent) {
       const isMod = e.metaKey || e.ctrlKey;
