@@ -825,7 +825,7 @@ export async function editSubtitles(
     .maybeSingle();
   if (getErr || !existing) throw new Error("Plan introuvable — vérifiez l’identifiant du clip");
 
-  const meta = { ...((existing.meta ?? {}) as Record<string, unknown>), text };
+  const meta: Record<string, unknown> = { ...((existing.meta ?? {}) as Record<string, unknown>), text };
   if (style) meta.style = style;
   const { data, error } = await ctx.supabase
     .from("timeline_clips")

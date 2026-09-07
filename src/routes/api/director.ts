@@ -3,7 +3,9 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  generateText,
+  streamText,
+  stepCountIs,
+  toUIMessageStream,
   tool,
   type UIMessage,
 } from "ai";
@@ -14,6 +16,7 @@ import {
   capLabel,
   type DirectorModel,
 } from "@/lib/models/catalog";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export const Route = createFileRoute("/api/director")({
   server: {
@@ -323,140 +326,120 @@ export const Route = createFileRoute("/api/director")({
         };
 
         // -------------------------------------------------------------------
-        // Manual tool loop — guarantees every tool call is awaited before
-        // continuation, so no result can be left orphaned (the root cause of
-        // AI_MissingToolResultsError on opencode.ai / zen-go).
+        // Manual tool loop with REALTIME streaming — every iteration runs
+        // a single-step streamText whose deltas (text + tool-call inputs +
+        // tool outputs) are merged into the outer UIMessage stream DURING
+        // generation, so the UI shows live tool activity instead of only
+        // the final text.
         //
-        // The final text answer is streamed to the client through a
-        // createUIMessageStream call so the UI still gets live text deltas.
+        // No orphaned tool results: each iteration is fully consumed
+        // (await consumeStream + responseMessages) before continuation —
+        // every tool call is awaited, fixing AI_MissingToolResultsError.
         // -------------------------------------------------------------------
         const MAX_TOOL_ITERATIONS = 10;
         const startedAt = Date.now();
-        let conversation: unknown[] = await convertToModelMessages(body.messages);
+        const baseConversation: unknown[] = await convertToModelMessages(body.messages);
         const toolsCalled: string[] = [];
-        let finalText = "";
         let iterations = 0;
 
-        try {
-          for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-            iterations++;
-            const step = await generateText({
-              model,
-              system: systemPrompt,
-              messages: conversation as never,
-              tools: tools as never,
-              toolsContext: undefined as never,
-              headers: {
-                "x-opencode-session": sessionId,
-                "User-Agent": "lilium-studio-director/1.0",
-              },
-            } as never);
-
-            for (const tc of step.toolCalls ?? []) toolsCalled.push(tc.toolName);
-
-            if (
-              step.finishReason === "tool-calls" &&
-              (step.toolCalls?.length ?? 0) > 0
-            ) {
-              // Append assistant + tool result messages for the next iteration.
-              // AI SDK v5: step.response.messages contains both the assistant
-              // message (with tool calls) and the tool result messages.
-              const responseMessages = (step as { response?: { messages?: unknown[] } })
-                .response?.messages;
-              if (responseMessages?.length) {
-                conversation = [...conversation, ...responseMessages];
-              } else {
-                // Defensive fallback: reconstruct manually if response.messages
-                // is unavailable in this SDK version.
-                conversation = [
-                  ...conversation,
-                  {
-                    role: "assistant",
-                    content:
-                      step.toolCalls?.map((tc) => ({
-                        type: "tool-call",
-                        toolCallId: tc.toolCallId,
-                        toolName: tc.toolName,
-                        args: tc.input,
-                      })) ?? [],
-                  },
-                  ...(step.toolResults ?? []).map((tr) => ({
-                    role: "tool",
-                    toolCallId: tr.toolCallId,
-                    content: JSON.stringify((tr as { output?: unknown }).output ?? null),
-                  })),
-                ];
-              }
-              continue;
-            }
-
-            // No more tool calls — this is the final assistant text.
-            finalText = step.text ?? "";
-            break;
-          }
-        } catch (err) {
-          let detail: string;
-          if (err instanceof Error) detail = `${err.name}: ${err.message}\n${err.stack ?? ""}`;
-          else if (typeof err === "object" && err !== null) {
-            try {
-              detail = JSON.stringify(err, Object.getOwnPropertyNames(err));
-            } catch {
-              detail = String(err);
-            }
-          } else detail = String(err);
-          console.error("[/api/director] manual-loop error:", detail);
-          // Surface the provider's own diagnostics (status + response body)
-          // so a 500 from the LLM gateway is actionable from the UI.
-          const eRec = (err ?? {}) as Record<string, unknown>;
-          const statusCode =
-            typeof eRec.statusCode === "number" ? ` [HTTP ${eRec.statusCode}]` : "";
-          let providerBody = "";
-          const rawBody = eRec.responseBody;
-          if (typeof rawBody === "string" && rawBody.length > 0) {
-            providerBody = `\nProvider said: ${rawBody.slice(0, 500)}`;
-          } else if (rawBody != null) {
-            try {
-              providerBody = `\nProvider said: ${JSON.stringify(rawBody).slice(0, 500)}`;
-            } catch {
-              /* ignore */
-            }
-          }
-          const message = `Director stopped: ${(err as Error)?.message ?? String(err)}${statusCode}${providerBody}`;
-          const stream = createUIMessageStream({
-            execute: ({ writer }) => {
-              writer.write({ type: "text-start", id: "err" } as never);
-              writer.write({ type: "text-delta", id: "err", delta: message } as never);
-              writer.write({ type: "text-end", id: "err" } as never);
-            },
-          });
-          return createUIMessageStreamResponse({ stream });
-        }
-
-        console.error(
-          "[/api/director] manual loop finished: iterations:",
-          iterations,
-          "tools:",
-          toolsCalled.join(",") || "none",
-          "ms:",
-          Date.now() - startedAt,
-        );
-
-        if (!finalText && iterations >= MAX_TOOL_ITERATIONS) {
-          finalText =
-            "The Director reached its planning limit. Please retry with a shorter, more direct instruction.";
-        }
-
-        // Stream the final answer to the UI as a single text message (no
-        // extra model call — we already have the text from the manual loop).
         const stream = createUIMessageStream({
-          execute: ({ writer }) => {
-            writer.write({ type: "text-start", id: "final" } as never);
-            writer.write({ type: "text-delta", id: "final", delta: finalText } as never);
-            writer.write({ type: "text-end", id: "final" } as never);
+          execute: async ({ writer }) => {
+            let conversation: unknown[] = baseConversation;
+            try {
+              for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+                iterations++;
+                const result = streamText({
+                  model,
+                  system: systemPrompt,
+                  messages: conversation as never,
+                  tools: tools as never,
+                  stopWhen: stepCountIs(1),
+                  headers: {
+                    "x-opencode-session": sessionId,
+                    "User-Agent": "lilium-studio-director/1.0",
+                  },
+                } as never);
+
+                // Stream text + tool-call deltas live to the client.
+                // Inner start/finish are suppressed — the outer stream
+                // owns the message lifecycle; steps still flow through.
+                writer.merge(
+                  toUIMessageStream({
+                    stream: result.stream as never,
+                    tools: tools as never,
+                    sendStart: false,
+                    sendFinish: false,
+                  } as never) as never,
+                );
+                await result.consumeStream();
+                const finishReason = await result.finishReason;
+                const stepToolCalls = await result.toolCalls;
+                for (const tc of stepToolCalls ?? []) toolsCalled.push(tc.toolName);
+                const responseMessages = await result.responseMessages;
+                if (responseMessages?.length) {
+                  conversation = [...conversation, ...(responseMessages as unknown[])];
+                }
+
+                if (finishReason === "tool-calls" && (stepToolCalls?.length ?? 0) > 0) {
+                  continue;
+                }
+                break;
+              }
+
+              console.error(
+                "[/api/director] manual loop finished: iterations:",
+                iterations,
+                "tools:",
+                toolsCalled.join(",") || "none",
+                "ms:",
+                Date.now() - startedAt,
+              );
+
+              if (iterations >= MAX_TOOL_ITERATIONS) {
+                const limitId = "limite";
+                const limitText = UI_LABELS.director.limiteAtteinte;
+                writer.write({ type: "text-start", id: limitId } as never);
+                writer.write({ type: "text-delta", id: limitId, delta: limitText } as never);
+                writer.write({ type: "text-end", id: limitId } as never);
+              }
+            } catch (err) {
+              let detail: string;
+              if (err instanceof Error) detail = `${err.name}: ${err.message}\n${err.stack ?? ""}`;
+              else if (typeof err === "object" && err !== null) {
+                try {
+                  detail = JSON.stringify(err, Object.getOwnPropertyNames(err));
+                } catch {
+                  detail = String(err);
+                }
+              } else detail = String(err);
+              console.error("[/api/director] manual-loop error:", detail);
+              // Actionable FR diagnostics: HTTP status + provider body ≤500ch.
+              const eRec = (err ?? {}) as Record<string, unknown>;
+              const statusCode =
+                typeof eRec.statusCode === "number" ? ` — HTTP ${eRec.statusCode}` : "";
+              let providerBody = "";
+              const rawBody = eRec.responseBody;
+              if (typeof rawBody === "string" && rawBody.length > 0) {
+                providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${rawBody.slice(0, 500)}`;
+              } else if (rawBody != null) {
+                try {
+                  providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${JSON.stringify(rawBody).slice(0, 500)}`;
+                } catch {
+                  /* ignore */
+                }
+              }
+              const baseMessage = (err as Error)?.message ?? String(err);
+              const message = `${UI_LABELS.director.arretDirecteur} : ${baseMessage}${statusCode}${providerBody}`;
+              const errId = "err";
+              writer.write({ type: "text-start", id: errId } as never);
+              writer.write({ type: "text-delta", id: errId, delta: message } as never);
+              writer.write({ type: "text-end", id: errId } as never);
+              writer.write({ type: "error", errorText: message } as never);
+            }
           },
         });
 
-return createUIMessageStreamResponse({ stream });
+        return createUIMessageStreamResponse({ stream });
       },
     },
   },
