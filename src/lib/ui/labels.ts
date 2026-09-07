@@ -246,6 +246,7 @@ export const UI_LABELS = {
       "Demandez au Director de générer un média, ou lancez un flux créatif depuis le panneau Flux.",
     graphe: "flux",
     statistiqueVide: "—",
+    suite: "Afficher la suite",
   },
   lineage: {
     titre: "Origines",
@@ -539,32 +540,6 @@ export function jobStatusLabel(status: string): string {
 export const CONN_LABELS = {
   reconnecting: "Reconnexion…",
   offline: "Hors ligne — reconnexion auto…",
-} as const;
-
-/** Jobs panel strings (WS6 — minimal FR touch, WS5 owns the rest). */
-export const JOBS_LABELS = {
-  title: "Rendus",
-  running: "en cours",
-  total: "total",
-  empty:
-    "Aucun rendu pour l'instant. Demandez au Director de générer un média, ou lancez un flux créatif.",
-  showMore: "Afficher plus",
-} as const;
-
-/** Lineage DAG strings (WS6). */
-export const LINEAGE_LABELS = {
-  title: "Origine",
-  parents: "Sources",
-  seed: "Sélection",
-  children: "Réutilisé dans",
-  root: "aucune source — média d'origine",
-  rerun: "Rejouer",
-  fork: "Dupliquer",
-  diff: "Comparer",
-  rerunHint: "Bientôt — rejoue le flux qui a produit ce média",
-  forkHint: "Bientôt — duplique ce média en gardant son origine",
-  diffHint: "Bientôt — compare les paramètres avec le parent",
-  loading: "Chargement de l'origine…",
 } as const;
 
 /* ------------------------------------------------------------------ */
