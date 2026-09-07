@@ -85,6 +85,9 @@ export function DirectorPanel() {
         cloudflareAccountId,
         cloudflareApiKey,
         groqApiKey,
+        // Stable per-conversation id → forwarded as x-opencode-session
+        // (required by OpenCode Go for routing + prompt caching).
+        sessionId: currentId ?? undefined,
       },
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }),

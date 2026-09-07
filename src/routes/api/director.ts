@@ -32,6 +32,7 @@ export const Route = createFileRoute("/api/director")({
           cloudflareAccountId?: string;
           cloudflareApiKey?: string;
           groqApiKey?: string;
+          sessionId?: string;
         };
         if (!body?.projectId) return new Response("projectId required", { status: 400 });
         if (!body?.apiKey) return new Response("apiKey required", { status: 400 });
@@ -53,6 +54,10 @@ export const Route = createFileRoute("/api/director")({
         // produces an opaque provider 500 — fail clean instead.
         const modelId = (body.model ?? "kimi-k2.7-code").trim() || "kimi-k2.7-code";
         const apiKey = (body.apiKey ?? "").trim();
+        // Stable session id per conversation — OpenCode Go requires it as
+        // x-opencode-session for routing + prompt caching (400 otherwise).
+        // Falls back to a per-project id when the client sends none.
+        const sessionId = (body.sessionId ?? "").trim() || `lilium-${projectId}`;
 
         // Unified catalogue = builtin + user custom models.
         const models = [...CATALOG, ...(body.customModels ?? [])];
@@ -341,6 +346,10 @@ export const Route = createFileRoute("/api/director")({
               messages: conversation as never,
               tools: tools as never,
               toolsContext: undefined as never,
+              headers: {
+                "x-opencode-session": sessionId,
+                "User-Agent": "lilium-studio-director/1.0",
+              },
             } as never);
 
             for (const tc of step.toolCalls ?? []) toolsCalled.push(tc.toolName);

@@ -307,3 +307,25 @@ git push origin main
   `47ba387..4b37a87`; (2) confirm whether the latest production build
   succeeded or failed (and surface the error); (3) force a fresh
   production deploy of `origin/main` HEAD.
+
+### Suivi — 400 MissingSessionID d'OpenCode Go (2026-09-07)
+- Après republish, le Director répondait `AI_APICallError` 500 puis,
+  une fois l'erreur détaillée côté UI (commit `a38ab89`), le vrai
+  message est apparu : `Request is missing x-opencode-session`
+  (HTTP 400, `MissingSessionID`).
+- Cause : OpenCode Go exige un `x-opencode-session` stable par
+  conversation (routage + prompt caching, cf.
+  https://opencode.ai/docs/go/#where-can-i-use-it). Notre provider
+  (`createOpenAICompatible`, `src/lib/opencode-go-provider.server.ts`)
+  ne l'envoyait pas.
+- Fix : le client envoie `sessionId` (= id de conversation Director),
+  la route l'utilise pour le header `x-opencode-session` (fallback
+  `lilium-<projectId>`), + `User-Agent: lilium-studio-director/1.0`
+  comme la doc le recommande.
+- ⚠️ Point ouvert : d'après la table des endpoints de la doc,
+  `muse-spark-1.3-contributor` passe par `/v1/responses` (Responses
+  API), pas `/v1/chat/completions` comme notre provider actuel. Si
+  muse-spark échoue encore après le fix header (alors que les modèles
+  chat/completions passent), il faudra câbler l'endpoint responses —
+  pas de dépendance ajoutée pour l'instant (`@ai-sdk/openai` absent,
+  install volontairement évitée).
