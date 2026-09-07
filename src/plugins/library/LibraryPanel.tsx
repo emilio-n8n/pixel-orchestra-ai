@@ -327,7 +327,7 @@ export function LibraryPanel() {
                   {UI_LABELS.library.importer}
                 </button>
                 <button
-                  onClick={() => kernel.notify?.(UI_LABELS.library.demanderDirector, "info")}
+                  onClick={() => kernel.notify?.(UI_LABELS.library.aideAssistant, "info")}
                   className={`h-8 rounded-lg border border-[var(--line)] px-3.5 text-[12px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] ${FOCUS_RING}`}
                 >
                   {UI_LABELS.library.demanderDirector}

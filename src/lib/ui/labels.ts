@@ -355,6 +355,7 @@ export const UI_LABELS = {
       "Importez vos fichiers ou demandez au Director de générer images, voix et musiques.",
     importer: "Importer",
     demanderDirector: "Demander au Director",
+    aideAssistant: "Décrivez votre scène à l’Assistant, dans le panneau de droite.",
     rechercher: "Rechercher un média…",
     filtreTous: "Tous",
     importEnCours: "Import…",
