@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MousePointerSquareDashed, Code2, Upload, X, Type as TypeIcon } from "lucide-react";
 import { useKernel, useRegistrySnapshot } from "@/kernel/react";
 import { useLibrary } from "@/plugins/library/store";

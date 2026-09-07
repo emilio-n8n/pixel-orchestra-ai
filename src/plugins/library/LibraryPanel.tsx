@@ -411,7 +411,15 @@ function AssetCard({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       onDragOver={
         isPending
           ? (e) => {
