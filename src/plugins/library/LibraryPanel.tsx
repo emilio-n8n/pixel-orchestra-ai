@@ -45,9 +45,9 @@ export function LibraryPanel() {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<(typeof KIND_FILTERS)[number]>("all");
   const [fulfillingId, setFulfillingId] = useState<string | null>(null);
-  const [provenance, setProvenance] = useState<Record<string, { tool: string | null; parentCount: number }>>(
-    {},
-  );
+  const [provenance, setProvenance] = useState<
+    Record<string, { tool: string | null; parentCount: number }>
+  >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const lastMutation = useKernelEvents(1)
@@ -234,12 +234,21 @@ export function LibraryPanel() {
             : "border-[var(--line)] text-[var(--text-dim)]"
         }`}
       >
-        <button onClick={() => fileInputRef.current?.click()} className={`cursor-pointer ${FOCUS_RING} rounded`} disabled={busy}>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className={`cursor-pointer ${FOCUS_RING} rounded`}
+          disabled={busy}
+        >
           <span className="block text-sm text-[var(--text-muted)]">
-            {UI_LABELS.library.depot} <span className="text-[var(--accent)] underline">{UI_LABELS.library.parcourir}</span>
+            {UI_LABELS.library.depot}{" "}
+            <span className="text-[var(--accent)] underline">{UI_LABELS.library.parcourir}</span>
           </span>
-          <span className="mono mt-1 block text-[10px] uppercase tracking-widest">{UI_LABELS.library.formats}</span>
-          {busy ? <span className="mt-1 block text-[11px]">{UI_LABELS.library.importEnCours}</span> : null}
+          <span className="mono mt-1 block text-[10px] uppercase tracking-widest">
+            {UI_LABELS.library.formats}
+          </span>
+          {busy ? (
+            <span className="mt-1 block text-[11px]">{UI_LABELS.library.importEnCours}</span>
+          ) : null}
         </button>
         <input
           ref={fileInputRef}
@@ -256,7 +265,10 @@ export function LibraryPanel() {
 
       <div className="flex shrink-0 items-center gap-2 px-4 pb-2">
         <div className="relative min-w-0 flex-1">
-          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-dim)]" />
+          <Search
+            size={13}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-dim)]"
+          />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -276,7 +288,11 @@ export function LibraryPanel() {
                 : "border-[var(--line)] text-[var(--text-dim)] hover:border-[var(--line-strong)] hover:text-[var(--text-muted)]"
             }`}
           >
-            {k === "all" ? UI_LABELS.library.filtreTous : k === "pending" ? UI_LABELS.library.enAttente : kindLabel(k)}
+            {k === "all"
+              ? UI_LABELS.library.filtreTous
+              : k === "pending"
+                ? UI_LABELS.library.enAttente
+                : kindLabel(k)}
           </button>
         ))}
       </div>
@@ -353,7 +369,9 @@ export function LibraryPanel() {
               disabled={loadingMore}
               className={`rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50 ${FOCUS_RING}`}
             >
-              {loadingMore ? UI_LABELS.library.chargement : UI_LABELS.library.chargerPlus(assets.length, total)}
+              {loadingMore
+                ? UI_LABELS.library.chargement
+                : UI_LABELS.library.chargerPlus(assets.length, total)}
             </button>
           </div>
         )}
@@ -461,7 +479,10 @@ function AssetCard({
         )}
       </div>
       {isPending && asset.prompt ? (
-        <div className="line-clamp-2 text-[10px] leading-snug text-[var(--text-dim)]" title={asset.prompt}>
+        <div
+          className="line-clamp-2 text-[10px] leading-snug text-[var(--text-dim)]"
+          title={asset.prompt}
+        >
           {asset.prompt}
         </div>
       ) : null}
@@ -469,7 +490,9 @@ function AssetCard({
         <div className="flex items-center justify-between gap-1 text-[10px] text-[var(--text-dim)]">
           <span className="truncate" title={provenance.tool}>
             {toolLabel(provenance.tool)}
-            {provenance.parentCount > 0 ? ` · ${provenance.parentCount} parent${provenance.parentCount > 1 ? "s" : ""}` : ""}
+            {provenance.parentCount > 0
+              ? ` · ${provenance.parentCount} parent${provenance.parentCount > 1 ? "s" : ""}`
+              : ""}
           </span>
           <span
             role="button"
@@ -537,12 +560,16 @@ function KindPreview({ asset }: { asset: AssetRow }) {
     return (
       <div className="flex flex-col items-center gap-1.5 p-3 text-center">
         <KindIcon kind={asset.pendingKind ?? "pending"} size={26} />
-        <span className="px-2 text-[10px] leading-snug text-[var(--text-dim)]">{UI_LABELS.library.depotCompleter}</span>
+        <span className="px-2 text-[10px] leading-snug text-[var(--text-dim)]">
+          {UI_LABELS.library.depotCompleter}
+        </span>
       </div>
     );
   }
   if (asset.kind === "image" && asset.url) {
-    return <img src={asset.url} alt={asset.name} loading="lazy" className="h-full w-full object-cover" />;
+    return (
+      <img src={asset.url} alt={asset.name} loading="lazy" className="h-full w-full object-cover" />
+    );
   }
   if (asset.kind === "image" && asset.blobHash) {
     return <ImageThumb hash={asset.blobHash} alt={asset.name} />;
@@ -628,8 +655,7 @@ function AudioWaveform({ asset }: { asset: AssetRow }) {
       const step = Math.floor(w / n);
       const gap = Math.max(1, Math.floor(step / 4));
       const barW = Math.max(1, step - gap);
-      const accent =
-        getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#8b5cf6";
+      const accent = getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#8b5cf6";
       ctx.fillStyle = accent;
       peaks.forEach((p, i) => {
         const bh = Math.max(2, p * h * 0.9);
@@ -701,7 +727,13 @@ function AudioWaveform({ asset }: { asset: AssetRow }) {
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2">
       <canvas ref={canvasRef} className="h-12 w-full" />
       {audioSrc ? (
-        <audio controls src={audioSrc} preload="none" className="h-6 w-full" onClick={(e) => e.stopPropagation()} />
+        <audio
+          controls
+          src={audioSrc}
+          preload="none"
+          className="h-6 w-full"
+          onClick={(e) => e.stopPropagation()}
+        />
       ) : (
         <span className="flex items-center gap-1 text-[10px] text-[var(--text-dim)]">
           <Music size={11} />

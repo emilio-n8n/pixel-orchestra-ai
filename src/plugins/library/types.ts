@@ -88,7 +88,9 @@ export function dedupeKeyOf(a: Pick<AssetRow, "supabaseId" | "blobHash" | "id">)
 }
 
 /** Client-side safety net: drop duplicates by supabase_id, then blob hash. */
-export function dedupeAssets<T extends Pick<AssetRow, "supabaseId" | "blobHash" | "id">>(assets: T[]): T[] {
+export function dedupeAssets<T extends Pick<AssetRow, "supabaseId" | "blobHash" | "id">>(
+  assets: T[],
+): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const a of assets) {

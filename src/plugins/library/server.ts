@@ -95,10 +95,7 @@ function cloudRowToAsset(r: {
     id: r.id,
     projectId: r.project_id,
     kind: r.kind as AssetKind,
-    name:
-      (typeof meta.name === "string" && meta.name) ||
-      r.prompt ||
-      `${r.kind} asset`,
+    name: (typeof meta.name === "string" && meta.name) || r.prompt || `${r.kind} asset`,
     mime: r.mime,
     sizeBytes: typeof meta.size_bytes === "number" ? meta.size_bytes : 0,
     blobHash: null,
@@ -134,7 +131,9 @@ async function syncToSupabase(
     .from("assets")
     .createSignedUrl(filename, 60 * 60 * 24 * 365);
   if (signErr || !urlData?.signedUrl) {
-    console.warn(`[library] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename`);
+    console.warn(
+      `[library] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename`,
+    );
   }
   const url = urlData?.signedUrl ?? filename;
   const { data, error: rowErr } = await supabase
@@ -154,7 +153,14 @@ async function syncToSupabase(
   return { id: data.id, url, storagePath: filename };
 }
 
-function emitImported(projectId: string, id: string, kind: string, name: string, size: number, hash: string | null) {
+function emitImported(
+  projectId: string,
+  id: string,
+  kind: string,
+  name: string,
+  size: number,
+  hash: string | null,
+) {
   try {
     getKernel().events.emit({
       type: "AssetImported",
@@ -284,7 +290,9 @@ export const fulfillPendingAsset = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = getDb();
     const storage = getStorage();
-    const pending = db.prepare("SELECT * FROM assets WHERE id = ? AND kind = 'pending'").get<RawRow>(data.assetId);
+    const pending = db
+      .prepare("SELECT * FROM assets WHERE id = ? AND kind = 'pending'")
+      .get<RawRow>(data.assetId);
     if (!pending) throw new Error("pending asset not found");
     const meta = parseMeta(pending.meta_json);
     const bytes = Uint8Array.from(atob(data.bytesBase64), (c) => c.charCodeAt(0));
@@ -323,7 +331,12 @@ export const fulfillPendingAsset = createServerFn({ method: "POST" })
       data.mime,
       ref.size,
       ref.hash,
-      JSON.stringify({ ...meta, supabase_id: supabaseId, storage_path: storagePath, status: "ready" }),
+      JSON.stringify({
+        ...meta,
+        supabase_id: supabaseId,
+        storage_path: storagePath,
+        status: "ready",
+      }),
       now,
       data.assetId,
     );
@@ -413,10 +426,15 @@ export const replaceAsset = createServerFn({ method: "POST" })
               .from("assets")
               .createSignedUrl(filename, 60 * 60 * 24 * 365);
             if (signErr || !urlData?.signedUrl) {
-              console.warn(`[library] replace: createSignedUrl failed (${signErr?.message ?? "empty"})`);
+              console.warn(
+                `[library] replace: createSignedUrl failed (${signErr?.message ?? "empty"})`,
+              );
             }
             extraMeta.storage_path = filename;
-            await context.supabase.from("assets").update({ url: urlData?.signedUrl ?? filename }).eq("id", sbId);
+            await context.supabase
+              .from("assets")
+              .update({ url: urlData?.signedUrl ?? filename })
+              .eq("id", sbId);
           }
         }
       } else {
@@ -441,7 +459,9 @@ export const replaceAsset = createServerFn({ method: "POST" })
     const asset = row ? rowToAsset(row) : undefined;
     try {
       getKernel().events.emit({ type: "AssetUpdated", assetId: data.assetId });
-    } catch { /* kernel not ready */ }
+    } catch {
+      /* kernel not ready */
+    }
     return { asset };
   });
 
@@ -461,7 +481,10 @@ export const updateHtmlAsset = createServerFn({ method: "POST" })
         await context.supabase.storage.from("assets").update(prevMeta.storage_path, bytes, {
           contentType: "text/html",
         });
-        await context.supabase.from("assets").update({ prompt: data.html.slice(0, 200) }).eq("id", sbId);
+        await context.supabase
+          .from("assets")
+          .update({ prompt: data.html.slice(0, 200) })
+          .eq("id", sbId);
       }
     } catch (e) {
       console.warn("[library] Supabase html update failed (local updated):", e);
@@ -473,7 +496,9 @@ export const updateHtmlAsset = createServerFn({ method: "POST" })
     const asset = row ? rowToAsset(row) : undefined;
     try {
       getKernel().events.emit({ type: "AssetUpdated", assetId: data.assetId });
-    } catch { /* kernel not ready */ }
+    } catch {
+      /* kernel not ready */
+    }
     return { asset };
   });
 
@@ -493,7 +518,11 @@ export const listAssets = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const from = data.offset;
     const to = data.offset + data.limit - 1;
-    const { data: rows, error, count } = await context.supabase
+    const {
+      data: rows,
+      error,
+      count,
+    } = await context.supabase
       .from("assets")
       .select("id, project_id, kind, mime, url, prompt, meta, created_at", { count: "exact" })
       .eq("owner_id", context.userId)
@@ -708,7 +737,9 @@ export const getAssetsProvenance = createServerFn({ method: "POST" })
         if (out[id]) continue;
         try {
           const prov = db
-            .prepare("SELECT capability_id, source_asset_ids_json FROM asset_provenance WHERE asset_id = ?")
+            .prepare(
+              "SELECT capability_id, source_asset_ids_json FROM asset_provenance WHERE asset_id = ?",
+            )
             .get<{ capability_id: string | null; source_asset_ids_json: string }>(id);
           if (prov) {
             let parentCount = 0;

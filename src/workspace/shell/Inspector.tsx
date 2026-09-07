@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { MousePointerSquareDashed, Code2, Upload, X, Type as TypeIcon } from "lucide-react";
 import { useKernel, useRegistrySnapshot } from "@/kernel/react";
 import { useLibrary } from "@/plugins/library/store";
-import { replaceAsset, replaceClipAsset, updateHtmlAsset, getAssetBytes } from "@/plugins/library/server";
+import {
+  replaceAsset,
+  replaceClipAsset,
+  updateHtmlAsset,
+  getAssetBytes,
+} from "@/plugins/library/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBlock } from "@/components/ui/error-block";
 import { kindLabel, UI_LABELS } from "@/lib/ui/labels";
@@ -69,7 +74,13 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
   const kernel = useKernel();
   const takeGroup = takeGroupOf(asset);
   const [takes, setTakes] = useState<
-    Array<{ id: string; url: string | null; prompt: string | null; meta: unknown; created_at: string }>
+    Array<{
+      id: string;
+      url: string | null;
+      prompt: string | null;
+      meta: unknown;
+      created_at: string;
+    }>
   >([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +118,7 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
     };
   }, [takeGroup]);
 
-  const useTake = useCallback(
+  const applyTake = useCallback(
     async (takeId: string, label: string) => {
       setBusyId(takeId);
       setError(null);
@@ -169,7 +180,9 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                 <div className="flex min-w-0 items-center gap-2 text-[11px] text-[var(--text)]">
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold ${
-                      isCurrent ? "bg-[var(--accent)] text-[var(--accent-fg)]" : "bg-[var(--surface-3)] text-[var(--text-muted)]"
+                      isCurrent
+                        ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                        : "bg-[var(--surface-3)] text-[var(--text-muted)]"
                     }`}
                   >
                     {label}
@@ -177,7 +190,9 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                   <span className="truncate" title={displayName}>
                     {displayName}
                   </span>
-                  {tDur ? <span className="mono shrink-0 text-[10px] text-[var(--text-dim)]">{tDur}</span> : null}
+                  {tDur ? (
+                    <span className="mono shrink-0 text-[10px] text-[var(--text-dim)]">{tDur}</span>
+                  ) : null}
                   {isCurrent ? (
                     <span className="shrink-0 text-[9px] uppercase tracking-widest text-[var(--accent-strong)]">
                       actif
@@ -186,7 +201,7 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                 </div>
                 {!isCurrent ? (
                   <button
-                    onClick={() => void useTake(t.id, label)}
+                    onClick={() => void applyTake(t.id, label)}
                     disabled={busyId !== null}
                     className="shrink-0 rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                     title={UI_LABELS.inspector.remplacerTake}
@@ -197,7 +212,13 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                 ) : null}
               </div>
               {t.url ? (
-                <audio controls src={t.url} className="h-7 w-full" preload="none" aria-label={UI_LABELS.inspector.ecouterPrise(label)} />
+                <audio
+                  controls
+                  src={t.url}
+                  className="h-7 w-full"
+                  preload="none"
+                  aria-label={UI_LABELS.inspector.ecouterPrise(label)}
+                />
               ) : null}
             </div>
           );
@@ -225,7 +246,12 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
     <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
         <div className="t-meta">{UI_LABELS.shell.planSelectionne}</div>
-        <button onClick={() => selectClip(null)} title={UI_LABELS.shell.deselectionner} aria-label={UI_LABELS.shell.deselectionner} className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
+        <button
+          onClick={() => selectClip(null)}
+          title={UI_LABELS.shell.deselectionner}
+          aria-label={UI_LABELS.shell.deselectionner}
+          className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        >
           <X size={12} />
         </button>
       </div>
@@ -233,7 +259,10 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
         <Row k={UI_LABELS.inspector.piste} v={clip.track} />
         <Row k={UI_LABELS.inspector.debut} v={`${((clip.start_ms ?? 0) / 1000).toFixed(2)} s`} />
         <Row k={UI_LABELS.inspector.duree} v={`${((clip.duration_ms ?? 0) / 1000).toFixed(2)} s`} />
-        <Row k={UI_LABELS.inspector.contenu} v={isSilence ? "Silence" : kindLabel(clip.assets?.kind ?? "other")} />
+        <Row
+          k={UI_LABELS.inspector.contenu}
+          v={isSilence ? "Silence" : kindLabel(clip.assets?.kind ?? "other")}
+        />
         {clip.assets?.prompt ? (
           <div className="pt-1">
             <div className="text-[11px] text-[var(--text-dim)]">Prompt</div>
@@ -286,14 +315,21 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
         <div className="t-meta flex items-center gap-1.5">
           <TypeIcon size={11} /> {UI_LABELS.inspector.sousTitre}
         </div>
-        <button onClick={() => selectClip(null)} title={UI_LABELS.shell.deselectionner} aria-label={UI_LABELS.shell.deselectionner} className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
+        <button
+          onClick={() => selectClip(null)}
+          title={UI_LABELS.shell.deselectionner}
+          aria-label={UI_LABELS.shell.deselectionner}
+          className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        >
           <X size={12} />
         </button>
       </div>
 
       <div className="mt-2.5 space-y-2">
         <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.texte}</div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+            {UI_LABELS.inspector.texte}
+          </div>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -304,7 +340,9 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.police}</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+              {UI_LABELS.inspector.police}
+            </div>
             <select
               value={font}
               onChange={(e) => setFont(e.target.value)}
@@ -318,7 +356,9 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             </select>
           </div>
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.taille}</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+              {UI_LABELS.inspector.taille}
+            </div>
             <input
               type="number"
               min={10}
@@ -329,7 +369,9 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             />
           </div>
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.couleur}</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+              {UI_LABELS.inspector.couleur}
+            </div>
             <div className="flex h-7 items-center gap-1.5 rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5">
               <input
                 type="color"
@@ -342,7 +384,9 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             </div>
           </div>
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.position}</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+              {UI_LABELS.inspector.position}
+            </div>
             <select
               value={position}
               onChange={(e) => setPosition(e.target.value)}
@@ -387,13 +431,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-function AssetInspector({
-  asset,
-  onClose,
-}: {
-  asset: AssetRow;
-  onClose: () => void;
-}) {
+function AssetInspector({ asset, onClose }: { asset: AssetRow; onClose: () => void }) {
   const [editingHtml, setEditingHtml] = useState(false);
   const [htmlDraft, setHtmlDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -422,7 +460,11 @@ function AssetInspector({
       try {
         const buf = new Uint8Array(await file.arrayBuffer());
         await replaceAsset({
-          data: { assetId: asset.id, mime: file.type || "application/octet-stream", bytesBase64: bytesToBase64(buf) },
+          data: {
+            assetId: asset.id,
+            mime: file.type || "application/octet-stream",
+            bytesBase64: bytesToBase64(buf),
+          },
         });
       } catch (e) {
         setError((e as Error).message);
@@ -450,7 +492,12 @@ function AssetInspector({
     <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
         <div className="t-meta">{UI_LABELS.shell.mediaSelectionne}</div>
-        <button onClick={onClose} title={UI_LABELS.shell.deselectionner} aria-label={UI_LABELS.shell.deselectionner} className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
+        <button
+          onClick={onClose}
+          title={UI_LABELS.shell.deselectionner}
+          aria-label={UI_LABELS.shell.deselectionner}
+          className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        >
           <X size={12} />
         </button>
       </div>

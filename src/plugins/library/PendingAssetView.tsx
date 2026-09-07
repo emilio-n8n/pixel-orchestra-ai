@@ -1,5 +1,13 @@
 import { useCallback, useState } from "react";
-import { Code2, File as FileIcon, FileText, Film, Hourglass, Image as ImageIcon, Music } from "lucide-react";
+import {
+  Code2,
+  File as FileIcon,
+  FileText,
+  Film,
+  Hourglass,
+  Image as ImageIcon,
+  Music,
+} from "lucide-react";
 import { fulfillPendingAsset } from "./server";
 import { UI_LABELS, kindLabel } from "@/lib/ui/labels";
 import { ErrorBlock } from "@/components/ui/error-block";
@@ -134,7 +142,9 @@ export function PendingAssetView({
                 e.target.value = "";
               }}
             />
-            <span className="text-sm">{busy ? UI_LABELS.library.depotEnCours : UI_LABELS.library.depotFichier}</span>
+            <span className="text-sm">
+              {busy ? UI_LABELS.library.depotEnCours : UI_LABELS.library.depotFichier}
+            </span>
             <span className="mono mt-1 text-[10px] uppercase tracking-widest">
               {UI_LABELS.library.toutFormat(asset.pendingKind ?? "média")}
             </span>
