@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { MousePointerSquareDashed, Code2, Upload, X, Type as TypeIcon } from "lucide-react";
-import { useRegistrySnapshot } from "@/kernel/react";
+import { useKernel, useRegistrySnapshot } from "@/kernel/react";
 import { useLibrary } from "@/plugins/library/store";
-import { replaceAsset, updateHtmlAsset, getAssetBytes } from "@/plugins/library/server";
+import { replaceAsset, replaceClipAsset, updateHtmlAsset, getAssetBytes } from "@/plugins/library/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBlock } from "@/components/ui/error-block";
 import { kindLabel, UI_LABELS } from "@/lib/ui/labels";
@@ -10,6 +10,7 @@ import { usePanelStore } from "@/stores/panels";
 import { supabase } from "@/integrations/supabase/client";
 import { useTimelineUi, type TimelineClip } from "@/plugins/ui-timeline/store";
 import type { AssetRow } from "@/plugins/library/types";
+import { takeGroupOf, takeIndexOf, takeLabel } from "@/plugins/library/types";
 
 const FONT_OPTIONS = [
   { value: "system-ui, sans-serif", label: "Système" },
@@ -65,26 +66,40 @@ export function Inspector() {
 
 /** A/B/C take switcher for multi-take voice assets (generate_voice_takes). */
 function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
-  const takeGroup = typeof asset.meta?.take_group === "string" ? asset.meta.take_group : null;
-  const currentIndex =
-    typeof asset.meta?.take_index === "number" ? asset.meta.take_index : null;
+  const kernel = useKernel();
+  const takeGroup = takeGroupOf(asset);
   const [takes, setTakes] = useState<
-    Array<{ id: string; url: string | null; name: string | null; meta: unknown; created_at: string }>
+    Array<{ id: string; url: string | null; prompt: string | null; meta: unknown; created_at: string }>
   >([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [placed, setPlaced] = useState(false);
+  const [placedLabel, setPlacedLabel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!takeGroup) return;
     let alive = true;
     supabase
       .from("assets")
-      .select("id, url, name, meta, created_at")
+      .select("id, url, prompt, meta, created_at")
       .eq("meta->>take_group", takeGroup)
       .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (alive) setTakes((data ?? []) as typeof takes);
+      .then(({ data, error: qErr }) => {
+        if (!alive) return;
+        if (qErr) {
+          setError(qErr.message);
+          return;
+        }
+        const rows = ((data ?? []) as unknown as typeof takes).slice().sort((a, b) => {
+          const am = (a.meta ?? {}) as Record<string, unknown>;
+          const bm = (b.meta ?? {}) as Record<string, unknown>;
+          const ai = typeof am.take_index === "number" ? am.take_index : 0;
+          const bi = typeof bm.take_index === "number" ? bm.take_index : 0;
+          return ai - bi;
+        });
+        setTakes(rows);
+      })
+      .catch((e) => {
+        if (alive) setError((e as Error).message);
       });
     return () => {
       alive = false;
@@ -92,41 +107,40 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
   }, [takeGroup]);
 
   const useTake = useCallback(
-    async (takeId: string) => {
+    async (takeId: string, label: string) => {
       setBusyId(takeId);
       setError(null);
       try {
-        const { data: clip } = await supabase
+        // Find the clip carrying the current take (or any sibling take) so
+        // switching keeps the exact timeline position.
+        const siblingIds = takes.map((t) => t.id);
+        const { data: clip, error: clipErr } = await supabase
           .from("timeline_clips")
-          .select("id, duration_ms")
-          .eq("asset_id", asset.id)
+          .select("id")
+          .in("asset_id", siblingIds.length > 0 ? siblingIds : [asset.id])
+          .limit(1)
           .maybeSingle();
+        if (clipErr) throw new Error(clipErr.message);
         if (!clip) {
           setError(UI_LABELS.inspector.takeSansTimeline);
           return;
         }
-        const t = takes.find((x) => x.id === takeId);
-        const tMeta = (t?.meta ?? {}) as Record<string, unknown>;
-        await supabase
-          .from("timeline_clips")
-          .update({
-            asset_id: takeId,
-            ...(typeof tMeta.duration_ms === "number" && tMeta.duration_ms > 0
-              ? { duration_ms: tMeta.duration_ms }
-              : {}),
-          })
-          .eq("id", clip.id);
-        setPlaced(true);
+        // One-click Utiliser via the library's replace_clip_asset: the clip
+        // keeps its position and resizes to the take's real duration.
+        await replaceClipAsset({ data: { clipId: clip.id, newAssetId: takeId } });
+        setPlacedLabel(label);
+        kernel.notify?.(UI_LABELS.inspector.priseAppliquee(label), "success");
       } catch (e) {
         setError((e as Error).message);
       } finally {
         setBusyId(null);
       }
     },
-    [asset.id, takes],
+    [asset.id, takes, kernel],
   );
 
   if (!takeGroup) return null;
+  void takeIndexOf(asset);
 
   return (
     <div className="mt-3 rounded border border-[var(--line)] bg-[var(--surface-1)] p-2">
@@ -134,55 +148,63 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
         {UI_LABELS.inspector.prisesVoix(takes.length)}
       </div>
       <div className="space-y-1.5">
-        {takes.map((t, i) => {
-          const label = ["A", "B", "C", "D", "E"][i] ?? `${i + 1}`;
-          const isCurrent = t.id === asset.id;
+        {takes.map((t) => {
           const tMeta = (t.meta ?? {}) as Record<string, unknown>;
+          const idx = typeof tMeta.take_index === "number" ? tMeta.take_index : takes.indexOf(t);
+          const label = takeLabel(idx);
+          const isCurrent = t.id === asset.id;
           const tDur =
             typeof tMeta.duration_ms === "number"
               ? `${(tMeta.duration_ms / 1000).toFixed(1)}s`
               : null;
+          const displayName =
+            (typeof tMeta.name === "string" && tMeta.name) || t.prompt || `Take ${label}`;
           return (
             <div
               key={t.id}
               className={`rounded border p-1.5 ${isCurrent ? "border-[var(--accent)]/60 bg-[var(--accent-quiet)]" : "border-[var(--line)]"}`}
             >
               <div className="mb-1 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[11px] text-[var(--text)]">
+                <div className="flex min-w-0 items-center gap-2 text-[11px] text-[var(--text)]">
                   <span
-                    className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold ${
                       isCurrent ? "bg-[var(--accent)] text-[var(--accent-fg)]" : "bg-[var(--surface-3)] text-[var(--text-muted)]"
                     }`}
                   >
                     {label}
                   </span>
-                  <span className="truncate">{t.name ?? `Take ${i + 1}`}</span>
-                  {tDur ? <span className="mono text-[10px] text-[var(--text-dim)]">{tDur}</span> : null}
+                  <span className="truncate" title={displayName}>
+                    {displayName}
+                  </span>
+                  {tDur ? <span className="mono shrink-0 text-[10px] text-[var(--text-dim)]">{tDur}</span> : null}
                   {isCurrent ? (
-                    <span className="text-[9px] uppercase tracking-widest text-[var(--accent-strong)]">
+                    <span className="shrink-0 text-[9px] uppercase tracking-widest text-[var(--accent-strong)]">
                       actif
                     </span>
                   ) : null}
                 </div>
                 {!isCurrent ? (
                   <button
-                    onClick={() => void useTake(t.id)}
+                    onClick={() => void useTake(t.id, label)}
                     disabled={busyId !== null}
-                    className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                    className="shrink-0 rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                     title={UI_LABELS.inspector.remplacerTake}
+                    aria-label={UI_LABELS.inspector.ecouterPrise(label)}
                   >
                     {busyId === t.id ? "…" : UI_LABELS.common.utiliser}
                   </button>
                 ) : null}
               </div>
-              {t.url ? <audio controls src={t.url} className="h-7 w-full" preload="none" /> : null}
+              {t.url ? (
+                <audio controls src={t.url} className="h-7 w-full" preload="none" aria-label={UI_LABELS.inspector.ecouterPrise(label)} />
+              ) : null}
             </div>
           );
         })}
       </div>
-      {placed ? (
+      {placedLabel ? (
         <div className="mt-1.5 text-[10px] text-[var(--text-muted)]">
-          {UI_LABELS.inspector.takeApplique}
+          {UI_LABELS.inspector.priseAppliquee(placedLabel)}
         </div>
       ) : null}
       {error ? (
