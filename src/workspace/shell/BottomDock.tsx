@@ -1,6 +1,7 @@
 import { Clapperboard } from "lucide-react";
 import { useRegistrySnapshot } from "@/kernel/react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export function BottomDock() {
   const registry = useRegistrySnapshot();
@@ -12,8 +13,8 @@ export function BottomDock() {
         <EmptyState
           compact
           icon={Clapperboard}
-          title="Espace de montage"
-          description="Ouvrez l'Éditeur pour composer votre séquence sur la timeline."
+          title={UI_LABELS.shell.espaceMontage}
+          description={UI_LABELS.shell.aideMontage}
         />
       </div>
     );

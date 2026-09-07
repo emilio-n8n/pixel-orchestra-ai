@@ -5,7 +5,7 @@ import { usePanelStore } from "@/stores/panels";
 import { useLibrary } from "@/plugins/library/store";
 import { PendingAssetView } from "@/plugins/library/PendingAssetView";
 import { EmptyState } from "@/components/ui/empty-state";
-import { kindLabel, moduleMeta } from "@/lib/ui/labels";
+import { kindLabel, moduleMeta, UI_LABELS } from "@/lib/ui/labels";
 import type { ViewerAsset } from "@/kernel";
 
 export function CenterView() {
@@ -55,19 +55,23 @@ export function CenterView() {
       };
       return (
         <div className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]">
-          <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
+          <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="t-meta">{kindLabel(selected.kind)}</span>
+              <span className="t-meta shrink-0">{kindLabel(selected.kind)}</span>
               <span className="truncate text-[12.5px] text-[var(--text)]" title={selected.name}>
                 {selected.name}
               </span>
             </div>
-            <button onClick={() => setSelected(null)} className="ghost-btn h-7 px-2 text-[12px]">
+            <button
+              onClick={() => setSelected(null)}
+              title={UI_LABELS.common.retour}
+              className="ghost-btn h-7 shrink-0 px-2 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            >
               <ArrowLeft size={13} />
-              Retour
+              {UI_LABELS.common.retour}
             </button>
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="min-h-0 flex-1">
             <Comp asset={asset} />
           </div>
         </div>
@@ -89,8 +93,8 @@ export function CenterView() {
     <div className="h-full bg-[var(--surface-1)]">
       <EmptyState
         icon={Hammer}
-        title={`${moduleMeta(active).label} arrive bientôt`}
-        description="Cet espace de travail est en cours de préparation. Utilisez l'Éditeur et la médiathèque en attendant."
+        title={UI_LABELS.shell.arriveBientot(moduleMeta(active).label)}
+        description={UI_LABELS.shell.aideBientot}
       />
     </div>
   );

@@ -26,15 +26,15 @@ export function RightPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-1)]">
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--line)] px-2">
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--line)] px-2" role="tablist" aria-label={UI_LABELS.shell.proprietes}>
         <TabButton
-          label="Assistant"
+          label={UI_LABELS.director.titre}
           icon={<Sparkles size={13} />}
           active={tab === "chat"}
           onClick={() => setOverride("chat")}
         />
         <TabButton
-          label="Propriétés"
+          label={UI_LABELS.shell.proprietes}
           icon={<SlidersHorizontal size={13} />}
           active={tab === "inspect"}
           onClick={() => setOverride("inspect")}
@@ -61,7 +61,9 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-lg text-[12px] transition-colors duration-150 ease-out ${
+      role="tab"
+      aria-selected={active}
+      className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-lg text-[12px] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
         active
           ? "bg-[var(--surface-3)] text-[var(--text)]"
           : "text-[var(--text-dim)] hover:text-[var(--text-muted)]"

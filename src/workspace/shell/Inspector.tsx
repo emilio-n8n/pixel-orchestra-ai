@@ -4,7 +4,8 @@ import { useRegistrySnapshot } from "@/kernel/react";
 import { useLibrary } from "@/plugins/library/store";
 import { replaceAsset, updateHtmlAsset, getAssetBytes } from "@/plugins/library/server";
 import { EmptyState } from "@/components/ui/empty-state";
-import { kindLabel } from "@/lib/ui/labels";
+import { ErrorBlock } from "@/components/ui/error-block";
+import { kindLabel, UI_LABELS } from "@/lib/ui/labels";
 import { usePanelStore } from "@/stores/panels";
 import { supabase } from "@/integrations/supabase/client";
 import { useTimelineUi, type TimelineClip } from "@/plugins/ui-timeline/store";
@@ -49,8 +50,8 @@ export function Inspector() {
           <EmptyState
             compact
             icon={MousePointerSquareDashed}
-            title="Aucune sélection"
-            description="Sélectionnez un média ou un plan de la timeline pour ajuster ses propriétés."
+            title={UI_LABELS.shell.aucuneSelection}
+            description={UI_LABELS.shell.aideSelection}
           />
         )}
         {panels.map((p) => {
@@ -101,7 +102,7 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
           .eq("asset_id", asset.id)
           .maybeSingle();
         if (!clip) {
-          setError("Ce take n'est pas encore posé sur la timeline — ajoutez-le depuis la médiathèque.");
+          setError(UI_LABELS.inspector.takeSansTimeline);
           return;
         }
         const t = takes.find((x) => x.id === takeId);
@@ -130,7 +131,7 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
   return (
     <div className="mt-3 rounded border border-[var(--line)] bg-[var(--surface-1)] p-2">
       <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
-        Prises de voix ({takes.length})
+        {UI_LABELS.inspector.prisesVoix(takes.length)}
       </div>
       <div className="space-y-1.5">
         {takes.map((t, i) => {
@@ -167,10 +168,10 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                   <button
                     onClick={() => void useTake(t.id)}
                     disabled={busyId !== null}
-                    className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40"
-                    title="Remplacer ce take sur le clip de la timeline"
+                    className="rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                    title={UI_LABELS.inspector.remplacerTake}
                   >
-                    {busyId === t.id ? "…" : "Utiliser"}
+                    {busyId === t.id ? "…" : UI_LABELS.common.utiliser}
                   </button>
                 ) : null}
               </div>
@@ -181,12 +182,12 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
       </div>
       {placed ? (
         <div className="mt-1.5 text-[10px] text-[var(--text-muted)]">
-          Take appliqué — le clip garde sa position et sa durée a été ajustée.
+          {UI_LABELS.inspector.takeApplique}
         </div>
       ) : null}
       {error ? (
-        <div className="mt-1.5 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-1.5 text-[10px] text-[var(--status-err)]">
-          {error}
+        <div className="mt-1.5">
+          <ErrorBlock message={String(error)} error={error} context="inspector.take" compact />
         </div>
       ) : null}
     </div>
@@ -200,16 +201,16 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
   return (
     <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
-        <div className="t-meta">Plan sélectionné</div>
-        <button onClick={() => selectClip(null)} title="Désélectionner" className="ghost-btn h-6 w-6">
+        <div className="t-meta">{UI_LABELS.shell.planSelectionne}</div>
+        <button onClick={() => selectClip(null)} title={UI_LABELS.shell.deselectionner} aria-label={UI_LABELS.shell.deselectionner} className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
           <X size={12} />
         </button>
       </div>
       <div className="mt-2.5 space-y-1.5">
-        <Row k="Piste" v={clip.track} />
-        <Row k="Début" v={`${((clip.start_ms ?? 0) / 1000).toFixed(2)} s`} />
-        <Row k="Durée" v={`${((clip.duration_ms ?? 0) / 1000).toFixed(2)} s`} />
-        <Row k="Contenu" v={isSilence ? "Silence" : kindLabel(clip.assets?.kind ?? "other")} />
+        <Row k={UI_LABELS.inspector.piste} v={clip.track} />
+        <Row k={UI_LABELS.inspector.debut} v={`${((clip.start_ms ?? 0) / 1000).toFixed(2)} s`} />
+        <Row k={UI_LABELS.inspector.duree} v={`${((clip.duration_ms ?? 0) / 1000).toFixed(2)} s`} />
+        <Row k={UI_LABELS.inspector.contenu} v={isSilence ? "Silence" : kindLabel(clip.assets?.kind ?? "other")} />
         {clip.assets?.prompt ? (
           <div className="pt-1">
             <div className="text-[11px] text-[var(--text-dim)]">Prompt</div>
@@ -260,31 +261,31 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
     <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
         <div className="t-meta flex items-center gap-1.5">
-          <TypeIcon size={11} /> Sous-titre
+          <TypeIcon size={11} /> {UI_LABELS.inspector.sousTitre}
         </div>
-        <button onClick={() => selectClip(null)} title="Désélectionner" className="ghost-btn h-6 w-6">
+        <button onClick={() => selectClip(null)} title={UI_LABELS.shell.deselectionner} aria-label={UI_LABELS.shell.deselectionner} className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
           <X size={12} />
         </button>
       </div>
 
       <div className="mt-2.5 space-y-2">
         <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Texte</div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.texte}</div>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
-            className="w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
+            className="w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Police</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.police}</div>
             <select
               value={font}
               onChange={(e) => setFont(e.target.value)}
-              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none"
+              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
             >
               {FONT_OPTIONS.map((f) => (
                 <option key={f.value} value={f.value}>
@@ -294,34 +295,35 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             </select>
           </div>
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Taille</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.taille}</div>
             <input
               type="number"
               min={10}
               max={120}
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
-              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none"
+              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
             />
           </div>
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Couleur</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.couleur}</div>
             <div className="flex h-7 items-center gap-1.5 rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5">
               <input
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
+                aria-label={UI_LABELS.inspector.couleur}
                 className="h-4 w-6 cursor-pointer border-none bg-transparent p-0"
               />
               <span className="mono text-[10px] text-[var(--text-muted)]">{color}</span>
             </div>
           </div>
           <div>
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Position</div>
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">{UI_LABELS.inspector.position}</div>
             <select
               value={position}
               onChange={(e) => setPosition(e.target.value)}
-              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none"
+              className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
             >
               {POSITION_OPTIONS.map((p) => (
                 <option key={p.value} value={p.value}>
@@ -335,23 +337,21 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
         <div className="flex justify-end gap-2 pt-1">
           <button
             onClick={() => selectClip(null)}
-            className="h-7 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="h-7 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
           >
-            Annuler
+            {UI_LABELS.common.annuler}
           </button>
           <button
             onClick={save}
             disabled={busy}
-            className="h-7 rounded-lg bg-[var(--accent)] px-3 text-[11.5px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+            className="h-7 rounded-lg bg-[var(--accent)] px-3 text-[11.5px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
           >
-            {busy ? "Enregistrement…" : "Enregistrer"}
+            {busy ? UI_LABELS.common.enregistrement : UI_LABELS.common.enregistrer}
           </button>
         </div>
 
         {error ? (
-          <div className="rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[10px] text-[var(--status-err)]">
-            {error}
-          </div>
+          <ErrorBlock message={String(error)} error={error} context="inspector.subtitle" compact />
         ) : null}
       </div>
     </div>
@@ -426,16 +426,16 @@ function AssetInspector({
   return (
     <div className="animate-fade-in border-b border-[var(--line)] p-3 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
-        <div className="t-meta">Média sélectionné</div>
-        <button onClick={onClose} title="Désélectionner" className="ghost-btn h-6 w-6">
+        <div className="t-meta">{UI_LABELS.shell.mediaSelectionne}</div>
+        <button onClick={onClose} title={UI_LABELS.shell.deselectionner} aria-label={UI_LABELS.shell.deselectionner} className="ghost-btn h-6 w-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
           <X size={12} />
         </button>
       </div>
       <div className="mt-2.5 space-y-1.5">
-        <Row k="Nom" v={asset.name} />
-        <Row k="Type" v={kindLabel(asset.kind)} />
-        <Row k="Poids" v={formatBytes(asset.sizeBytes)} />
-        <Row k="Créé le" v={new Date(asset.createdAt).toLocaleString("fr-FR")} />
+        <Row k={UI_LABELS.inspector.nom} v={asset.name} />
+        <Row k={UI_LABELS.inspector.type} v={kindLabel(asset.kind)} />
+        <Row k={UI_LABELS.inspector.poids} v={formatBytes(asset.sizeBytes)} />
+        <Row k={UI_LABELS.inspector.creeLe} v={new Date(asset.createdAt).toLocaleString("fr-FR")} />
         {devMode ? (
           <>
             <Row k="id" v={asset.id} />
@@ -455,14 +455,14 @@ function AssetInspector({
             <button
               onClick={() => setEditingHtml(true)}
               disabled={busy}
-              className="flex h-7 items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50"
+              className="flex h-7 items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             >
-              <Code2 size={12} /> Modifier le visuel
+              <Code2 size={12} /> {UI_LABELS.inspector.modifierVisuel}
             </button>
           ) : null}
-          <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)]">
+          <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--accent)]">
             <Upload size={12} />
-            {busy ? "Envoi…" : "Remplacer le fichier"}
+            {busy ? UI_LABELS.common.envoyer : UI_LABELS.inspector.remplacerFichier}
             <input
               type="file"
               className="hidden"
@@ -488,24 +488,24 @@ function AssetInspector({
           <div className="mt-1.5 flex justify-end gap-2">
             <button
               onClick={() => setEditingHtml(false)}
-              className="h-7 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)]"
+              className="h-7 rounded-lg border border-[var(--line)] px-2.5 text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             >
-              Annuler
+              {UI_LABELS.common.annuler}
             </button>
             <button
               onClick={saveHtml}
               disabled={busy}
-              className="h-7 rounded-lg bg-[var(--accent)] px-3 text-[11.5px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50"
+              className="h-7 rounded-lg bg-[var(--accent)] px-3 text-[11.5px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-strong)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             >
-              Enregistrer
+              {UI_LABELS.common.enregistrer}
             </button>
           </div>
         </div>
       ) : null}
 
       {error ? (
-        <div className="mt-2 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[10px] text-[var(--status-err)]">
-          {error}
+        <div className="mt-2">
+          <ErrorBlock message={String(error)} error={error} context="inspector.asset" compact />
         </div>
       ) : null}
     </div>
