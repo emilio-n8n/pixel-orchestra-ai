@@ -64,11 +64,10 @@ const capabilityExec: NodeExecutor = {
 
 export const nodeCapabilityPlugin: PluginManifest = {
   id: "com.lilium.builtin.node-capability",
-  name: "Capability node",
+  name: "Nœud moteur",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  permissions: ["net", "net:https://*", "net:http://localhost:*", "net:http://127.0.0.1:*"],
-  description: "Wraps a connector capability as a node-graph node.",
+  description: "Expose une capacité d’un connecteur comme nœud du flux créatif.",
   contributes: {},
   activate: () => {
     addNodeExecutor({ ...capabilityExec, pluginId: "com.lilium.builtin.node-capability" });

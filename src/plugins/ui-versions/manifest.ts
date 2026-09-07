@@ -6,7 +6,7 @@ export const uiVersionsPlugin: PluginManifest = {
   name: "Versions",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "Creative versioning — snapshots, restore, branch (phase 8).",
+  description: "Versions créatives — instantanés, restauration, branches.",
   contributes: {
     panels: [
       {

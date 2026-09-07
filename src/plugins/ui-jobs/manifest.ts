@@ -3,11 +3,11 @@ import { JobsPanel } from "./JobsPanel";
 
 export const uiJobsPlugin: PluginManifest = {
   id: "com.lilium.builtin.ui-jobs",
-  name: "Jobs",
+  name: "Rendus",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "Live job queue — recent graph runs, statuses, stats.",
+  description: "File des rendus — derniers flux exécutés, statuts, statistiques.",
   contributes: {
-    panels: [{ id: "jobs.center", title: "Jobs", slot: "center", component: JobsPanel, order: 70 }],
+    panels: [{ id: "jobs.center", title: "Rendus", slot: "center", component: JobsPanel, order: 70 }],
   },
 };

@@ -3,7 +3,7 @@ import { VideoViewer } from "./VideoViewer";
 
 export const viewerVideoPlugin: PluginManifest = {
   id: "com.lilium.builtin.viewer-video",
-  name: "Viewer — Video",
+  name: "Visionneuse — Vidéo",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
   contributes: {

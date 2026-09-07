@@ -3,16 +3,16 @@ import { ConnectorsPanel } from "./ConnectorsPanel";
 
 export const connectorsPanelPlugin: PluginManifest = {
   id: "com.lilium.builtin.connectors-panel",
-  name: "Connectors",
+  name: "Connexions",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
   description:
-    "Browse, add and invoke Gradio connectors. Lists registered capabilities, runs them with auto-generated forms.",
+    "Parcourt, ajoute et appelle les connecteurs Gradio. Liste les capacités, les exécute via des formulaires auto-générés.",
   contributes: {
     panels: [
       {
         id: "connectors.center",
-        title: "Connectors",
+        title: "Connexions",
         slot: "center",
         component: ConnectorsPanel,
         order: 60,

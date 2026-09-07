@@ -8,11 +8,11 @@ import type { PluginManifest } from "@/kernel";
  */
 export const directorPlugin: PluginManifest = {
   id: "com.lilium.builtin.director",
-  name: "Director",
+  name: "Assistant",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
   description:
-    "AI Director — generate images, voices, and title cards, and drop them on the timeline.",
+    "Assistant IA — génère images, voix et cartons titres, puis les pose sur la timeline.",
   contributes: {},
   activate: (ctx) => ctx.logger.info("director plugin activated"),
 };

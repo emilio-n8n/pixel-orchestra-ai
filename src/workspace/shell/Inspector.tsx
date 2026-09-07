@@ -15,7 +15,7 @@ import { usePanelStore } from "@/stores/panels";
 import { supabase } from "@/integrations/supabase/client";
 import { useTimelineUi, type TimelineClip } from "@/plugins/ui-timeline/store";
 import type { AssetRow } from "@/plugins/library/types";
-import { takeGroupOf, takeIndexOf, takeLabel } from "@/plugins/library/types";
+import { takeGroupOf, takeLabel } from "@/plugins/library/types";
 
 const FONT_OPTIONS = [
   { value: "system-ui, sans-serif", label: "Système" },
@@ -152,7 +152,6 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
   );
 
   if (!takeGroup) return null;
-  void takeIndexOf(asset);
 
   return (
     <div className="mt-3 rounded border border-[var(--line)] bg-[var(--surface-1)] p-2">
@@ -594,7 +593,7 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024) return `${n} o`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} Ko`;
+  return `${(n / 1024 / 1024).toFixed(1)} Mo`;
 }

@@ -3,7 +3,7 @@ import { ImageViewer } from "./ImageViewer";
 
 export const viewerImagePlugin: PluginManifest = {
   id: "com.lilium.builtin.viewer-image",
-  name: "Viewer — Image",
+  name: "Visionneuse — Image",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
   contributes: {

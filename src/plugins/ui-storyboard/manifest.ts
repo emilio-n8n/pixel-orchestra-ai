@@ -3,15 +3,15 @@ import { StoryboardPanel } from "./StoryboardPanel";
 
 export const uiStoryboardPlugin: PluginManifest = {
   id: "com.lilium.builtin.ui-storyboard",
-  name: "Storyboard",
+  name: "Scènes",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "Scenes and shots — the narrative structure of the project.",
+  description: "Scènes et plans — la structure narrative du projet.",
   contributes: {
     panels: [
       {
         id: "storyboard.center",
-        title: "Storyboard",
+        title: "Scènes",
         slot: "center",
         component: StoryboardPanel,
         order: 20,

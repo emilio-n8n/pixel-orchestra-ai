@@ -3,7 +3,7 @@ import { AudioViewer } from "./AudioViewer";
 
 export const viewerAudioPlugin: PluginManifest = {
   id: "com.lilium.builtin.viewer-audio",
-  name: "Viewer — Audio",
+  name: "Visionneuse — Audio",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
   contributes: {

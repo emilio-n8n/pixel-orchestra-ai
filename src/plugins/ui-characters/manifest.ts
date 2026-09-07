@@ -3,22 +3,22 @@ import { CharactersPanel } from "./CharactersPanel";
 
 export const uiCharactersPlugin: PluginManifest = {
   id: "com.lilium.builtin.ui-characters",
-  name: "Characters",
+  name: "Personnages",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "AI context — manage characters, styles, voices for the project.",
+  description: "Contexte IA — personnages, styles et voix du projet.",
   contributes: {
     panels: [
       {
         id: "characters.center",
-        title: "Characters",
+        title: "Personnages",
         slot: "center",
         component: CharactersPanel,
         order: 50,
       },
       {
         id: "characters.inspector",
-        title: "Characters",
+        title: "Personnages",
         slot: "inspector",
         component: CharactersPanel,
         order: 90,

@@ -19,10 +19,10 @@ const assetExec: NodeExecutor = {
 
 export const nodeAssetPlugin: PluginManifest = {
   id: "com.lilium.builtin.node-asset",
-  name: "Asset node",
+  name: "Nœud média",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "References an existing asset in the project library.",
+  description: "Référence un média existant de la médiathèque du projet.",
   contributes: {},
   activate: () => {
     addNodeExecutor({ ...assetExec, pluginId: "com.lilium.builtin.node-asset" });

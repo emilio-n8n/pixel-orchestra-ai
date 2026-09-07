@@ -3,16 +3,16 @@ import { LineagePanel } from "./LineagePanel";
 
 export const uiLineagePlugin: PluginManifest = {
   id: "com.lilium.builtin.ui-lineage",
-  name: "Lineage",
+  name: "Origines",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
   description:
-    "Inspector panel for asset lineage. Shows the producer node, capability, direct sources, and ancestors/descendants in the asset graph.",
+    "Panneau d’origine des médias. Affiche le nœud producteur, le moteur, les sources directes, parents et dérivés.",
   contributes: {
     panels: [
       {
         id: "lineage.inspector",
-        title: "Lineage",
+        title: "Origines",
         slot: "inspector",
         component: LineagePanel,
         order: 10,

@@ -6,7 +6,7 @@ export const agentCopilotPlugin: PluginManifest = {
   name: "Agent",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "AI copilot — describe what you want, the agent builds the graph.",
+  description: "Copilote IA — décrivez ce que vous voulez, l’agent construit le flux.",
   contributes: {
     panels: [
       {

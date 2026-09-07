@@ -48,10 +48,10 @@ const promptTemplateExec: NodeExecutor = {
 
 export const nodePrimitivesPlugin: PluginManifest = {
   id: "com.lilium.builtin.node-primitives",
-  name: "Primitive nodes",
+  name: "Nœuds de base",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "String, number, and prompt-template node executors.",
+  description: "Nœuds texte, nombre et modèle de prompt.",
   contributes: {},
   activate: () => {
     addNodeExecutor({ ...stringExec, pluginId: "com.lilium.builtin.node-primitives" });

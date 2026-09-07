@@ -103,10 +103,10 @@ const exporterExec: NodeExecutor = {
 
 export const nodeExporterPlugin: PluginManifest = {
   id: "com.lilium.builtin.node-exporter",
-  name: "Exporter node",
+  name: "Nœud export",
   version: "0.1.0",
   engines: { lilium: "^0.1.0" },
-  description: "Saves the upstream value as an asset row + asset_provenance (for lineage).",
+  description: "Enregistre la valeur amont comme média + origine (pour les Origines).",
   contributes: {},
   activate: () => {
     addNodeExecutor({ ...exporterExec, pluginId: "com.lilium.builtin.node-exporter" });
