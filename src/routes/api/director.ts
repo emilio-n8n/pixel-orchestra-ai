@@ -10,12 +10,7 @@ import {
   type UIMessage,
 } from "ai";
 import { z } from "zod";
-import {
-  CATALOG,
-  listByCapability,
-  capLabel,
-  type DirectorModel,
-} from "@/lib/models/catalog";
+import { CATALOG, listByCapability, capLabel, type DirectorModel } from "@/lib/models/catalog";
 import { UI_LABELS } from "@/lib/ui/labels";
 
 export const Route = createFileRoute("/api/director")({
@@ -101,11 +96,11 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "AUDIO OVERLAP: Never let two audio clips overlap on the same track. generate_voice returns the real duration_ms of the audio file in its metadata — trust it, never estimate or guess the duration. add_to_timeline uses that real duration automatically for overlap detection (it never underestimates), so do NOT pass duration_ms for audio clips unless you intentionally want a longer clip. Pay attention to the _warning field returned by add_to_timeline: if present, the clip was shifted or its duration was adjusted. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add." +
           "\n\n" +
-          "HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. \"fade-in + slide-up title with a slow gradient shift and pulsing glow\"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles." +
+          'HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. "fade-in + slide-up title with a slow gradient shift and pulsing glow"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles.' +
           "\n\n" +
-          "TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear (pass ripple:true to close the gap — later clips on the track slide left). Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to \"start the music at Xs with a fade-in\", use update_timeline_clip with start_ms + fade_in_ms on the music clip." +
+          'TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear (pass ripple:true to close the gap — later clips on the track slide left). Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to "start the music at Xs with a fade-in", use update_timeline_clip with start_ms + fade_in_ms on the music clip.' +
           "\n\n" +
-          "SILENCE CLIPS: for pauses, pacing and \"rhythmic narration\" templates, use insert_silence_clip (duration_ms + optional start_ms) — never compute start_ms gaps by hand. A silence clip on a track blocks that time range: other clips placed after it are shifted right by the anti-overlap system automatically. Use silences to create natural pacing between voiceover lines, or to reserve space before/after sounds." +
+          'SILENCE CLIPS: for pauses, pacing and "rhythmic narration" templates, use insert_silence_clip (duration_ms + optional start_ms) — never compute start_ms gaps by hand. A silence clip on a track blocks that time range: other clips placed after it are shifted right by the anti-overlap system automatically. Use silences to create natural pacing between voiceover lines, or to reserve space before/after sounds.' +
           "\n\n" +
           "SUBTITLES: generate_subtitles transcribes a voice and places the captions. To fix a word or restyle captions (font, size, color, position) use edit_subtitles on the subtitle clip — the timeline renders text from the clip meta. Never resize subtitle clips manually; their duration comes from the voice." +
           "\n\n" +
@@ -117,7 +112,7 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           "SFX (generate_sfx): for sound effects there is no built-in model — create a pending asset with a precise description; the user provides the file and you place it on the SFX track when ready (wait_for_user_assets)." +
           "\n\n" +
-          "LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks \"what depends on this asset\" or \"how was this made\", use get_lineage with the asset id.";
+          'LINEAGE: every generated asset records its provenance (tool, prompt, source assets). If the user asks "what depends on this asset" or "how was this made", use get_lineage with the asset id.';
 
         const tools = {
           generate_image: tool({
@@ -152,7 +147,8 @@ export const Route = createFileRoute("/api/director")({
             execute: ({ asset_ids }) => H.waitForUserAssets(ctx, asset_ids),
           }),
           list_pending_assets: tool({
-            description: "List all pending assets (id, kind, prompt) waiting for the user to provide a file.",
+            description:
+              "List all pending assets (id, kind, prompt) waiting for the user to provide a file.",
             inputSchema: z.object({}),
             execute: () => H.listPendingAssets(ctx),
           }),
@@ -258,7 +254,7 @@ export const Route = createFileRoute("/api/director")({
           }),
           update_timeline_clip: tool({
             description:
-              "Edit an existing clip WITHOUT removing/re-adding it: shift it (start_ms), resize it (duration_ms), move it to another track, or apply volume fades (fade_in_ms / fade_out_ms, in milliseconds — used by preview and export). Use this for any surgical edit the user asks for (\"shift the voice by 0.5s\", \"music fade-in of 1s\", \"start the music at 2s\"). Returns a _warning if the new position overlaps another clip on the track.",
+              'Edit an existing clip WITHOUT removing/re-adding it: shift it (start_ms), resize it (duration_ms), move it to another track, or apply volume fades (fade_in_ms / fade_out_ms, in milliseconds — used by preview and export). Use this for any surgical edit the user asks for ("shift the voice by 0.5s", "music fade-in of 1s", "start the music at 2s"). Returns a _warning if the new position overlaps another clip on the track.',
             inputSchema: z.object({
               clip_id: z.string(),
               start_ms: z.number().int().optional(),
@@ -286,11 +282,15 @@ export const Route = createFileRoute("/api/director")({
               duration_ms: z.number().int().optional(),
             }),
             execute: ({ brief, duration_ms }) =>
-              H.createPendingAsset(ctx, "audio", duration_ms ? `${brief} (target duration: ${duration_ms}ms)` : brief),
+              H.createPendingAsset(
+                ctx,
+                "audio",
+                duration_ms ? `${brief} (target duration: ${duration_ms}ms)` : brief,
+              ),
           }),
           get_lineage: tool({
             description:
-              "Show the lineage of an asset: how it was generated (tool + params) and what other assets depend on it. Use to answer questions like \"what depends on this asset?\" or \"how was this made?\".",
+              'Show the lineage of an asset: how it was generated (tool + params) and what other assets depend on it. Use to answer questions like "what depends on this asset?" or "how was this made?".',
             inputSchema: z.object({ asset_id: z.string() }),
             execute: ({ asset_id }) => H.getLineage(ctx, asset_id),
           }),
@@ -300,7 +300,8 @@ export const Route = createFileRoute("/api/director")({
             execute: () => H.listTimeline(ctx),
           }),
           list_assets: tool({
-            description: "List recently created assets in this project. Audio assets include their real duration_ms in meta.",
+            description:
+              "List recently created assets in this project. Audio assets include their real duration_ms in meta.",
             inputSchema: z.object({}),
             execute: () => H.listAssets(ctx),
           }),
@@ -308,9 +309,7 @@ export const Route = createFileRoute("/api/director")({
             description:
               "List all available models across providers with their capabilities. Pass an optional capability filter (chat, image, audio.speech, audio.transcribe).",
             inputSchema: z.object({
-              capability: z
-                .enum(["chat", "image", "audio.speech", "audio.transcribe"])
-                .optional(),
+              capability: z.enum(["chat", "image", "audio.speech", "audio.transcribe"]).optional(),
             }),
             execute: ({ capability }) => {
               const list = capability ? listByCapability(models, capability) : models;

@@ -144,9 +144,10 @@ export const useDirectorStore = create<DirectorStore>()(
             updatedAt: now,
             messages: msgs,
           };
-          conversations = idx >= 0
-            ? conversations.map((c) => (c.id === currentId ? updated : c))
-            : [updated, ...conversations];
+          conversations =
+            idx >= 0
+              ? conversations.map((c) => (c.id === currentId ? updated : c))
+              : [updated, ...conversations];
         }
         set({
           conversationsByProject: { ...state.conversationsByProject, [projectId]: conversations },

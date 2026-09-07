@@ -45,8 +45,8 @@ export function DirectorPanel() {
 
   const conversationsByProject = useDirectorStore((s) => s.conversationsByProject);
   const currentByProject = useDirectorStore((s) => s.currentByProject);
-  const conversations = pid ? conversationsByProject[pid] ?? [] : [];
-  const currentId = pid ? currentByProject[pid] ?? null : null;
+  const conversations = pid ? (conversationsByProject[pid] ?? []) : [];
+  const currentId = pid ? (currentByProject[pid] ?? null) : null;
   const setMessagesStore = useDirectorStore((s) => s.setMessages);
   const createConversation = useDirectorStore((s) => s.createConversation);
   const setCurrentConversation = useDirectorStore((s) => s.setCurrentConversation);
@@ -153,9 +153,13 @@ export function DirectorPanel() {
     markHydrating();
   }
 
-  const currentTitle = conversations.find((c) => c.id === currentId)?.title ?? UI_LABELS.director.titre;
+  const currentTitle =
+    conversations.find((c) => c.id === currentId)?.title ?? UI_LABELS.director.titre;
 
-  if (!pid) return <div className="p-6 text-sm text-[var(--text-muted)]">{UI_LABELS.director.sansProjet}</div>;
+  if (!pid)
+    return (
+      <div className="p-6 text-sm text-[var(--text-muted)]">{UI_LABELS.director.sansProjet}</div>
+    );
   if (!token)
     return (
       <div className="p-6 text-sm text-[var(--text-muted)]">
@@ -170,7 +174,10 @@ export function DirectorPanel() {
     <div className="flex h-full flex-col bg-[var(--surface-1)]">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
         <span
-          onClick={() => { setShowHistory(!showHistory); setShowSettings(false); }}
+          onClick={() => {
+            setShowHistory(!showHistory);
+            setShowSettings(false);
+          }}
           className={`flex-1 cursor-pointer truncate pr-2 text-[11px] font-medium uppercase tracking-[0.16em] ${
             showHistory ? "text-[var(--text)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
           }`}
@@ -188,9 +195,14 @@ export function DirectorPanel() {
             <Plus size={14} />
           </button>
           <button
-            onClick={() => { setShowHistory(!showHistory); setShowSettings(false); }}
+            onClick={() => {
+              setShowHistory(!showHistory);
+              setShowSettings(false);
+            }}
             className={`rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
-              showHistory ? "text-[var(--text)] bg-[var(--surface-3)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+              showHistory
+                ? "text-[var(--text)] bg-[var(--surface-3)]"
+                : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
             title={UI_LABELS.director.historique}
             aria-label={UI_LABELS.director.historique}
@@ -198,9 +210,14 @@ export function DirectorPanel() {
             <History size={14} />
           </button>
           <button
-            onClick={() => { setShowSettings(!showSettings); setShowHistory(false); }}
+            onClick={() => {
+              setShowSettings(!showSettings);
+              setShowHistory(false);
+            }}
             className={`rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
-              showSettings ? "text-[var(--text)] bg-[var(--surface-3)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+              showSettings
+                ? "text-[var(--text)] bg-[var(--surface-3)]"
+                : "text-[var(--text-dim)] hover:text-[var(--text)]"
             }`}
             title={UI_LABELS.director.reglages}
             aria-label={UI_LABELS.director.reglages}
@@ -331,9 +348,7 @@ export function DirectorPanel() {
               placeholder={UI_LABELS.director.jetonApi}
               className="h-7 text-xs"
             />
-            <p className="mt-1 text-[10px] text-[var(--text-dim)]">
-              {UI_LABELS.director.groqAide}
-            </p>
+            <p className="mt-1 text-[10px] text-[var(--text-dim)]">{UI_LABELS.director.groqAide}</p>
           </div>
 
           <div className="border-t border-[var(--line)] pt-2">
@@ -341,7 +356,9 @@ export function DirectorPanel() {
               <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-dim)]">
                 {UI_LABELS.director.mesModeles}
               </span>
-              <span className="text-[10px] text-[var(--text-dim)]">{UI_LABELS.director.modelePersoCompteur(customModels.length)}</span>
+              <span className="text-[10px] text-[var(--text-dim)]">
+                {UI_LABELS.director.modelePersoCompteur(customModels.length)}
+              </span>
             </div>
             {customModels.length > 0 && (
               <div className="mb-2 space-y-1">
@@ -380,20 +397,29 @@ export function DirectorPanel() {
           </div>
         )}
         {messages.length === 0 && apiKey && (
-          <div className="text-[var(--text-muted)]">
-            {UI_LABELS.director.exempleInvite}
-          </div>
+          <div className="text-[var(--text-muted)]">{UI_LABELS.director.exempleInvite}</div>
         )}
         {messages.map((m) => (
-          <div key={m.id} className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3">
+          <div
+            key={m.id}
+            className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3"
+          >
             <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
               {m.role === "user" ? "Vous" : UI_LABELS.director.titre}
             </div>
             {m.parts.map((p, i) => {
-              if (p.type === "text") return <div key={i} className="whitespace-pre-wrap">{p.text}</div>;
+              if (p.type === "text")
+                return (
+                  <div key={i} className="whitespace-pre-wrap">
+                    {p.text}
+                  </div>
+                );
               if (typeof p.type === "string" && p.type.startsWith("tool-"))
                 return (
-                  <div key={i} className="mt-1 rounded bg-[var(--surface-3)] px-2 py-1 text-[11px] text-[var(--text-muted)]">
+                  <div
+                    key={i}
+                    className="mt-1 rounded bg-[var(--surface-3)] px-2 py-1 text-[11px] text-[var(--text-muted)]"
+                  >
                     ⚙ {toolLabel(p.type)}
                   </div>
                 );
@@ -487,7 +513,11 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           type="text"
           value={modelId}
           onChange={(e) => setModelId(e.target.value)}
-          placeholder={provider === "cloudflare" ? "identifiant du modèle (p. ex. @cf/…/flux-1-schnell)" : "URL du point d’accès"}
+          placeholder={
+            provider === "cloudflare"
+              ? "identifiant du modèle (p. ex. @cf/…/flux-1-schnell)"
+              : "URL du point d’accès"
+          }
           className="h-6 flex-1 text-[10px]"
         />
       </div>
@@ -501,7 +531,10 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
         />
         <div className="flex items-center gap-2">
           {CAP_OPTIONS.map((c) => (
-            <label key={c.value} className="flex cursor-pointer items-center gap-0.5 text-[10px] text-[var(--text-muted)]">
+            <label
+              key={c.value}
+              className="flex cursor-pointer items-center gap-0.5 text-[10px] text-[var(--text-muted)]"
+            >
               <input
                 type="checkbox"
                 checked={caps.has(c.value)}
@@ -512,7 +545,12 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
             </label>
           ))}
         </div>
-        <Button size="sm" onClick={submit} disabled={!modelId.trim()} className="h-6 px-2 text-[10px]">
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={!modelId.trim()}
+          className="h-6 px-2 text-[10px]"
+        >
           {UI_LABELS.common.ajouter}
         </Button>
       </div>

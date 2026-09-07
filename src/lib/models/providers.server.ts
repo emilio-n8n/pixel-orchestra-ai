@@ -56,7 +56,9 @@ export async function generateImageCloudflare(
 }
 
 /** Fallback image generation via the Lovable AI Gateway (Gemini). */
-export async function generateImageLovable(prompt: string): Promise<{ mime: string; bytes: Uint8Array }> {
+export async function generateImageLovable(
+  prompt: string,
+): Promise<{ mime: string; bytes: Uint8Array }> {
   const res = await fetch(`${LOVABLE_AI_URL}/chat/completions`, {
     method: "POST",
     headers: {
