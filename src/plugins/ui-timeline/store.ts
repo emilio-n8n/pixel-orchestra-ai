@@ -45,3 +45,72 @@ export function clipTransitions(c: TimelineClip): {
   const outMs = typeof meta.transition_out_ms === "number" ? meta.transition_out_ms : 0;
   return { inMs, outMs };
 }
+
+/* ------------------------------------------------------------------ */
+/* WS2 — gesture + subtitle shared constants (single source).          */
+/* The panel (canvas) and the Inspector (editors) must render the     */
+/* same subtitle style: same defaults, same 120-char clamp.           */
+/* ------------------------------------------------------------------ */
+
+/** Snap step for drag / resize / nudge. */
+export const SNAP_MS = 10;
+/** Minimum clip length — resize and nudge never go below. */
+export const MIN_DURATION_MS = 100;
+/** Arrow nudge step, Shift+arrow fast step. */
+export const NUDGE_MS = 100;
+export const NUDGE_SHIFT_MS = 1000;
+/** Audio lookahead window for the schedule-ahead starter. */
+export const AUDIO_LOOKAHEAD_MS = 200;
+
+/** Snap any ms value to the 10 ms grid. */
+export function snapMs(ms: number): number {
+  return Math.round(ms / SNAP_MS) * SNAP_MS;
+}
+
+export const SUBTITLE_MAX_CHARS = 120;
+
+export const DEFAULT_SUBTITLE_STYLE = {
+  font: "system-ui, sans-serif",
+  size: 28,
+  color: "#ffffff",
+  position: "bottom",
+} as const;
+
+export interface SubtitleStyle {
+  font: string;
+  size: number;
+  color: string;
+  position: "bottom" | "center" | "top";
+}
+
+/** Resolve meta.style → full style with Inspector-identical defaults. */
+export function resolveSubtitleStyle(meta?: Record<string, unknown> | null): SubtitleStyle {
+  const s = (meta?.style ?? {}) as Partial<SubtitleStyle>;
+  const position = s.position === "top" || s.position === "center" ? s.position : "bottom";
+  return {
+    font: typeof s.font === "string" && s.font.length > 0 ? s.font : DEFAULT_SUBTITLE_STYLE.font,
+    size:
+      typeof s.size === "number" && Number.isFinite(s.size)
+        ? Math.min(120, Math.max(10, Math.round(s.size)))
+        : DEFAULT_SUBTITLE_STYLE.size,
+    color:
+      typeof s.color === "string" && s.color.length > 0 ? s.color : DEFAULT_SUBTITLE_STYLE.color,
+    position,
+  };
+}
+
+/** 120-char clamp with ellipsis — canvas and Inspector share it. */
+export function formatSubtitleText(raw: string): string {
+  if (raw.length <= SUBTITLE_MAX_CHARS) return raw;
+  return `${raw.slice(0, SUBTITLE_MAX_CHARS - 1).trimEnd()}…`;
+}
+
+/** True when keyboard shortcuts must stay silent (user is typing). */
+export function isTypingTarget(t: HTMLElement | null): boolean {
+  if (!t) return false;
+  const tag = t.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (t.isContentEditable) return true;
+  if (t.closest?.('[contenteditable="true"]')) return true;
+  return false;
+}
