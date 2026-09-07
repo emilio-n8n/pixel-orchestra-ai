@@ -504,33 +504,84 @@ export const listAssets = createServerFn({ method: "GET" })
 
     const cloud = (rows ?? []).map(cloudRowToAsset);
 
-    // Merge local-only rows on top of the cloud page: pending assets (they
-    // live in the kernel DB by design) and legacy local rows that were never
-    // mirrored to Supabase. Rows that have a supabase_id are owned by the
-    // cloud pagination — never duplicated here.
-    let localOnly: AssetRow[] = [];
+    // Zero-duplicate merge (dedupe keys: supabase_id, then blob hash).
+    // Local rows win over their cloud twins so a pending→ready fulfill
+    // keeps the SAME card id in place (no ghost duplicate, no jump):
+    //  - pending rows always come from local (cloud never has them)
+    //  - local ready rows with a supabase_id replace the matching cloud row
+    //    (enriched with the durable URL) and the cloud twin is dropped
+    //  - legacy local rows without supabase_id dedupe cloud rows by blob hash
+    //  - everything else from the cloud passes through untouched
+    let merged: AssetRow[] = [];
+    let extraLocal = 0;
     try {
       const db = getDb();
       const locals = db
         .prepare("SELECT * FROM assets WHERE project_id = ? ORDER BY created_at DESC")
         .all<RawRow>(data.projectId);
+
+      const pending: AssetRow[] = [];
+      const legacy: AssetRow[] = [];
+      const localReadyBySupabase = new Map<string, AssetRow>();
+      const localHashes = new Set<string>();
       for (const l of locals) {
         const meta = parseMeta(l.meta_json);
         const supabaseId = typeof meta.supabase_id === "string" ? meta.supabase_id : null;
+        const asset = rowToAsset(l);
+        if (l.blob_hash) localHashes.add(l.blob_hash);
+        // Cloud meta may carry the hash for rows created before local sync.
+        const metaHash = typeof meta.blob_hash === "string" ? meta.blob_hash : null;
+        if (metaHash) localHashes.add(metaHash);
         if (l.kind === "pending") {
-          localOnly.push(rowToAsset(l));
-        } else if (!supabaseId) {
-          localOnly.push(rowToAsset(l));
+          pending.push(asset);
+        } else if (supabaseId) {
+          localReadyBySupabase.set(supabaseId, asset);
+        } else {
+          legacy.push(asset);
         }
-        // supabaseId present → the cloud owns this asset (shown on its page).
       }
+
+      const cloudFiltered: AssetRow[] = [];
+      for (const c of cloud) {
+        // 1) supabase_id match → local wins (same logical asset).
+        if (c.supabaseId && localReadyBySupabase.has(c.supabaseId)) {
+          const local = localReadyBySupabase.get(c.supabaseId)!;
+          // Enrich local with the durable cloud URL when local has none.
+          if (!local.url && c.url) local.url = c.url;
+          continue;
+        }
+        // 2) blob-hash match (legacy local without supabase_id) → local wins.
+        if (c.blobHash && localHashes.has(c.blobHash)) continue;
+        cloudFiltered.push(c);
+      }
+
+      // Local ready rows (fulfilled pendings + Director mirrors) keep their
+      // stable local ids and carry the cloud URL — shown in place.
+      const localReady: AssetRow[] = [];
+      for (const [, asset] of localReadyBySupabase) {
+        const twin = cloud.find((c) => c.supabaseId && c.supabaseId === asset.supabaseId);
+        if (twin?.url && !asset.url) asset.url = twin.url;
+        localReady.push(asset);
+      }
+
+      // Pending first (actionable), then everything by recency.
+      const byDate = (a: AssetRow, b: AssetRow) => b.createdAt - a.createdAt;
+      pending.sort(byDate);
+      localReady.sort(byDate);
+      legacy.sort(byDate);
+      cloudFiltered.sort(byDate);
+      merged = [...pending, ...localReady, ...legacy, ...cloudFiltered];
+      // Total = cloud total + truly-local rows (pending + legacy). Local
+      // ready rows are cloud twins, not extras.
+      extraLocal = pending.length + legacy.length;
     } catch {
       /* local kernel DB unavailable — cloud only */
+      merged = cloud;
     }
 
     return {
-      assets: [...localOnly, ...cloud],
-      total: (count ?? rows?.length ?? 0) + localOnly.length,
+      assets: merged,
+      total: (count ?? rows?.length ?? 0) + extraLocal,
     };
   });
 
@@ -542,4 +593,138 @@ export const getAssetBytes = createServerFn({ method: "GET" })
     let bin = "";
     for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
     return { bytesBase64: btoa(bin), size: bytes.byteLength };
+  });
+
+// ---------------------------------------------------------------------------
+// Take switching — swap the asset of an existing clip in place.
+// The clip keeps its position; audio clips resize to the real duration.
+// Used by the Inspector's A/B take comparison (one-click "Utiliser").
+// ---------------------------------------------------------------------------
+
+export const replaceClipAsset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(z.object({ clipId: z.string(), newAssetId: z.string() }))
+  .handler(async ({ data, context }) => {
+    const { data: asset, error: assetErr } = await context.supabase
+      .from("assets")
+      .select("id, kind, meta")
+      .eq("id", data.newAssetId)
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (assetErr || !asset) throw new Error("média introuvable");
+    const meta = (asset.meta ?? {}) as Record<string, unknown>;
+    const patch: Record<string, unknown> = { asset_id: data.newAssetId };
+    if (asset.kind === "audio" && typeof meta.duration_ms === "number" && meta.duration_ms > 0) {
+      patch.duration_ms = meta.duration_ms;
+    }
+    const { data: clip, error } = await context.supabase
+      .from("timeline_clips")
+      .update(patch)
+      .eq("id", data.clipId)
+      .eq("owner_id", context.userId)
+      .select("id, track, start_ms, duration_ms, asset_id")
+      .single();
+    if (error) throw new Error(error.message);
+    try {
+      getKernel().events.emit({ type: "AssetUpdated", assetId: data.newAssetId });
+    } catch {
+      /* kernel not ready */
+    }
+    return { clip };
+  });
+
+// ---------------------------------------------------------------------------
+// Provenance summary for Library cards — tool label + parent count.
+// Reads Supabase asset_provenance (Director) and the local kernel table
+// (node graph) so every card can show its lineage at a glance.
+// ---------------------------------------------------------------------------
+
+export const getAssetsProvenance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(z.object({ assetIds: z.array(z.string()).max(200) }))
+  .handler(async ({ data, context }) => {
+    const out: Record<string, { tool: string | null; parentCount: number }> = {};
+    if (data.assetIds.length === 0) return { provenance: out };
+
+    // Map local ids → supabase ids so Director provenance (keyed by cloud
+    // id) resolves for locally-mirrored rows.
+    const supabaseIds: string[] = [];
+    const localToSupabase = new Map<string, string>();
+    try {
+      const db = getDb();
+      for (const id of data.assetIds) {
+        try {
+          const row = db
+            .prepare("SELECT meta_json FROM assets WHERE id = ?")
+            .get<{ meta_json: string }>(id);
+          if (row) {
+            const meta = parseMeta(row.meta_json);
+            if (typeof meta.supabase_id === "string") {
+              localToSupabase.set(id, meta.supabase_id);
+              supabaseIds.push(meta.supabase_id);
+            }
+          }
+        } catch {
+          /* row missing — still query cloud by raw id */
+        }
+      }
+    } catch {
+      /* local DB unavailable */
+    }
+
+    const queryIds = [...new Set([...data.assetIds, ...supabaseIds])];
+    try {
+      const { data: rows } = await context.supabase
+        .from("asset_provenance")
+        .select("asset_id, tool, source_asset_ids")
+        .in("asset_id", queryIds);
+      const byId = new Map<string, { tool: string | null; parentCount: number }>();
+      for (const r of (rows ?? []) as Array<{
+        asset_id: string;
+        tool: string | null;
+        source_asset_ids: string[] | null;
+      }>) {
+        byId.set(r.asset_id, {
+          tool: r.tool,
+          parentCount: Array.isArray(r.source_asset_ids) ? r.source_asset_ids.length : 0,
+        });
+      }
+      for (const id of data.assetIds) {
+        if (byId.has(id)) out[id] = byId.get(id)!;
+        else if (localToSupabase.has(id) && byId.has(localToSupabase.get(id)!)) {
+          out[id] = byId.get(localToSupabase.get(id)!)!;
+        }
+      }
+    } catch {
+      /* best-effort — cards simply hide the lineage row */
+    }
+
+    // Local node-graph provenance (capability_id) for rows without a
+    // Director entry.
+    try {
+      const db = getDb();
+      for (const id of data.assetIds) {
+        if (out[id]) continue;
+        try {
+          const prov = db
+            .prepare("SELECT capability_id, source_asset_ids_json FROM asset_provenance WHERE asset_id = ?")
+            .get<{ capability_id: string | null; source_asset_ids_json: string }>(id);
+          if (prov) {
+            let parentCount = 0;
+            try {
+              const ids = JSON.parse(prov.source_asset_ids_json) as string[];
+              parentCount = Array.isArray(ids) ? ids.length : 0;
+            } catch {
+              /* empty */
+            }
+            out[id] = { tool: prov.capability_id, parentCount };
+          }
+        } catch {
+          /* no local provenance */
+        }
+      }
+    } catch {
+      /* local DB unavailable */
+    }
+    return { provenance: out };
   });
