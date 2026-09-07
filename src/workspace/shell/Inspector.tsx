@@ -13,7 +13,13 @@ import { ErrorBlock } from "@/components/ui/error-block";
 import { kindLabel, UI_LABELS } from "@/lib/ui/labels";
 import { usePanelStore } from "@/stores/panels";
 import { supabase } from "@/integrations/supabase/client";
-import { useTimelineUi, type TimelineClip } from "@/plugins/ui-timeline/store";
+import {
+  useTimelineUi,
+  DEFAULT_SUBTITLE_STYLE,
+  SUBTITLE_MAX_CHARS,
+  formatSubtitleText,
+  type TimelineClip,
+} from "@/plugins/ui-timeline/store";
 import type { AssetRow } from "@/plugins/library/types";
 import { takeGroupOf, takeLabel } from "@/plugins/library/types";
 
@@ -278,7 +284,7 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
 /** Inline subtitle editor: text + style (font, size, color, position). */
 function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
   const selectClip = useTimelineUi((s) => s.selectClip);
-  const meta = clip.meta ?? {};
+  const meta = useMemo(() => clip.meta ?? {}, [clip.meta]);
   const prevStyle = (meta.style ?? {}) as {
     font?: string;
     size?: number;
@@ -288,12 +294,13 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
   const [text, setText] = useState<string>(
     (meta.text as string | undefined) ?? clip.assets?.prompt ?? "",
   );
-  const [font, setFont] = useState(prevStyle.font ?? "system-ui, sans-serif");
-  const [size, setSize] = useState(prevStyle.size ?? 28);
-  const [color, setColor] = useState(prevStyle.color ?? "#ffffff");
-  const [position, setPosition] = useState(prevStyle.position ?? "bottom");
+  const [font, setFont] = useState(prevStyle.font ?? DEFAULT_SUBTITLE_STYLE.font);
+  const [size, setSize] = useState(prevStyle.size ?? DEFAULT_SUBTITLE_STYLE.size);
+  const [color, setColor] = useState(prevStyle.color ?? DEFAULT_SUBTITLE_STYLE.color);
+  const [position, setPosition] = useState(prevStyle.position ?? DEFAULT_SUBTITLE_STYLE.position);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previewText = formatSubtitleText(text);
 
   const save = useCallback(async () => {
     setBusy(true);
@@ -326,8 +333,13 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
 
       <div className="mt-2.5 space-y-2">
         <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
-            {UI_LABELS.inspector.texte}
+          <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+            <span>{UI_LABELS.inspector.texte}</span>
+            <span
+              className={`mono normal-case tracking-normal ${text.length > SUBTITLE_MAX_CHARS ? "text-[var(--status-warn)]" : ""}`}
+            >
+              {UI_LABELS.inspector.sousTitreCompteur(text.length)}
+            </span>
           </div>
           <textarea
             value={text}
@@ -335,6 +347,31 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             rows={3}
             className="w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
           />
+          <div className="mt-1 text-[10px] text-[var(--text-dim)]">
+            {UI_LABELS.inspector.sousTitreLimite}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+            {UI_LABELS.inspector.sousTitreApercu}
+          </div>
+          <div
+            className={`flex min-h-14 items-center rounded bg-black p-2 ${
+              position === "top"
+                ? "justify-center items-start"
+                : position === "center"
+                  ? "justify-center items-center"
+                  : "justify-center items-end"
+            }`}
+          >
+            <span
+              className="rounded bg-black/55 px-2 py-1 text-center"
+              style={{ fontFamily: font, fontSize: Math.min(20, Math.max(10, size * 0.55)), color }}
+            >
+              {previewText || "…"}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
