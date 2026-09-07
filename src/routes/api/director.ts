@@ -344,6 +344,7 @@ export const Route = createFileRoute("/api/director")({
         const stream = createUIMessageStream({
           execute: async ({ writer }) => {
             let conversation: unknown[] = baseConversation;
+            let completed = false;
             try {
               for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
                 iterations++;
@@ -382,6 +383,7 @@ export const Route = createFileRoute("/api/director")({
                 if (finishReason === "tool-calls" && (stepToolCalls?.length ?? 0) > 0) {
                   continue;
                 }
+                completed = true;
                 break;
               }
 
@@ -394,7 +396,7 @@ export const Route = createFileRoute("/api/director")({
                 Date.now() - startedAt,
               );
 
-              if (iterations >= MAX_TOOL_ITERATIONS) {
+              if (!completed) {
                 const limitId = "limite";
                 const limitText = UI_LABELS.director.limiteAtteinte;
                 writer.write({ type: "text-start", id: limitId } as never);
