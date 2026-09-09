@@ -38,7 +38,7 @@ import {
   type TimelineClip,
 } from "./store";
 import { duckGainAt } from "@/lib/director/ducking";
-import { exportErrorMessage, type ExportPhase } from "@/lib/ui/labels";
+import { EXPORT_LABELS, exportErrorMessage, type ExportPhase } from "@/lib/ui/labels";
 
 /* ---------------- constants (single source for preview + file) ---------------- */
 
@@ -709,83 +709,131 @@ const MEDIA_CHECK_TIMEOUT_MS = 10_000;
 function abortableTimeout(
   ms: number,
   signal: AbortSignal | undefined,
+  onTimeout: () => void,
   onAbort: () => void,
-): { timer: ReturnType<typeof setTimeout>; cleanup: () => void } {
-  const onAb = () => {
+): { cleanup: () => void } {
+  const wrappedAbort = () => {
+    clearTimeout(timer);
     onAbort();
   };
-  signal?.addEventListener("abort", onAb, { once: true });
-  const timer = setTimeout(onAb, ms);
+  signal?.addEventListener("abort", wrappedAbort, { once: true });
+  const timer = setTimeout(() => {
+    signal?.removeEventListener("abort", wrappedAbort);
+    onTimeout();
+  }, ms);
   return {
-    timer,
     cleanup: () => {
       clearTimeout(timer);
-      signal?.removeEventListener("abort", onAb);
+      signal?.removeEventListener("abort", wrappedAbort);
     },
   };
 }
 
 /** Fail in French (with clip position) when an image URL is dead. */
-function checkImageUrl(url: string, clip: TimelineClip, signal?: AbortSignal): Promise<void> {
+function checkImageUrl(
+  url: string,
+  clip: TimelineClip,
+  signal?: AbortSignal,
+): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     // Same CORS mode as the preview preload: a URL that loads here
-    // draws identically in the file.
+    // draws identically in the file — and the loaded element is reused
+    // downstream so the probe never costs a double download.
     img.crossOrigin = "anonymous";
-    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, () =>
-      reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`)),
+    const dead = () => reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`));
+    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, dead, () =>
+      reject(new ExportError("cancelled")),
     );
     img.onload = () => {
       cleanup();
-      resolve();
+      resolve(img);
     };
     img.onerror = () => {
       cleanup();
-      reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`));
+      dead();
     };
     img.src = url;
   });
 }
 
 /** Fail in French (with clip position) when a video URL is dead. */
-function checkVideoUrl(url: string, clip: TimelineClip, signal?: AbortSignal): Promise<void> {
+function checkVideoUrl(
+  url: string,
+  clip: TimelineClip,
+  signal?: AbortSignal,
+): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const ve = document.createElement("video");
     ve.preload = "auto";
     ve.muted = true;
-    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, () =>
-      reject(new ExportError("fetch-failed", `vidéo ${clipLabel(clip)}`)),
-    );
-    const done = (ok: boolean) => {
-      cleanup();
+    const dead = () => {
       ve.removeAttribute("src");
       ve.remove();
-      if (ok) resolve();
-      else reject(new ExportError("fetch-failed", `vidéo ${clipLabel(clip)}`));
+      reject(new ExportError("fetch-failed", `vidéo ${clipLabel(clip)}`));
     };
-    ve.oncanplay = () => done(true);
-    ve.onerror = () => done(false);
+    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, dead, () => {
+      ve.removeAttribute("src");
+      ve.remove();
+      reject(new ExportError("cancelled"));
+    });
+    ve.oncanplay = () => {
+      cleanup();
+      resolve(ve);
+    };
+    ve.onerror = () => {
+      cleanup();
+      dead();
+    };
     ve.src = url;
   });
+}
+
+export interface MediaReady {
+  images: Map<string, HTMLImageElement>;
+  videos: Map<string, HTMLVideoElement>;
 }
 
 /**
  * Upfront availability probe: every image/video clip must actually load
  * (signed URLs can expire between preload and export while staying
  * absolute). Nothing renders black silently — dead media throws FR.
+ * Loaded elements are returned so the export reuses them (no double
+ * download): images feed the frame renderer, videos become the muted
+ * picture sources. Cancel during the probe reports `cancelled`, never
+ * a fake download failure.
  */
-export async function assertMediaReady(clips: TimelineClip[], signal?: AbortSignal): Promise<void> {
+export async function assertMediaReady(
+  clips: TimelineClip[],
+  signal?: AbortSignal,
+): Promise<MediaReady> {
   throwIfCancelled(signal);
+  const images = new Map<string, HTMLImageElement>();
+  const videos = new Map<string, HTMLVideoElement>();
   await Promise.all(
     clips.flatMap((c) => {
       if (c.meta?.silence === true || c.track === "Subtitles") return [];
       const url = c.assets?.url;
       if (!isHttpUrl(url)) return [];
-      if (c.assets?.kind === "image") return [checkImageUrl(url, c, signal)];
-      if (c.assets?.kind === "video") return [checkVideoUrl(url, c, signal)];
+      if (c.assets?.kind === "image") {
+        return [
+          checkImageUrl(url, c, signal).then((img) => {
+            images.set(url, img);
+          }),
+        ];
+      }
+      if (c.assets?.kind === "video") {
+        return [
+          checkVideoUrl(url, c, signal).then((ve) => {
+            videos.set(c.id, ve);
+          }),
+        ];
+      }
       return [];
     }),
   );
+  throwIfCancelled(signal);
+  return { images, videos };
 }
 
 export interface RunExportOpts {
@@ -843,8 +891,9 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
   }
   throwIfCancelled(signal);
   // Availability probe: absolute URLs can still be dead (expired signed
-  // URL, 404, CORS) — those throw FR instead of rendering black.
-  await assertMediaReady(clips, signal);
+  // URL, 404, CORS) — those throw FR instead of rendering black. Loaded
+  // elements are reused below (no double download).
+  const mediaReady = await assertMediaReady(clips, signal);
 
   const prerendered = new Map<string, string>();
   const htmlVideoEls = new Map<string, HTMLVideoElement>();
@@ -914,7 +963,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     // ×dpr), and the preview never flashes while the file encodes.
     const canvas = opts.canvas ?? makeExportCanvas();
     if (canvas.width !== EXPORT_WIDTH || canvas.height !== EXPORT_HEIGHT) {
-      throw new ExportError("unexpected", "canvas d’export 1920×1080 requis");
+      throw new ExportError("unexpected", EXPORT_LABELS.canvasExportRequis);
     }
     stream = canvas.captureStream(EXPORT_FPS);
     const AC: typeof AudioContext =
@@ -1000,7 +1049,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     // Pre-create (preloaded) video elements for the pre-rendered cards
     // and for video-file clips on the Video track.
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new ExportError("unexpected", "canvas 2d indisponible");
+    if (!ctx) throw new ExportError("unexpected", EXPORT_LABELS.canvasIndisponible);
     for (const [clipId, blobUrl] of prerendered) {
       const ve = document.createElement("video");
       ve.src = blobUrl;
@@ -1011,22 +1060,31 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
       document.body.appendChild(ve);
       htmlVideoEls.set(clipId, ve);
     }
+    // Seed with probed elements so even an early failure still
+    // releases them via cleanup() below.
+    mediaReady.videos.forEach((ve, id) => videoEls.set(id, ve));
     for (const c of clips) {
       if (c.track !== "Video" || c.assets?.kind !== "video") continue;
       const url = c.assets.url;
       if (!isHttpUrl(url)) continue;
-      const ve = document.createElement("video");
-      ve.src = url;
+      // Reuse the probed element (already loaded) when available.
+      let ve = videoEls.get(c.id);
+      if (!ve) {
+        ve = document.createElement("video");
+        ve.src = url;
+        videoEls.set(c.id, ve);
+      }
       ve.preload = "auto";
       ve.muted = true;
       (ve as HTMLVideoElement & { playsInline?: boolean }).playsInline = true;
       ve.style.display = "none";
-      document.body.appendChild(ve);
-      videoEls.set(c.id, ve);
+      if (!ve.isConnected) document.body.appendChild(ve);
     }
 
     // ---- phase 3: realtime-paced encode ----
     const totalFrames = Math.max(1, Math.ceil(totalMs / FRAME_MS));
+    // Probed images backstop the preview cache (no double download).
+    const frameGetImage = (url: string) => getImage(url) ?? mediaReady.images.get(url);
     const render = (p: number) =>
       renderTimelineFrame({
         ctx,
@@ -1034,7 +1092,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
         height: canvas.height,
         clips,
         ms: p,
-        getImage,
+        getImage: frameGetImage,
         videoFrameMap: videoEls,
         htmlVideoMap: prerendered,
         htmlVideoEls,
@@ -1124,7 +1182,9 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
         }
         onProgress?.({
           phase: "encode",
-          done: Math.min(totalFrames, htmlFrameIndex(p, totalMs)),
+          // Count (not 0-based index): the last frame reports total, so
+          // the bar reaches the finalize threshold instead of stalling.
+          done: Math.min(totalFrames, htmlFrameIndex(p, totalMs) + (p >= totalMs ? 1 : 0)),
           total: totalFrames,
         });
         if (p >= totalMs) {

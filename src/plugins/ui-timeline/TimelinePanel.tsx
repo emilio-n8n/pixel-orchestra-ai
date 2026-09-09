@@ -86,7 +86,6 @@ export function TimelinePanel() {
   const pendingTimersRef = useRef<number[]>([]);
   const clipsRef = useRef<TimelineClip[]>([]);
   const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
-  const previewHtmlElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   // Muted picture sources for video-file clips (preview + scrub).
   const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const trackAreaRef = useRef<HTMLDivElement>(null);
@@ -376,7 +375,6 @@ export function TimelinePanel() {
       ms,
       getImage: (url) => imgCacheRef.current.get(url),
       videoFrameMap: videoElsRef.current,
-      htmlVideoEls: previewHtmlElsRef.current,
     });
     // Reset so later 2d users (export temp canvas aside) start identity.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -870,6 +868,7 @@ export function TimelinePanel() {
           } catch {
             /* element already gone */
           }
+          audiosRef.current = audiosRef.current.filter((a) => a !== entry.el);
           audioMapRef.current.delete(id);
           continue;
         }

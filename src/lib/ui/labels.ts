@@ -156,6 +156,8 @@ export const EXPORT_LABELS = {
   dureeEstimee: (duree: string) => `Durée estimée ≈ ${duree} + pré-rendu des cartes`,
   imagesIgnorees: (n: number) =>
     `${n} image${n > 1 ? "s" : ""} de carte ignorée${n > 1 ? "s" : ""} au pré-rendu (animation non capturable) — le reste du fichier est intact.`,
+  canvasIndisponible: "canvas 2d indisponible",
+  canvasExportRequis: "canvas d’export 1920×1080 requis",
 } as const;
 
 /** Per-phase progress line shown under the preview while exporting. */
