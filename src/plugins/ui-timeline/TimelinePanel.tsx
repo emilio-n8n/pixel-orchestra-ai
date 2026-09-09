@@ -38,7 +38,6 @@ import {
   EXPORT_HEIGHT as LOGICAL_H,
 } from "./export";
 import { insertSilenceClip } from "./server";
-import { duckGainAt } from "@/lib/director/ducking";
 import {
   EXPORT_LABELS,
   exportErrorMessage,
@@ -81,6 +80,8 @@ export function TimelinePanel() {
   const audiosRef = useRef<HTMLAudioElement[]>([]);
   const audioMapRef = useRef<Map<string, { el: HTMLAudioElement; clip: TimelineClip }>>(new Map());
   const startedIdsRef = useRef<Set<string>>(new Set());
+  const scheduledIdsRef = useRef<Set<string>>(new Set());
+  const pendingTimersRef = useRef<number[]>([]);
   const clipsRef = useRef<TimelineClip[]>([]);
   const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
   const previewHtmlElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -201,19 +202,18 @@ export function TimelinePanel() {
 
   // Ducking gain per track at the (throttled) playhead — drives the
   // breathing gain-dot so the user SEES the duck they hear.
+  // Uses volAt on the ACTIVE clip (fades × ducking), the exact same
+  // source as the audible per-frame path — never a stale curve sample.
   const duckGains = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of TRACKS) {
-      const c = clips.find(
-        (cc) =>
-          cc.track === t &&
-          (cc.meta as { ducking?: { curve?: Array<{ t_ms: number; gain: number }> } } | null)
-            ?.ducking?.curve,
-      );
-      if (!c) continue;
-      const curve = (c.meta as { ducking: { curve: Array<{ t_ms: number; gain: number }> } })
-        .ducking.curve;
-      m.set(t, duckGainAt(curve, playhead));
+      let best = -1;
+      for (const c of clips) {
+        if (c.track !== t) continue;
+        if (playhead < c.start_ms || playhead >= c.start_ms + c.duration_ms) continue;
+        best = Math.max(best, volAt(c, playhead));
+      }
+      if (best >= 0) m.set(t, best);
     }
     return m;
   }, [clips, playhead]);
@@ -231,23 +231,35 @@ export function TimelinePanel() {
   const MAX_IMG_CACHE = 60;
   useEffect(() => {
     const cache = imgCacheRef.current;
+    const live = new Set<string>();
     for (const c of clips) {
       const url = c.assets?.url;
-      if (c.assets?.kind === "image" && isHttpUrl(url) && !cache.has(url)) {
-        // Evict oldest entries first — unbounded growth janks at 100+ items.
-        while (cache.size >= MAX_IMG_CACHE) {
-          const oldest = cache.keys().next();
-          if (oldest.done) break;
-          cache.delete(oldest.value);
-        }
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.decoding = "async";
-        img.src = url;
-        // Warm the decoder off the critical path so first paint doesn't hitch.
-        if (typeof img.decode === "function") img.decode().catch(() => {});
-        cache.set(url, img);
+      if (c.assets?.kind === "image" && isHttpUrl(url)) live.add(url);
+    }
+    // Prune entries whose asset is gone so stale URLs never leak.
+    for (const key of [...cache.keys()]) {
+      if (!live.has(key)) cache.delete(key);
+    }
+    for (const url of live) {
+      const hit = cache.get(url);
+      if (hit) {
+        // True LRU: refresh recency on hit.
+        cache.delete(url);
+        cache.set(url, hit);
+        continue;
       }
+      while (cache.size >= MAX_IMG_CACHE) {
+        const oldest = cache.keys().next();
+        if (oldest.done) break;
+        cache.delete(oldest.value);
+      }
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.decoding = "async";
+      img.src = url;
+      // Warm the decoder off the critical path so first paint doesn't hitch.
+      if (typeof img.decode === "function") img.decode().catch(() => {});
+      cache.set(url, img);
     }
   }, [clips]);
 
@@ -668,6 +680,9 @@ export function TimelinePanel() {
     audiosRef.current = [];
     audioMapRef.current.clear();
     startedIdsRef.current.clear();
+    scheduledIdsRef.current.clear();
+    pendingTimersRef.current.forEach((t) => window.clearTimeout(t));
+    pendingTimersRef.current = [];
   }, []);
 
   const stop = useCallback(() => {
@@ -736,13 +751,20 @@ export function TimelinePanel() {
         return;
       }
       // Schedule-ahead: start clips up to 200 ms before their downbeat.
+      // Audio NEVER starts early: future clips get a timer that fires
+      // exactly on the downbeat (play() is immediate, so starting now
+      // would be up to 200 ms ahead of the playhead).
       for (const c of clipsRef.current) {
         if (!AUDIO_TRACKS.has(c.track) || !isHttpUrl(c.assets?.url)) continue;
-        if (startedIdsRef.current.has(c.id)) continue;
+        if (startedIdsRef.current.has(c.id) || scheduledIdsRef.current.has(c.id)) continue;
         if (p + AUDIO_LOOKAHEAD_MS >= c.start_ms && p < c.start_ms + c.duration_ms) {
-          // Start slightly early only when we are truly ahead; otherwise
-          // start exactly at the clip head on the next frame.
-          if (p >= c.start_ms - AUDIO_LOOKAHEAD_MS) startAudioFor(c, Math.max(p, c.start_ms));
+          if (p >= c.start_ms) {
+            startAudioFor(c, p);
+          } else {
+            scheduledIdsRef.current.add(c.id);
+            const t = window.setTimeout(() => startAudioFor(c, c.start_ms), c.start_ms - p);
+            pendingTimersRef.current.push(t);
+          }
         }
       }
       // Volume envelope each frame: fades + ducking gain.
