@@ -263,8 +263,17 @@ export function TimelinePanel() {
       if (c.assets?.kind === "image" && isHttpUrl(url)) live.add(url);
     }
     // Prune entries whose asset is gone so stale URLs never leak.
+    // Evicted images release their bitmap eagerly (soft leak otherwise).
     for (const key of [...cache.keys()]) {
-      if (!live.has(key)) cache.delete(key);
+      if (!live.has(key)) {
+        const stale = cache.get(key);
+        try {
+          stale?.removeAttribute("src");
+        } catch {
+          /* noop */
+        }
+        cache.delete(key);
+      }
     }
     for (const url of live) {
       const hit = cache.get(url);
@@ -277,6 +286,12 @@ export function TimelinePanel() {
       while (cache.size >= MAX_IMG_CACHE) {
         const oldest = cache.keys().next();
         if (oldest.done) break;
+        const evicted = cache.get(oldest.value);
+        try {
+          evicted?.removeAttribute("src");
+        } catch {
+          /* noop */
+        }
         cache.delete(oldest.value);
       }
       const img = new Image();

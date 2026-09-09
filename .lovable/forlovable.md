@@ -484,11 +484,10 @@ pas de undo/redo timeline, pas de pipeline publish Lovable.
   FR WS3, retry offline silencieux + `ConnPill`, `ErrorBlock` compact
   conservé pour les vraies erreurs (jamais vidé en storm : le DAG stale
   reste affiché).
-- `src/plugins/ui-timeline/TimelinePanel.tsx` : déjà durci WS6 (hook
-  partagé `clips:${projectId}` sur clips+assets, `loadClips` avec
-  `.catch` + retry, `ConnPill` transport, erreurs offline silencieuses sur
-  silence/delete) ; **ajout WS6 perf** : cache préload images **capé LRU
-  60 entrées** (plus de croissance non bornée à 100+ items) + `loading="lazy"`.
+- `src/plugins/ui-timeline/TimelinePanel.tsx` : durci WS6 par étapes
+  (hook partagé + retry + `ConnPill` + cache LRU 60 + `loading="lazy"` —
+  assemblés sur `aef65d1`→`dabc45a` puis `67ddbf2`/`83e3563` ; la phrase
+  d'origine datant tout de `e6ab0ee` était anticipée — corrigée ici).
 - `src/lib/ui/labels.ts` : vocabulaire WS6 redondant (`JOBS_LABELS`,
   `LINEAGE_LABELS`) **supprimé** au profit de `UI_LABELS.jobs/lineage`
   (WS3) — reste `CONN_LABELS` (pastille) + `jobs.suite`. Zéro conflit.
@@ -534,7 +533,20 @@ pas de undo/redo timeline, pas de pipeline publish Lovable.
 
 ### 5. Critique (gauntlet)
 
-- Voir section verdict du critic ci-dessous (WOW explicite exigé avant clôture).
+- Round 1 FAIL (2026-09-09) : M1 sens lineage inversé par double
+  négation ; M2 écritures offline perdues en silence + delete
+  optimiste contradictoire.
+- `f7602a5` : `server.ts` redressé (`listAncestorsBySource` /
+  `listDescendantsBySource`, tags `relation` corrects, appel lisible) ;
+  file d'écritures offline last-write-wins + replay au reconnect
+  (drag/resize/nudge) ; silence/suppression en échec offline →
+  rollback + notice FR (lectures toujours silencieuses) ; retry Jobs
+  séparés ; garde anti-double-fetch timeline ; pastille lineage sur
+  retry réel uniquement ; refs channel en effet ; bitmaps LRU libérés.
+- Suivis assumés (mineurs) : pagination Jobs en refetch total + runs
+  capés 50 ; click-through lineage sur `AssetRow` synthétique ;
+  pas de refetch `visibilitychange` ; listes non virtualisées >150 items.
+- Round 2 en cours — WOW exigé avant clôture.
 
 ---
 

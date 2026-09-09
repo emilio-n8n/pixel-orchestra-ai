@@ -35,9 +35,12 @@ export function useSupabaseChannel(opts: {
   const { name, enabled = true } = opts;
   const [conn, setConn] = useState<ConnState>("live");
   const onEventRef = useRef(opts.onEvent);
-  onEventRef.current = opts.onEvent;
   const buildRef = useRef(opts.build);
-  buildRef.current = opts.build;
+  // Ref writes belong in an effect (concurrent-mode safe), not render.
+  useEffect(() => {
+    onEventRef.current = opts.onEvent;
+    buildRef.current = opts.build;
+  });
 
   useEffect(() => {
     if (!name || !enabled) return;
