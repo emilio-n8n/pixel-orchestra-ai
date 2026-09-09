@@ -27,8 +27,7 @@ export function computeDuckingCurve(input: DuckingInput): GainPoint[] {
   const duckedGain = Math.pow(10, attenuationDb / 20);
   const dt = stepMs / 1000;
 
-  const isActive = (t: number) =>
-    sourceIntervals.some((iv) => t >= iv.start_ms && t < iv.end_ms);
+  const isActive = (t: number) => sourceIntervals.some((iv) => t >= iv.start_ms && t < iv.end_ms);
 
   let gain = 1;
   const points: GainPoint[] = [];
@@ -43,10 +42,7 @@ export function computeDuckingCurve(input: DuckingInput): GainPoint[] {
 }
 
 /** Interpolate the curve at an absolute time (1 outside the sampled range). */
-export function duckGainAt(
-  curve: GainPoint[] | undefined,
-  absMs: number,
-): number {
+export function duckGainAt(curve: GainPoint[] | undefined, absMs: number): number {
   if (!curve || curve.length === 0) return 1;
   if (absMs <= curve[0].t_ms) return curve[0].gain;
   const last = curve[curve.length - 1];

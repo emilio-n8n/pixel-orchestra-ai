@@ -11,9 +11,9 @@ export function HelloPanel() {
         </div>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Bienvenue dans votre espace</h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--text-muted)]">
-          Ici, tout est un plugin. Ce panneau, la barre latérale, les visionneuses, les
-          connexions — le noyau ne fait qu’orchestrer les contrats. Ouvrez la palette de
-          commandes (⌘K) pour voir ce qui est déjà branché.
+          Ici, tout est un plugin. Ce panneau, la barre latérale, les visionneuses, les connexions —
+          le noyau ne fait qu’orchestrer les contrats. Ouvrez la palette de commandes (⌘K) pour voir
+          ce qui est déjà branché.
         </p>
       </div>
       <div className="grid flex-1 grid-cols-2 gap-px overflow-hidden bg-[var(--line)]">

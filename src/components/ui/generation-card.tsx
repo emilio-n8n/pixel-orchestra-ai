@@ -1,6 +1,12 @@
 import { Check, Loader2, X, type LucideIcon } from "lucide-react";
 
-export type GenerationState = "idle" | "queued" | "generating" | "completed" | "failed" | "cancelled";
+export type GenerationState =
+  | "idle"
+  | "queued"
+  | "generating"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export function GenerationCard({
   icon: Icon,
@@ -58,7 +64,11 @@ export function GenerationCard({
       {running ? (
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--surface-4)]">
           <div
-            className={typeof progress === "number" ? "h-full rounded-full" : "h-full w-1/3 rounded-full animate-[indeterminate_1.4s_ease-in-out_infinite]"}
+            className={
+              typeof progress === "number"
+                ? "h-full rounded-full"
+                : "h-full w-1/3 rounded-full animate-[indeterminate_1.4s_ease-in-out_infinite]"
+            }
             style={{
               background: "var(--accent)",
               width: typeof progress === "number" ? `${Math.round(progress * 100)}%` : undefined,

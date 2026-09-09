@@ -51,10 +51,14 @@ function SettingsPage() {
                       <td className="px-3 py-2 text-[var(--text)]">
                         <div>{p.name}</div>
                         {p.description ? (
-                          <div className="text-[11px] text-[var(--text-muted)]">{p.description}</div>
+                          <div className="text-[11px] text-[var(--text-muted)]">
+                            {p.description}
+                          </div>
                         ) : null}
                       </td>
-                      <td className="mono px-3 py-2 text-[11px] text-[var(--text-muted)]">{p.id}</td>
+                      <td className="mono px-3 py-2 text-[11px] text-[var(--text-muted)]">
+                        {p.id}
+                      </td>
                       <td className="mono px-3 py-2 text-[11px] text-[var(--text-muted)]">
                         {p.version}
                       </td>

@@ -13,6 +13,9 @@ export default defineTool({
   handler: async ({ project_id, brief }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const row = await generateHtmlCard(c, brief);
-    return { content: [{ type: "text", text: JSON.stringify(row) }], structuredContent: { asset: row } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(row) }],
+      structuredContent: { asset: row },
+    };
   },
 });

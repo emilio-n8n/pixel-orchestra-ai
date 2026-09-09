@@ -20,6 +20,9 @@ export default defineTool({
   handler: async ({ project_id, ...rest }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const row = await applyDucking(c, rest);
-    return { content: [{ type: "text", text: JSON.stringify(row) }], structuredContent: { ducking: row } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(row) }],
+      structuredContent: { ducking: row },
+    };
   },
 });

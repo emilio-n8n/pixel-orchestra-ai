@@ -7,9 +7,7 @@ function Gate() {
   const [ok, setOk] = useState(false);
   useEffect(() => {
     const next =
-      typeof window !== "undefined"
-        ? window.location.pathname + window.location.search
-        : "/";
+      typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) nav({ to: "/auth", search: { next } });
       else setOk(true);

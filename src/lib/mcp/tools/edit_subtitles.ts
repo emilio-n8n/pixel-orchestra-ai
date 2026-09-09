@@ -25,6 +25,9 @@ export default defineTool({
   handler: async ({ project_id, clip_id, text, style }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const row = await editSubtitles(c, clip_id, text, style);
-    return { content: [{ type: "text", text: JSON.stringify(row) }], structuredContent: { clip: row } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(row) }],
+      structuredContent: { clip: row },
+    };
   },
 });

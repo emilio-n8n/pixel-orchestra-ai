@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { Clock, FileText, Film, Image as ImageIcon, Music, Sparkles, Type as TypeIcon } from "lucide-react";
+import {
+  Clock,
+  FileText,
+  Film,
+  Image as ImageIcon,
+  Music,
+  Sparkles,
+  Type as TypeIcon,
+} from "lucide-react";
 import { Waveform } from "./waveform";
 import { kindLabel } from "@/lib/ui/labels";
 

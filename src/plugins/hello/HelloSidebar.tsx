@@ -11,10 +11,10 @@ export function HelloSidebar() {
       </div>
       <div className="flex-1 overflow-auto p-3 text-[11px] text-[var(--text-muted)]">
         <p>
-          Ce panneau est fourni par le plugin <span className="mono text-[var(--accent)]">hello</span>{" "}
-          (emplacement : <span className="mono">sidebar</span>). Les modules de la barre latérale
-          viennent de <span className="mono">registry.panelsForSlot('sidebar')</span> — aucune
-          liste en dur.
+          Ce panneau est fourni par le plugin{" "}
+          <span className="mono text-[var(--accent)]">hello</span> (emplacement :{" "}
+          <span className="mono">sidebar</span>). Les modules de la barre latérale viennent de{" "}
+          <span className="mono">registry.panelsForSlot('sidebar')</span> — aucune liste en dur.
         </p>
         <div className="mt-3 border-t border-[var(--line)] pt-2">
           <div className="text-[10px] uppercase tracking-widest text-[var(--text-dim)]">

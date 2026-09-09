@@ -33,9 +33,13 @@ async function uploadBinaryAsset(
     upsert: false,
   });
   if (error) throw new Error(`upload failed: ${error.message}`);
-  const { data, error: signErr } = await supabase.storage.from("assets").createSignedUrl(filename, 60 * 60 * 24 * 365);
+  const { data, error: signErr } = await supabase.storage
+    .from("assets")
+    .createSignedUrl(filename, 60 * 60 * 24 * 365);
   if (signErr || !data?.signedUrl) {
-    console.warn(`[director] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename, timeline will skip it`);
+    console.warn(
+      `[director] createSignedUrl failed (${signErr?.message ?? "empty"}) — storing raw filename, timeline will skip it`,
+    );
   }
   return { url: data?.signedUrl ?? filename, storagePath: filename };
 }
@@ -44,7 +48,13 @@ async function insertAsset(
   supabase: SupabaseClient,
   userId: string,
   projectId: string,
-  row: { kind: string; mime: string | null; url: string; prompt: string | null; meta?: Record<string, unknown> },
+  row: {
+    kind: string;
+    mime: string | null;
+    url: string;
+    prompt: string | null;
+    meta?: Record<string, unknown>;
+  },
 ) {
   const { data, error } = await supabase
     .from("assets")
@@ -60,7 +70,7 @@ function uid(prefix: string) {
 }
 
 function wrapFullscreen(html: string): string {
-  let cleaned = html
+  const cleaned = html
     .replace(/^```html\s*/i, "")
     .replace(/```\s*$/i, "")
     .replace(/<!DOCTYPE[^>]*>/gi, "")
@@ -79,16 +89,25 @@ export async function generateHtmlCard(
   brief: string,
 ) {
   // Mirror the director's job/provenance recording for this generation.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loose = ctx.supabase as unknown as SupabaseClient<any>;
   let jobId: string | null = null;
   try {
     const { data } = await loose
       .from("director_jobs")
-      .insert({ owner_id: ctx.userId, project_id: ctx.projectId, kind: "generate_html_card", status: "queued", prompt: brief })
+      .insert({
+        owner_id: ctx.userId,
+        project_id: ctx.projectId,
+        kind: "generate_html_card",
+        status: "queued",
+        prompt: brief,
+      })
       .select("id")
       .single();
     jobId = data?.id ?? null;
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   try {
     const { text } = await generateText({
@@ -101,7 +120,14 @@ export async function generateHtmlCard(
     const bytes = new TextEncoder().encode(wrapped);
 
     // Store in Supabase (timeline / MCP)
-    const { url: storedUrl, storagePath } = await uploadBinaryAsset(ctx.supabase, ctx.userId, ctx.projectId, bytes, "text/html", "html");
+    const { url: storedUrl, storagePath } = await uploadBinaryAsset(
+      ctx.supabase,
+      ctx.userId,
+      ctx.projectId,
+      bytes,
+      "text/html",
+      "html",
+    );
     const supabaseRow = await insertAsset(ctx.supabase, ctx.userId, ctx.projectId, {
       kind: "html",
       mime: "text/html",
@@ -118,7 +144,9 @@ export async function generateHtmlCard(
         params: { brief },
         source_asset_ids: [],
       });
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
 
     // Also store in local kernel (Library / CenterView)
     try {
@@ -130,7 +158,16 @@ export async function generateHtmlCard(
       db.prepare(
         `INSERT INTO assets (id, project_id, kind, name, mime, size_bytes, blob_hash, meta_json, created_at, updated_at)
          VALUES (?, ?, 'html', ?, 'text/html', ?, ?, ?, ?, ?)`,
-      ).run(id, ctx.projectId, `Director HTML Card — ${brief.slice(0, 40)}`, ref.size, ref.hash, JSON.stringify({ storage_path: storagePath, supabase_id: supabaseRow.id }), now, now);
+      ).run(
+        id,
+        ctx.projectId,
+        `Director HTML Card — ${brief.slice(0, 40)}`,
+        ref.size,
+        ref.hash,
+        JSON.stringify({ storage_path: storagePath, supabase_id: supabaseRow.id }),
+        now,
+        now,
+      );
       try {
         getKernel().events.emit({
           type: "AssetImported",
@@ -141,17 +178,37 @@ export async function generateHtmlCard(
           sizeBytes: ref.size,
           blobHash: ref.hash,
         });
-      } catch { /* kernel not ready */ }
-    } catch { /* local kernel not available */ }
+      } catch {
+        /* kernel not ready */
+      }
+    } catch {
+      /* local kernel not available */
+    }
 
     try {
-      if (jobId) await loose.from("director_jobs").update({ status: "completed", finished_at: new Date().toISOString() }).eq("id", jobId);
-    } catch { /* best-effort */ }
+      if (jobId)
+        await loose
+          .from("director_jobs")
+          .update({ status: "completed", finished_at: new Date().toISOString() })
+          .eq("id", jobId);
+    } catch {
+      /* best-effort */
+    }
     return supabaseRow;
   } catch (e) {
     try {
-      if (jobId) await loose.from("director_jobs").update({ status: "failed", error: (e as Error).message ?? String(e), finished_at: new Date().toISOString() }).eq("id", jobId);
-    } catch { /* best-effort */ }
+      if (jobId)
+        await loose
+          .from("director_jobs")
+          .update({
+            status: "failed",
+            error: (e as Error).message ?? String(e),
+            finished_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+    } catch {
+      /* best-effort */
+    }
     throw e;
   }
 }

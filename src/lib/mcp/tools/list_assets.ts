@@ -12,6 +12,9 @@ export default defineTool({
   handler: async ({ project_id }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const rows = await listAssets(c);
-    return { content: [{ type: "text", text: JSON.stringify(rows) }], structuredContent: { assets: rows } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(rows) }],
+      structuredContent: { assets: rows },
+    };
   },
 });

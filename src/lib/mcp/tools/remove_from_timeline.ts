@@ -13,6 +13,9 @@ export default defineTool({
   handler: async ({ project_id, clip_id, ripple }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const row = await removeFromTimeline(c, clip_id, { ripple });
-    return { content: [{ type: "text", text: JSON.stringify(row) }], structuredContent: { removed: row } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(row) }],
+      structuredContent: { removed: row },
+    };
   },
 });

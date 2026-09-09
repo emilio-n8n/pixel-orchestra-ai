@@ -274,10 +274,7 @@ function NodeCard({
       Object.keys(node.params)
         // `capability` and `endpoint` are managed by the connector picker below.
         .filter((k) => !(isCapabilityNode && (k === "capability" || k === "endpoint")))
-        .map((k) => [
-          k,
-          { type: typeof node.params[k] === "number" ? "number" : "string" },
-        ]),
+        .map((k) => [k, { type: typeof node.params[k] === "number" ? "number" : "string" }]),
     ),
   };
   return (
@@ -464,8 +461,8 @@ function CapabilityConfig({
       </label>
       {connectorId && !loadingCaps && caps.length === 0 ? (
         <div className="text-[10px] text-[var(--status-warn)]">
-          No capabilities detected — the endpoint may be unreachable. Try "Probe" in the
-          Connectors tab.
+          No capabilities detected — the endpoint may be unreachable. Try "Probe" in the Connectors
+          tab.
         </div>
       ) : null}
       {connectors.length === 0 ? (

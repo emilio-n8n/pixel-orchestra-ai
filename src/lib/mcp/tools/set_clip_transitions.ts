@@ -18,6 +18,9 @@ export default defineTool({
   handler: async ({ project_id, clip_a_id, clip_b_id, ms }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const row = await setClipTransitions(c, { clip_a_id, clip_b_id, ms });
-    return { content: [{ type: "text", text: JSON.stringify(row) }], structuredContent: { transition: row } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(row) }],
+      structuredContent: { transition: row },
+    };
   },
 });

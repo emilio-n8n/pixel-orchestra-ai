@@ -18,6 +18,9 @@ export default defineTool({
   handler: async ({ project_id, text, voice, n }, ctx: ToolContext) => {
     const c = await mcpCtx(ctx, project_id);
     const row = await generateVoiceTakes(c, text, voice, n);
-    return { content: [{ type: "text", text: JSON.stringify(row) }], structuredContent: { takes: row } };
+    return {
+      content: [{ type: "text", text: JSON.stringify(row) }],
+      structuredContent: { takes: row },
+    };
   },
 });

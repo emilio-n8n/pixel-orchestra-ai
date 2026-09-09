@@ -33,7 +33,9 @@ export function HelloInspector() {
                   <span className="text-[var(--accent)]">{last.type}</span>
                 </>
               ) : (
-                <span className="text-[var(--text-dim)]">— (essayez ⌘K → Bonjour : Ping du bus)</span>
+                <span className="text-[var(--text-dim)]">
+                  — (essayez ⌘K → Bonjour : Ping du bus)
+                </span>
               )}
             </div>
             <div className="mt-2 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">

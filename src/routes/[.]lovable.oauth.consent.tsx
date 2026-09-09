@@ -4,10 +4,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
 // Beta helpers on supabase.auth.oauth (typed shim).
+type AuthDetails = {
+  redirect_url?: string;
+  redirect_to?: string;
+  client?: { name?: string };
+};
+type OAuthError = { message: string };
 type OAuthNS = {
-  getAuthorizationDetails: (id: string) => Promise<{ data: any; error: any }>;
-  approveAuthorization: (id: string) => Promise<{ data: any; error: any }>;
-  denyAuthorization: (id: string) => Promise<{ data: any; error: any }>;
+  getAuthorizationDetails: (
+    id: string,
+  ) => Promise<{ data: AuthDetails | null; error: OAuthError | null }>;
+  approveAuthorization: (
+    id: string,
+  ) => Promise<{ data: AuthDetails | null; error: OAuthError | null }>;
+  denyAuthorization: (
+    id: string,
+  ) => Promise<{ data: AuthDetails | null; error: OAuthError | null }>;
 };
 function oauth(): OAuthNS {
   return (supabase.auth as unknown as { oauth: OAuthNS }).oauth;
@@ -63,9 +75,17 @@ function Consent() {
     const { data, error } = approve
       ? await oauth().approveAuthorization(authorization_id)
       : await oauth().denyAuthorization(authorization_id);
-    if (error) { setBusy(false); setErr(error.message); return; }
+    if (error) {
+      setBusy(false);
+      setErr(error.message);
+      return;
+    }
     const target = safeRedirect(data?.redirect_url ?? data?.redirect_to);
-    if (!target) { setBusy(false); setErr("No redirect returned."); return; }
+    if (!target) {
+      setBusy(false);
+      setErr("No redirect returned.");
+      return;
+    }
     window.location.href = target;
   }
 
@@ -81,8 +101,17 @@ function Consent() {
         </p>
         {err && <div className="text-xs text-red-400">{err}</div>}
         <div className="flex gap-2">
-          <Button disabled={busy} onClick={() => decide(true)} className="flex-1">Approve</Button>
-          <Button disabled={busy} variant="outline" onClick={() => decide(false)} className="flex-1">Deny</Button>
+          <Button disabled={busy} onClick={() => decide(true)} className="flex-1">
+            Approve
+          </Button>
+          <Button
+            disabled={busy}
+            variant="outline"
+            onClick={() => decide(false)}
+            className="flex-1"
+          >
+            Deny
+          </Button>
         </div>
       </div>
     </main>
