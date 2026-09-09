@@ -582,7 +582,8 @@ export function TimelinePanel() {
         },
       });
     } catch (e) {
-      // Offline → silent (auto-flush on reconnect); real errors still surface once.
+      // Offline → honest notice (the write is queued/reported, never
+      // silently dropped); real errors still surface once.
       if (isOfflineError(e)) {
         setActionError(UI_LABELS.timeline.erreurHorsLigne);
         return;

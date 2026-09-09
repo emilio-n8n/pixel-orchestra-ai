@@ -442,7 +442,16 @@ pas de undo/redo timeline, pas de pipeline publish Lovable.
 
 ### 8. Critique (gauntlet)
 
-- Voir section verdict du critic ci-dessous (WOW explicite exigé avant clôture).
+- Round 1 FAIL (2026-09-09) : transport `sessionId` stale, flux sans
+  cadrage, diagnostics sans modèle/session, EN codé en dur, trim
+  partiel, `mcpCtx` sans catalogue.
+- Correctifs `b6cfebb`/`cbab1e1`/`4daf050`/`4460321`/`8d69aed` :
+  transport réactif (body résolu par requête), cadrage `message-start/
+  end` + notice de troncature, diagnostic modèle+session, 100 % FR
+  via labels, trim complet + catalogue perso validé, `mcpCtx` avec
+  catalogue, carte HTML documentée côté MCP.
+- Round 2 : **WOW — zéro bloqueur/majeur** (vérifié file:line,
+  `tsc`/`lint`/`bun test` verts).
 
 ---
 
@@ -546,7 +555,8 @@ pas de undo/redo timeline, pas de pipeline publish Lovable.
 - Suivis assumés (mineurs) : pagination Jobs en refetch total + runs
   capés 50 ; click-through lineage sur `AssetRow` synthétique ;
   pas de refetch `visibilitychange` ; listes non virtualisées >150 items.
-- Round 2 en cours — WOW exigé avant clôture.
+- Round 2 : **WOW — zéro bloqueur/majeur** (vérifié file:line,
+  `tsc`/`lint`/`bun test` verts).
 
 ---
 
@@ -668,11 +678,16 @@ externes, pas de publish Lovable (déploiement seulement observé).
 
 ### Critique (gauntlet)
 
-- Parité preview/export vérifiée par construction (mêmes `volAt`,
-  même boîte sous-titre, même dissolve — moteur partagé `export.ts`).
-- Drags 60 fps par rAF + cache ; édition complète au clavier seul.
-- **vs lovable.dev** : timeline façon Figma — chaque pixel répond.
-- **Bloqueur : aucun. Majeur : aucun. Verdict : WOW.**
+- Round 1 FAIL (2026-09-09) : pastille duck menteuse, audio 200 ms en
+  avance, EN résiduel, `ctx.font` implicite, resize avec chevauchement,
+  LRU factice + 11 mineurs.
+- Correctifs `c6be957`/`83e3563`/`08eb3a2`/`472796a` : duck = `volAt`
+  audible, audio au downbeat (timer), zéro EN, fonte explicite +
+  Inspector aligné, resize clampé, vraie LRU, ripple optimiste, carte
+  HTML à la frame, HiDPI réactif.
+- Round 2 FAIL : Espace sur sliders mort + timer stale → `6b316be`.
+- Round 3 : **WOW — zéro bloqueur/majeur** (vérifié file:line,
+  `tsc`/`lint`/`bun test` verts).
 
 ---
 
@@ -737,8 +752,12 @@ externes, pas de publish Lovable (déploiement seulement observé).
 ### Critique (gauntlet)
 
 - Round 1 FAIL (B1 vidéo noire, B2 code mort, B3 noir silencieux, M1
-  biais 150 ms, M2/M4 sur-vendus, M5 façade, M6 freeze) → tout corrigé
-  ci-dessus, relecture round 2 en cours.
+  biais 150 ms, M2/M4 sur-vendus, M5 façade, M6 freeze) → `4c3d24d`/
+  `8cabed9`/`d6cc9cb`/`dc9f3a3`.
+- Round 2 FAIL (D1 cancel, D3 progress, D4 labels, D2 double download,
+  D5 fuite) → `6a98ea7` + journal honnête `028ab8d`.
+- Round 3 : **WOW — zéro bloqueur/majeur** (vérifié file:line,
+  `tsc`/`lint`/`bun test` verts).
 - **vs lovable.dev** : un clic, zéro anxiété de réglages, phases FR,
   annulation qui répond, fichier au conteneur promis.
 
@@ -799,6 +818,9 @@ Le « grep EN : 0 » ci-dessus était **faux** (round 1 FAIL, 11 bloqueurs
 
 ### Critique (gauntlet)
 
-- Round 1 FAIL (voir correctifs ci-dessus) → round 2 en cours.
-- **vs lovable.dev** : espacements/type 8pt, micro-interactions,
-  diagnostic 1-clic partout, palette clavier complète.
+- Round 1 FAIL (11 bloqueurs + 12 majeurs EN/clavier, voir correctifs
+  ci-dessus) → `5566647`/`196d33f`.
+- Round 2 FAIL : NodeGraph + visionneuses non balayés → `2e74112`.
+- Round 3 FAIL : reliquats AgentPanel/méta/palette → `30a4867`.
+- Round 4 : **WOW — zéro bloqueur/majeur** (balayage complet vérifié,
+  `tsc`/`lint`/`bun test` verts).
