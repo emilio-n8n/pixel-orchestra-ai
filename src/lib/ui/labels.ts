@@ -83,7 +83,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 export function toolLabel(rawType: string): string {
   const name = rawType.replace(/^tool-/, "");
-  return TOOL_LABELS[name] ?? "Étape créative";
+  return TOOL_LABELS[name] ?? UI_LABELS.director.etapeCreative;
 }
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
