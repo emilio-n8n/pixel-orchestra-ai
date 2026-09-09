@@ -333,6 +333,8 @@ export const UI_LABELS = {
     arretDirecteur: "L’Assistant s’est interrompu",
     limiteAtteinte:
       "L’Assistant a atteint sa limite de planification. Reformulez avec une consigne plus courte et directe.",
+    reponseTronquee:
+      "La réponse a été tronquée (limite de longueur). Demandez la suite ou raccourcissez la consigne.",
     reponseFournisseur: "Réponse du fournisseur",
     statutHttp: (status: number) => `HTTP ${status}`,
     erreurHttp: (service: string, status: number, extrait: string) =>
@@ -340,6 +342,17 @@ export const UI_LABELS = {
     erreurConfigCloudflare: "Cloudflare non configuré (identifiant de compte + jeton API requis).",
     erreurConfigGroq: "Clé Groq non configurée (Réglages de l’Assistant → Groq).",
     erreurConfigLovable: "Clé Lovable non configurée.",
+    erreurImageVide: (service: string) =>
+      `${service} n’a renvoyé aucune image. Reformulez le brief ou réessayez.`,
+    echecTeleversement: (detail: string) => `Échec du téléversement : ${detail}`,
+    avertissementDureeAudio: (reelleS: string, demandeeS: string) =>
+      `⚠️ Le fichier audio dure ${reelleS} s mais vous avez demandé ${demandeeS} s — le plan aurait été tronqué. Durée réelle ${reelleS} s utilisée.`,
+    avertissementChevauchement: (n: number, piste: string, actuelMs: number, demandeMs: number) =>
+      `⚠️ Chevauchement avec ${n} plan(s) sur la piste « ${piste} ». Début décalé à ${actuelMs} ms (demandé : ${demandeMs} ms). Libérez de la place avec remove_from_timeline, ou utilisez des pistes séparées (Audio = voix, Musique = fond, Effets = bruitages) pour superposer les sons.`,
+    avertissementChevauchementMaj: (piste: string, debutMs: number, finMs: number) =>
+      `⚠️ Ce plan chevauche désormais un autre plan sur « ${piste} » (${debutMs} ms → ${finMs} ms). Déplacez ou raccourcissez l’un des deux pour garder un mix propre.`,
+    modeleImageNonPrisEnCharge: (id: string) =>
+      `Le modèle « ${id} » n’est pas pris en charge pour la génération d’images ici (seuls les modèles Cloudflare configurés le sont). Relancez sans model_id pour utiliser le moteur par défaut.`,
     actionCopierDiagnostic: "Copier le diagnostic",
     diagnosticCopie: "Diagnostic copié.",
     etapeCreative: "Étape créative",

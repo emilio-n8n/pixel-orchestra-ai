@@ -11,7 +11,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { CATALOG, listByCapability, capLabel, type DirectorModel } from "@/lib/models/catalog";
-import { UI_LABELS } from "@/lib/ui/labels";
+import { UI_LABELS, providerBodySlice } from "@/lib/ui/labels";
 
 export const Route = createFileRoute("/api/director")({
   server: {
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/api/director")({
       POST: async ({ request }) => {
         const auth = request.headers.get("Authorization") ?? "";
         const token = auth.replace(/^Bearer\s+/i, "");
-        if (!token) return new Response("Unauthorized", { status: 401 });
+        if (!token) return new Response("Non autorisé", { status: 401 });
 
         const body = (await request.json()) as {
           messages: UIMessage[];
@@ -32,8 +32,8 @@ export const Route = createFileRoute("/api/director")({
           groqApiKey?: string;
           sessionId?: string;
         };
-        if (!body?.projectId) return new Response("projectId required", { status: 400 });
-        if (!body?.apiKey) return new Response("apiKey required", { status: 400 });
+        if (!body?.projectId) return new Response("projectId requis", { status: 400 });
+        if (!body?.apiKey) return new Response("apiKey requise", { status: 400 });
 
         const { createClient } = await import("@supabase/supabase-js");
         const supabase = createClient(
@@ -45,11 +45,11 @@ export const Route = createFileRoute("/api/director")({
           },
         );
         const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-        if (userErr || !userData.user) return new Response("Unauthorized", { status: 401 });
+        if (userErr || !userData.user) return new Response("Non autorisé", { status: 401 });
         const userId = userData.user.id;
         const projectId = body.projectId;
-        // Trim: a pasted model id or API key with stray whitespace
-        // produces an opaque provider 500 — fail clean instead.
+        // Trim every pasted credential/id: stray whitespace produces an
+        // opaque provider 500 — fail clean instead.
         const modelId = (body.model ?? "kimi-k2.7-code").trim() || "kimi-k2.7-code";
         const apiKey = (body.apiKey ?? "").trim();
         // Stable session id per conversation — OpenCode Go requires it as
@@ -57,12 +57,24 @@ export const Route = createFileRoute("/api/director")({
         // Falls back to a per-project id when the client sends none.
         const sessionId = (body.sessionId ?? "").trim() || `lilium-${projectId}`;
 
-        // Unified catalogue = builtin + user custom models.
-        const models = [...CATALOG, ...(body.customModels ?? [])];
+        // Unified catalogue = builtin + sanitized user custom models
+        // (dedupe by id keeping builtin, drop malformed entries so the
+        // LLM is never advertised a model that cannot run).
+        const seenIds = new Set(CATALOG.map((m) => m.id));
+        const customModels = (body.customModels ?? []).filter((m) => {
+          if (!m || typeof m.id !== "string" || typeof m.modelId !== "string") return false;
+          const id = m.id.trim();
+          const mid = m.modelId.trim();
+          if (!id || !mid || seenIds.has(id)) return false;
+          if (!Array.isArray(m.capabilities) || m.capabilities.length === 0) return false;
+          seenIds.add(id);
+          return true;
+        });
+        const models = [...CATALOG, ...customModels];
         const creds = {
-          cloudflareAccountId: body.cloudflareAccountId,
-          cloudflareApiKey: body.cloudflareApiKey,
-          groqApiKey: body.groqApiKey,
+          cloudflareAccountId: body.cloudflareAccountId?.trim() || undefined,
+          cloudflareApiKey: body.cloudflareApiKey?.trim() || undefined,
+          groqApiKey: body.groqApiKey?.trim() || undefined,
         };
 
         const H = await import("@/lib/director/handlers.server");
@@ -361,14 +373,14 @@ export const Route = createFileRoute("/api/director")({
                 } as never);
 
                 // Stream text + tool-call deltas live to the client.
-                // Inner start/finish are suppressed — the outer stream
-                // owns the message lifecycle; steps still flow through.
+                // Full message framing per step so useChat mounts each
+                // step as it streams (no frameless pop-in at the end).
                 writer.merge(
                   toUIMessageStream({
                     stream: result.stream as never,
                     tools: tools as never,
-                    sendStart: false,
-                    sendFinish: false,
+                    sendStart: true,
+                    sendFinish: true,
                   } as never) as never,
                 );
                 await result.consumeStream();
@@ -382,6 +394,18 @@ export const Route = createFileRoute("/api/director")({
 
                 if (finishReason === "tool-calls" && (stepToolCalls?.length ?? 0) > 0) {
                   continue;
+                }
+                if (finishReason === "length") {
+                  const truncId = "tronquee";
+                  writer.write({ type: "message-start", id: truncId } as never);
+                  writer.write({ type: "text-start", id: truncId } as never);
+                  writer.write({
+                    type: "text-delta",
+                    id: truncId,
+                    delta: UI_LABELS.director.reponseTronquee,
+                  } as never);
+                  writer.write({ type: "text-end", id: truncId } as never);
+                  writer.write({ type: "message-end", id: truncId } as never);
                 }
                 completed = true;
                 break;
@@ -399,9 +423,11 @@ export const Route = createFileRoute("/api/director")({
               if (!completed) {
                 const limitId = "limite";
                 const limitText = UI_LABELS.director.limiteAtteinte;
+                writer.write({ type: "message-start", id: limitId } as never);
                 writer.write({ type: "text-start", id: limitId } as never);
                 writer.write({ type: "text-delta", id: limitId, delta: limitText } as never);
                 writer.write({ type: "text-end", id: limitId } as never);
+                writer.write({ type: "message-end", id: limitId } as never);
               }
             } catch (err) {
               let detail: string;
@@ -421,10 +447,10 @@ export const Route = createFileRoute("/api/director")({
               let providerBody = "";
               const rawBody = eRec.responseBody;
               if (typeof rawBody === "string" && rawBody.length > 0) {
-                providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${rawBody.slice(0, 500)}`;
+                providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${providerBodySlice(rawBody)}`;
               } else if (rawBody != null) {
                 try {
-                  providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${JSON.stringify(rawBody).slice(0, 500)}`;
+                  providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${providerBodySlice(JSON.stringify(rawBody))}`;
                 } catch {
                   /* ignore */
                 }
@@ -432,9 +458,11 @@ export const Route = createFileRoute("/api/director")({
               const baseMessage = (err as Error)?.message ?? String(err);
               const message = `${UI_LABELS.director.arretDirecteur} : ${baseMessage}${statusCode}${providerBody}`;
               const errId = "err";
+              writer.write({ type: "message-start", id: errId } as never);
               writer.write({ type: "text-start", id: errId } as never);
               writer.write({ type: "text-delta", id: errId, delta: message } as never);
               writer.write({ type: "text-end", id: errId } as never);
+              writer.write({ type: "message-end", id: errId } as never);
               writer.write({ type: "error", errorText: message } as never);
             }
           },

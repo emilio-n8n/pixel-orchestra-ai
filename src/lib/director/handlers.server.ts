@@ -8,6 +8,7 @@ import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
 import { measureMp3DurationMs } from "./audio-duration";
 import { computeDuckingCurve } from "./ducking";
+import { UI_LABELS } from "@/lib/ui/labels";
 import {
   generateImageCloudflare,
   generateImageLovable,
@@ -234,6 +235,12 @@ export async function generateImage(ctx: DirectorCtx, prompt: string, modelId?: 
     const preferred = modelId
       ? models.find((m) => m.id === modelId || m.modelId === modelId)
       : undefined;
+    // An explicit model that is not a Cloudflare image model cannot run
+    // here (no Gradio/custom image transport) — fail in French instead of
+    // silently falling back to a different engine.
+    if (preferred && preferred.provider !== "cloudflare") {
+      throw new Error(UI_LABELS.director.modeleImageNonPrisEnCharge(preferred.id));
+    }
     const cfModel = preferred?.provider === "cloudflare" ? preferred : undefined;
 
     let mime: string;
@@ -560,7 +567,10 @@ export async function addToTimeline(
     } else {
       desiredDuration = realDurationMs;
       if (args.duration_ms != null && args.duration_ms < realDurationMs) {
-        durationWarning = `⚠️ The audio file is ${(realDurationMs / 1000).toFixed(1)}s long but you requested ${(args.duration_ms / 1000).toFixed(1)}s — the clip would be truncated. Using the real duration ${(realDurationMs / 1000).toFixed(1)}s instead.`;
+        durationWarning = UI_LABELS.director.avertissementDureeAudio(
+          (realDurationMs / 1000).toFixed(1),
+          (args.duration_ms / 1000).toFixed(1),
+        );
       }
     }
   } else {
@@ -607,7 +617,7 @@ export async function addToTimeline(
   if (error) throw new Error(error.message);
 
   const overlapWarning = overlapDetected
-    ? `⚠️ WARNING: clip overlapped with ${overlapCount} existing clip(s) on track "${args.track}". Start time was automatically shifted to ${start}ms (from requested ${desiredStart}ms). Consider using the remove_from_timeline tool to clear space, or use different tracks (Audio for voiceover, Music for background, SFX for effects) to layer sounds intentionally.`
+    ? UI_LABELS.director.avertissementChevauchement(overlapCount, args.track, start, desiredStart)
     : null;
 
   const warning = [durationWarning, overlapWarning].filter(Boolean).join(" ") || null;
@@ -990,7 +1000,7 @@ export async function updateTimelineClip(
     const oEnd = oStart + (o.duration_ms ?? 3000);
     const cEnd = start + duration;
     if (start < oEnd && cEnd > oStart) {
-      overlapWarning = `⚠️ this clip now overlaps another clip on "${track}" (start ${start}ms → end ${cEnd}ms). Move or trim one of them to keep the mix clean.`;
+      overlapWarning = UI_LABELS.director.avertissementChevauchementMaj(track, start, cEnd);
       break;
     }
   }

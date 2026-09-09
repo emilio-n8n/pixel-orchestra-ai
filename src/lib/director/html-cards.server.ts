@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStorage } from "@/kernel/storage";
 import { getDb } from "@/kernel/db";
 import { getKernel } from "@/kernel";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 const HTML_SYSTEM =
   "You are generating a SINGLE fullscreen animated HTML element to be embedded as a 1920x1080 video frame.\n" +
@@ -32,7 +33,7 @@ async function uploadBinaryAsset(
     contentType: mime,
     upsert: false,
   });
-  if (error) throw new Error(`upload failed: ${error.message}`);
+  if (error) throw new Error(UI_LABELS.director.echecTeleversement(error.message));
   const { data, error: signErr } = await supabase.storage
     .from("assets")
     .createSignedUrl(filename, 60 * 60 * 24 * 365);

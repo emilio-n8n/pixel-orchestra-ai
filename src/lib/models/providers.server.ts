@@ -6,6 +6,7 @@
 // responsible for storing the result as an asset.
 
 import type { DirectorModel } from "./catalog";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export interface ModelCreds {
   cloudflareAccountId?: string;
@@ -17,7 +18,7 @@ const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1";
 
 function lovableKey(): string {
   const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY is not configured");
+  if (!key) throw new Error(UI_LABELS.director.erreurConfigLovable);
   return key;
 }
 
@@ -50,7 +51,7 @@ export async function generateImageCloudflare(
   // Some models return JSON with a base64 payload.
   const data = (await res.json()) as { result?: { image?: string } };
   const b64 = data?.result?.image;
-  if (!b64) throw new Error("cloudflare image returned no image payload");
+  if (!b64) throw new Error(UI_LABELS.director.erreurImageVide("Cloudflare"));
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   return { mime: "image/png", bytes };
 }
@@ -77,7 +78,8 @@ export async function generateImageLovable(
   }
   const data = await res.json();
   const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!url || !url.startsWith("data:")) throw new Error("image gen returned no image");
+  if (!url || !url.startsWith("data:"))
+    throw new Error(UI_LABELS.director.erreurImageVide("Lovable"));
   const [meta, b64] = url.split(",");
   const mime = /data:([^;]+)/.exec(meta)?.[1] ?? "image/png";
   return { mime, bytes: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)) };

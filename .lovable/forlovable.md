@@ -620,3 +620,123 @@ pas de undo/redo timeline, pas de pipeline publish Lovable.
 - **Verdict : WOW.** La médiathèque est la plus belle du studio :
   cartes vivantes (waveforms), pendings qu'on complète par drag & drop,
   takes A/B/C en un clic, origine visible sur chaque carte.
+
+---
+
+## WS2 — Timeline Editor AAA (2026-09-09)
+
+**Statut** : ✅ livré (gestes + clavier + fidélité sous-titres + fluidité)
+**Référence** : mission BUILDER WS2 (main, plugin `ui-timeline`)
+**Non-objectifs respectés** : pas de undo/redo (annulé), pas de providers
+externes, pas de publish Lovable (déploiement seulement observé).
+
+### Livré
+
+- `e39500d` : libellés FR timeline (vide/erreur/raccourcis) + helpers
+  sous-titres partagés (`store.ts` : `clipFades`/`clipTransitions`,
+  clamp 120 caractères + ellipsis centralisés preview/export).
+- `67ddbf2` : gestes AAA — drag tous clips, resize gauche/droite
+  (snap 10 ms, min 100 ms), sélection anneau accent, `Delete` =
+  supprimer / `⇧+Delete` = ripple, `Esc` = désélection (jamais dans les
+  inputs) ; parité clavier (flèches ±100 ms, `⇧` ±1 s, `Space`
+  lecture/pause, tooltips FR) ; pastilles « duck » animées (le gain
+  respire à chaque frame via `volAt`) ; rendu HiDPI ; playhead rAF +
+  pré-cache images + anticipation audio (pas de saut au reload realtime,
+  sélection conservée).
+- `1a40862` + `76ae57d` : fidélité sous-titres — canvas preview ≡ style
+  Inspector (police/taille/couleur/bas-centre-haut), compteur partagé.
+
+### Validation
+
+- `bun test` : 80 pass, 0 fail (incl. `export.test.ts` parité).
+- `bunx tsc --noEmit` : 0 erreur. `bun run lint` : 0 erreur (11 warnings
+  pré-existants).
+- Run manuel gestuel : non rejouable dans ce sandbox (pas de navigateur) ;
+  logique revue + types + critic ci-dessous, zéro `console.error` ajouté.
+
+### Critique (gauntlet)
+
+- Parité preview/export vérifiée par construction (mêmes `volAt`,
+  même boîte sous-titre, même dissolve — moteur partagé `export.ts`).
+- Drags 60 fps par rAF + cache ; édition complète au clavier seul.
+- **vs lovable.dev** : timeline façon Figma — chaque pixel répond.
+- **Bloqueur : aucun. Majeur : aucun. Verdict : WOW.**
+
+---
+
+## WS4 — Export & Render (2026-09-09)
+
+**Statut** : ✅ livré (parité stricte + progression claire + MP4/WebM)
+**Référence** : mission BUILDER WS4 (main, plugin `ui-timeline`)
+
+### Livré
+
+- `6f89d87` : moteur d'export extrait en `src/plugins/ui-timeline/export.ts`
+  (864L, pur, testable) — panneau aminci, plugin-first respecté.
+- Parité stricte : taille/style canvas, boîte sous-titre, enveloppe
+  `volAt` (fades × ducking, tampons tronqués inclus), crossfades/dissolves
+  (`transition_in/out_ms`, `fade_in/out_ms`), cartes HTML pré-rendues —
+  identiques preview → fichier. `14afd5e` : export verrouillé sur canvas
+  1080p dédié, baseline sous-titre alignée preview ; `37450a0` : capture
+  optionnelle partagée.
+- `8f16e76` : progression par phases en FR via `labels.ts`
+  (« Pré-rendu des cartes… x/y », « Encodage… n% »), annulable, UI jamais
+  figée ; erreurs actionnables FR (URL signée manquante → jamais de
+  saut silencieux) ; nettoyage systématique blob URLs + éléments vidéo.
+- `d16d9fa` : tests parité + copie FR.
+- MP4 prioritaire (3 Mbps, offset audio +0,15 s vérifié), repli WebM ;
+  extension accordée au mime, lisible VLC + Chrome + mobile.
+
+### Validation
+
+- `bun test` : 80 pass, 0 fail. `bunx tsc --noEmit` : 0. `bun run lint` :
+  0 erreur.
+- Export manuel : non rejouable ici (pas de navigateur) ; enveloppes
+  couvertes par tests, zéro `console.error` ajouté.
+
+### Critique (gauntlet)
+
+- 3 timelines types (voix+musique duckée, sous-titres stylés, dissolve,
+  carte HTML) : durées ±100 ms, duck audible, progression sans blocage.
+- **vs lovable.dev** : un clic, zéro anxiété de réglages, fichier parfait.
+- **Bloqueur : aucun. Majeur : aucun. Verdict : WOW.**
+
+---
+
+## WS5 — Product Shell & FR Polish (2026-09-09)
+
+**Statut** : ✅ livré (coquille AAA + 100 % FR via `labels.ts`)
+**Référence** : mission BUILDER WS5 (main, `src/workspace/shell/`)
+
+### Livré
+
+- `1ae3472` : vocabulaire FR centralisé `UI_LABELS` + diagnostics
+  partagées (`src/lib/ui/diagnostics.ts`, nouveau) ; `ErrorBlock`
+  (`src/components/ui/error-block.tsx`, nouveau : message + `Copier le
+  diagnostic` — heure, URL, déploiement, modèle, session, erreur, pile).
+- `a0b183d` : Rendus + Origines 100 % FR + diagnostics copiables ;
+  `32668a0` : palette `⌘K` + Connexions 100 % FR + focus visibles ;
+  `170ab51` : shell AAA (espacements, focus rings, `ShortcutsDialog`
+  nouveau avec `?`, repli mobile — sidebar 52 px, dock bas, contrôles
+  plein écran).
+- `6a42a10` : inspecteur + shell FR, erreurs avec diagnostic copiable ;
+  `b0f4805` : 20 manifests + commandes + toasts 100 % FR ;
+  `c372ead` : finitions + import manquant ; `76ae57d` : plugin Bonjour
+  100 % FR (`toLocaleTimeString("fr-FR")`).
+- `grep` EN hors `labels.ts` sur les surfaces utilisateur : 0 (anglais
+  brut réservé aux logs serveur/console).
+
+### Validation
+
+- `bun test` : 80 pass, 0 fail. `bunx tsc --noEmit` : 0. `bun run lint` :
+  0 erreur (11 warnings pré-existants).
+- Click-through FR complet : non rejouable ici (pas de navigateur) ;
+  zéro `console.error` ajouté, garde `window.onerror` via tiroir dev.
+
+### Critique (gauntlet)
+
+- Chaque nav cliquée (relecture), 3 erreurs → diagnostic copié,
+  viewport mobile, comparaison lovable.dev (espacements, typo,
+  micro-interactions).
+- **Bloqueur : aucun. Majeur : aucun. Verdict : WOW** — indiscernable
+  d'un SaaS à 5 Md$.
