@@ -707,7 +707,7 @@ externes, pas de publish Lovable (déploiement seulement observé).
   `htmlFrameMs`, poids de progression exacts) — 88 pass au total.
 - `6a98ea7` (D1-D5) : cancel pendant la sonde → `cancelled` (jamais de
   faux `fetch-failed`) ; éléments probés **réutilisés** (zéro double
-  téléchargement) ; FR via labels partout ; `a audiosRef` purgé ;
+  téléchargement) ;   FR via labels partout ; `audiosRef` purgé ;
   `previewHtmlElsRef` mort supprimé ; progress encode au compte juste.
 - Limites assumées (documentées dans le code) : cartes HTML en
   best-effort (html2canvas : pas de WebGL/SMIL), export temps réel

@@ -741,10 +741,14 @@ function checkImageUrl(
     // draws identically in the file — and the loaded element is reused
     // downstream so the probe never costs a double download.
     img.crossOrigin = "anonymous";
-    const dead = () => reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`));
-    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, dead, () =>
-      reject(new ExportError("cancelled")),
-    );
+    const dead = () => {
+      img.removeAttribute("src");
+      reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`));
+    };
+    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, dead, () => {
+      img.removeAttribute("src");
+      reject(new ExportError("cancelled"));
+    });
     img.onload = () => {
       cleanup();
       resolve(img);
