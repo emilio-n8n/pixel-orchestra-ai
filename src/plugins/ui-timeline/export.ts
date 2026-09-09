@@ -161,10 +161,46 @@ export function blackFadeAlpha(ms: number, clip: TimelineClip): number {
 
 export interface SubtitleLayout {
   text: string;
+  /** Wrapped lines (max 2) actually drawn — box grows with line count. */
+  lines: string[];
   font: string;
   color: string;
   box: { x: number; y: number; w: number; h: number };
+  /** Baseline of the first line; following lines step by lineHeight. */
   textPos: { x: number; y: number };
+  lineHeight: number;
+}
+
+/** Greedy word-wrap into at most 2 lines; the tail hard-truncates with …. */
+function wrapTwoLines(text: string, maxW: number, measure: (t: string) => number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [text];
+  const line1: string[] = [];
+  let i = 0;
+  for (; i < words.length; i++) {
+    const next = line1.length > 0 ? `${line1.join(" ")} ${words[i]}` : words[i];
+    if (measure(next) <= maxW) line1.push(words[i]);
+    else break;
+  }
+  if (i >= words.length) return [line1.join(" ")];
+  // First word alone too wide: keep it (the shrink loop handles it).
+  if (line1.length === 0) line1.push(words[i++]);
+  let line2 = words.slice(i).join(" ");
+  if (measure(line2) > maxW) {
+    const pts = [...line2];
+    let lo = 0;
+    let hi = pts.length;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (measure(`${pts.slice(0, mid).join("").trimEnd()}…`) <= maxW) lo = mid + 1;
+      else hi = mid;
+    }
+    line2 = `${pts
+      .slice(0, Math.max(0, lo - 1))
+      .join("")
+      .trimEnd()}…`;
+  }
+  return [line1.join(" "), line2];
 }
 
 /**
@@ -172,7 +208,8 @@ export interface SubtitleLayout {
  * (font/size/color/position). Style defaults and the 120-char clamp come
  * from the store helpers shared with the Inspector, and the renderer
  * passes ctx.measureText as `measure`, so Inspector, preview and file
- * compute identical boxes.
+ * compute identical boxes. Long lines wrap to 2 lines max, shrinking
+ * the font (min 12px) so the box never leaves the 1920px frame.
  */
 export function subtitleLayout(
   clip: TimelineClip,
@@ -182,23 +219,36 @@ export function subtitleLayout(
 ): SubtitleLayout | null {
   const rawText = (clip.meta?.text as string | undefined) ?? clip.assets?.prompt;
   if (!rawText) return null;
-  const style = resolveSubtitleStyle(clip.meta);
+  const base = resolveSubtitleStyle(clip.meta);
   const text = formatSubtitleText(rawText);
-  const font = `${style.size}px ${style.font}`;
-  const tw = measure(font, text);
-  const boxH = style.size + 16;
+  const maxW = canvasW - 80;
+  let size = base.size;
+  let font = `${size}px ${base.font}`;
+  let lines = wrapTwoLines(text, maxW, (t) => measure(font, t));
+  for (;;) {
+    font = `${size}px ${base.font}`;
+    lines = wrapTwoLines(text, maxW, (t) => measure(font, t));
+    const widest = Math.max(...lines.map((t) => measure(font, t)));
+    if (widest <= maxW || size <= 12) break;
+    size -= 2;
+  }
+  const lineHeight = Math.round(size * 1.25);
+  const boxH = lineHeight * lines.length + 16;
   const y =
-    style.position === "top"
+    base.position === "top"
       ? 70
-      : style.position === "center"
+      : base.position === "center"
         ? canvasH / 2 - boxH / 2
         : canvasH - 70 - boxH;
+  const tw = Math.max(...lines.map((t) => measure(font, t)));
   return {
     text,
+    lines,
     font,
-    color: style.color,
+    color: base.color,
     box: { x: (canvasW - tw) / 2 - 12, y, w: tw + 24, h: boxH },
-    textPos: { x: canvasW / 2, y: y + boxH - 8 },
+    textPos: { x: canvasW / 2, y: y + 8 + size },
+    lineHeight,
   };
 }
 
@@ -403,7 +453,9 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
       ctx.textAlign = "center";
       // "alphabetic" — matches the preview canvas exactly (same renderer).
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(layout.text, layout.textPos.x, layout.textPos.y);
+      layout.lines.forEach((line, i) => {
+        ctx.fillText(line, layout.textPos.x, layout.textPos.y + i * layout.lineHeight);
+      });
     }
   }
 }

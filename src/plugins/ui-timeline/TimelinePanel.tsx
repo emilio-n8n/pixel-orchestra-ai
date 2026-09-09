@@ -859,8 +859,20 @@ export function TimelinePanel() {
           }
         }
       }
-      // Volume envelope each frame: fades + ducking gain.
-      for (const [, entry] of audioMapRef.current) {
+      // Volume envelope each frame: fades + ducking gain. Clip-ended
+      // elements are paused and released (same as the export src.stop) —
+      // never left playing at volume 0 until the global stop.
+      for (const [id, entry] of audioMapRef.current) {
+        const end = (entry.clip.start_ms ?? 0) + (entry.clip.duration_ms ?? 0);
+        if (p >= end) {
+          try {
+            entry.el.pause();
+          } catch {
+            /* element already gone */
+          }
+          audioMapRef.current.delete(id);
+          continue;
+        }
         try {
           entry.el.volume = volAt(entry.clip, p);
         } catch {

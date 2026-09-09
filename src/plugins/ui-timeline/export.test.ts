@@ -18,9 +18,11 @@ import {
   formatTimeMs,
   htmlFrameCount,
   htmlFrameIndex,
+  htmlFrameMs,
   isHttpUrl,
   pickExportMime,
   progressFraction,
+  renderTimelineFrame,
   subtitleLayout,
   throwIfCancelled,
   volAt,
@@ -191,9 +193,11 @@ describe("subtitleLayout", () => {
     });
     const l = subtitleLayout(c, EXPORT_WIDTH, EXPORT_HEIGHT, measure)!;
     expect(l.text).toBe("Bonjour");
+    expect(l.lines).toEqual(["Bonjour"]);
     expect(l.font).toBe("28px system-ui, sans-serif");
     expect(l.color).toBe("#ffffff");
-    expect(l.box.y).toBe(EXPORT_HEIGHT - 70 - (28 + 16));
+    // lineHeight 35 (28×1.25) + 16 padding.
+    expect(l.box.y).toBe(EXPORT_HEIGHT - 70 - (Math.round(28 * 1.25) + 16));
     expect(l.textPos.x).toBe(EXPORT_WIDTH / 2);
   });
   it("honours font/size/color/position", () => {
@@ -217,7 +221,8 @@ describe("subtitleLayout", () => {
       meta: { text: "Milieu", style: { position: "center" } },
     });
     const l = subtitleLayout(c, EXPORT_WIDTH, EXPORT_HEIGHT, measure)!;
-    expect(l.box.y).toBe(EXPORT_HEIGHT / 2 - (28 + 16) / 2);
+    const boxH = Math.round(28 * 1.25) + 16;
+    expect(l.box.y).toBe(EXPORT_HEIGHT / 2 - boxH / 2);
   });
   it("clamps long texts like the Inspector (shared helper)", () => {
     const c = clip({
@@ -228,6 +233,34 @@ describe("subtitleLayout", () => {
     const l = subtitleLayout(c, EXPORT_WIDTH, EXPORT_HEIGHT, measure)!;
     expect(l.text.length).toBeLessThanOrEqual(120);
     expect(l.text.endsWith("…")).toBe(true);
+  });
+  it("wraps long sentences to 2 lines inside the frame", () => {
+    const words = Array.from({ length: 30 }, (_, i) => `mot${i}`).join(" ");
+    const c = clip({
+      track: "Subtitles",
+      assets: null,
+      meta: { text: words },
+    });
+    const propMeasure = (font: string, text: string) => text.length * 20;
+    const l = subtitleLayout(c, EXPORT_WIDTH, EXPORT_HEIGHT, propMeasure)!;
+    expect(l.lines.length).toBe(2);
+    expect(l.box.x).toBeGreaterThanOrEqual(0);
+    expect(l.box.x + l.box.w).toBeLessThanOrEqual(EXPORT_WIDTH);
+  });
+  it("shrinks the font so unbreakable words stay in frame", () => {
+    const c = clip({
+      track: "Subtitles",
+      assets: null,
+      meta: { text: "a".repeat(120) },
+    });
+    const propMeasure = (font: string, text: string) => {
+      const size = Number.parseInt(font, 10) || 28;
+      return text.length * size * 0.6;
+    };
+    const l = subtitleLayout(c, EXPORT_WIDTH, EXPORT_HEIGHT, propMeasure)!;
+    expect(Number.parseInt(l.font, 10)).toBeLessThan(28);
+    expect(l.box.x).toBeGreaterThanOrEqual(0);
+    expect(l.box.x + l.box.w).toBeLessThanOrEqual(EXPORT_WIDTH);
   });
   it("returns null without text", () => {
     expect(
@@ -346,5 +379,167 @@ describe("export constants", () => {
     expect(FRAME_MS).toBeCloseTo(33.333, 2);
     expect(VIDEO_BITS_PER_SECOND).toBe(3_000_000);
     expect(AUDIO_LEAD_S).toBe(0.15);
+  });
+});
+
+describe("htmlFrameMs — canonical card frame step", () => {
+  it("splits the duration into htmlFrameCount frames", () => {
+    expect(htmlFrameMs(3000)).toBeCloseTo(3000 / htmlFrameCount(3000), 9);
+    expect(htmlFrameMs(100)).toBeCloseTo(100 / htmlFrameCount(100), 9);
+  });
+});
+
+describe("progressFraction — exact phase weights", () => {
+  it("locks prerender .3 / audio .1 / encode .55 / finalize .05", () => {
+    expect(progressFraction({ phase: "prerender", done: 1, total: 2 })).toBeCloseTo(0.15, 9);
+    expect(progressFraction({ phase: "audio", done: 1, total: 2 })).toBeCloseTo(0.35, 9);
+    expect(progressFraction({ phase: "encode", done: 1, total: 2 })).toBeCloseTo(0.675, 9);
+    expect(progressFraction({ phase: "finalize", done: 1, total: 2 })).toBeCloseTo(0.975, 9);
+  });
+});
+
+/** Recording 2d context stand-in (bun has no DOM canvas). */
+function mockCtx() {
+  const calls: Array<{ op: string; args: unknown[] }> = [];
+  const fills: string[] = [];
+  const ctx = {
+    calls,
+    fills,
+    globalAlpha: 1,
+    font: "",
+    textAlign: "",
+    textBaseline: "",
+    save() {
+      calls.push({ op: "save", args: [] });
+    },
+    restore() {
+      calls.push({ op: "restore", args: [] });
+    },
+    fillRect(x: number, y: number, w: number, h: number) {
+      calls.push({ op: "fillRect", args: [x, y, w, h] });
+    },
+    fillText(t: string, x: number, y: number) {
+      calls.push({ op: "fillText", args: [t, x, y] });
+    },
+    drawImage(...a: unknown[]) {
+      calls.push({ op: "drawImage", args: a });
+    },
+    measureText(t: string) {
+      return { width: t.length * 10 };
+    },
+  };
+  Object.defineProperty(ctx, "fillStyle", {
+    set(v: string) {
+      fills.push(v);
+      calls.push({ op: "fillStyle", args: [v] });
+    },
+    get() {
+      return fills[fills.length - 1] ?? "#000";
+    },
+  });
+  return ctx;
+}
+
+function imgClip(over: Partial<TimelineClip> = {}) {
+  return clip({
+    id: "v1",
+    track: "Video",
+    start_ms: 0,
+    duration_ms: 3000,
+    asset_id: "img1",
+    assets: { kind: "image", url: "https://cdn.example/a.png", prompt: "plage" },
+    ...over,
+  });
+}
+
+describe("renderTimelineFrame — shared preview/file renderer", () => {
+  it("blends two overlapping video clips (dissolve, 2 draws)", () => {
+    const a = imgClip({ id: "a", start_ms: 0, duration_ms: 3000 });
+    const b = imgClip({ id: "b", start_ms: 2000, duration_ms: 3000 });
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [a, b],
+      ms: 2500,
+      getImage: () => ({ complete: true, naturalWidth: 800, naturalHeight: 600 }) as never,
+    });
+    const draws = ctx.calls.filter((c) => c.op === "drawImage");
+    expect(draws.length).toBe(2);
+  });
+  it("fades a lone clip to black at its tail", () => {
+    const c = imgClip({ meta: { transition_out_ms: 500 } });
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [c],
+      // 100ms before the end of a 500ms fade → alpha 0.2 black veil.
+      ms: 2900,
+      getImage: () => ({ complete: true, naturalWidth: 800, naturalHeight: 600 }) as never,
+    });
+    const veil = ctx.calls.find(
+      (x) =>
+        x.op === "fillStyle" &&
+        typeof x.args[0] === "string" &&
+        x.args[0].startsWith("rgba(0,0,0,"),
+    );
+    expect(veil).toBeDefined();
+  });
+  it("draws each subtitle line", () => {
+    const c = clip({
+      track: "Subtitles",
+      start_ms: 0,
+      duration_ms: 3000,
+      assets: null,
+      meta: { text: "un deux trois quatre cinq six sept huit neuf dix onze douze" },
+    });
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [c],
+      ms: 100,
+      getImage: () => undefined,
+    });
+    const texts = ctx.calls.filter((x) => x.op === "fillText");
+    expect(texts.length).toBeGreaterThanOrEqual(1);
+    expect(ctx.font).toContain("system-ui");
+  });
+  it("draws ready video elements, skips unready ones silently in-frame (validated upfront)", () => {
+    const c = clip({
+      id: "vv",
+      track: "Video",
+      start_ms: 0,
+      duration_ms: 3000,
+      asset_id: "vid1",
+      assets: { kind: "video", url: "https://cdn.example/b.mp4", prompt: null },
+    });
+    const ready = { readyState: 3, videoWidth: 640, videoHeight: 360 };
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [c],
+      ms: 100,
+      getImage: () => undefined,
+      videoFrameMap: new Map([["vv", ready as never]]),
+    });
+    expect(ctx.calls.filter((x) => x.op === "drawImage").length).toBe(1);
+    const ctx2 = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx2 as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [c],
+      ms: 100,
+      getImage: () => undefined,
+      videoFrameMap: new Map([["vv", { readyState: 0, videoWidth: 0, videoHeight: 0 } as never]]),
+    });
+    expect(ctx2.calls.filter((x) => x.op === "drawImage").length).toBe(0);
   });
 });
