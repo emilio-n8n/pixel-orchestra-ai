@@ -374,6 +374,8 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
     if (layout) {
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(layout.box.x, layout.box.y, layout.box.w, layout.box.h);
+      // Explicit: never rely on the measure callback's font side-effect.
+      ctx.font = layout.font;
       ctx.fillStyle = layout.color;
       ctx.textAlign = "center";
       // "alphabetic" — matches the preview canvas exactly (same renderer).

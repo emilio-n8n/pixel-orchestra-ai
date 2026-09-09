@@ -101,8 +101,10 @@ export function resolveSubtitleStyle(meta?: Record<string, unknown> | null): Sub
 
 /** 120-char clamp with ellipsis — canvas and Inspector share it. */
 export function formatSubtitleText(raw: string): string {
-  if (raw.length <= SUBTITLE_MAX_CHARS) return raw;
-  return `${raw.slice(0, SUBTITLE_MAX_CHARS - 1).trimEnd()}…`;
+  // Code-point aware: never split a surrogate pair / grapheme.
+  const points = [...raw];
+  if (points.length <= SUBTITLE_MAX_CHARS) return raw;
+  return `${points.slice(0, SUBTITLE_MAX_CHARS - 1).join("").trimEnd()}…`;
 }
 
 /** True when keyboard shortcuts must stay silent (user is typing). */
@@ -111,6 +113,8 @@ export function isTypingTarget(t: HTMLElement | null): boolean {
   const tag = t.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   if (t.isContentEditable) return true;
-  if (t.closest?.('[contenteditable="true"]')) return true;
+  if (t.closest?.('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'))
+    return true;
+  if (t.closest?.('[role="textbox"]')) return true;
   return false;
 }
