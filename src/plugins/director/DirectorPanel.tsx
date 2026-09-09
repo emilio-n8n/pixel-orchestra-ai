@@ -107,11 +107,10 @@ export function DirectorPanel() {
       new DefaultChatTransport({
         api: "/api/director",
         body: () => ({ ...bodyRef.current }),
-        headers: () => {
+        headers: (): Record<string, string> => {
           const t = tokenRef.current;
           return t ? { Authorization: `Bearer ${t}` } : {};
-        },
-      }),
+        },      }),
     [],
   );
 
