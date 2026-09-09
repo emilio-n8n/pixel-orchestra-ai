@@ -329,6 +329,8 @@ export const UI_LABELS = {
     vous: "Vous",
     cleApiPlaceholder: "Clé API (p. ex. zen-go-…)",
     etiquettePersoPlaceholder: "Étiquette (facultatif)",
+    modeleIdPlaceholderCloudflare: "identifiant du modèle (p. ex. @cf/…/flux-1-schnell)",
+    pointAccesPlaceholder: "URL du point d’accès",
     erreurGenerique: "La requête à l’Assistant a échoué.",
     arretDirecteur: "L’Assistant s’est interrompu",
     limiteAtteinte:

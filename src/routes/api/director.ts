@@ -52,6 +52,7 @@ export const Route = createFileRoute("/api/director")({
         // opaque provider 500 — fail clean instead.
         const modelId = (body.model ?? "kimi-k2.7-code").trim() || "kimi-k2.7-code";
         const apiKey = (body.apiKey ?? "").trim();
+        if (!apiKey) return new Response("apiKey requise", { status: 400 });
         // Stable session id per conversation — OpenCode Go requires it as
         // x-opencode-session for routing + prompt caching (400 otherwise).
         // Falls back to a per-project id when the client sends none.
@@ -61,14 +62,14 @@ export const Route = createFileRoute("/api/director")({
         // (dedupe by id keeping builtin, drop malformed entries so the
         // LLM is never advertised a model that cannot run).
         const seenIds = new Set(CATALOG.map((m) => m.id));
-        const customModels = (body.customModels ?? []).filter((m) => {
-          if (!m || typeof m.id !== "string" || typeof m.modelId !== "string") return false;
+        const customModels = (body.customModels ?? []).flatMap((m) => {
+          if (!m || typeof m.id !== "string" || typeof m.modelId !== "string") return [];
           const id = m.id.trim();
           const mid = m.modelId.trim();
-          if (!id || !mid || seenIds.has(id)) return false;
-          if (!Array.isArray(m.capabilities) || m.capabilities.length === 0) return false;
+          if (!id || !mid || seenIds.has(id)) return [];
+          if (!Array.isArray(m.capabilities) || m.capabilities.length === 0) return [];
           seenIds.add(id);
-          return true;
+          return [{ ...m, id, modelId: mid }];
         });
         const models = [...CATALOG, ...customModels];
         const creds = {

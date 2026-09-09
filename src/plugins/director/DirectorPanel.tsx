@@ -542,8 +542,8 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           onChange={(e) => setModelId(e.target.value)}
           placeholder={
             provider === "cloudflare"
-              ? "identifiant du modèle (p. ex. @cf/…/flux-1-schnell)"
-              : "URL du point d’accès"
+              ? UI_LABELS.director.modeleIdPlaceholderCloudflare
+              : UI_LABELS.director.pointAccesPlaceholder
           }
           className="h-6 flex-1 text-[10px]"
         />
