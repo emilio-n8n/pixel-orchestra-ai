@@ -293,14 +293,14 @@ export class GradioConnector implements Connector {
 
 export const gradioConnectorContribution: ConnectorContribution = {
   kind: "gradio",
-  displayName: "Gradio endpoint",
+  displayName: "Point d’accès Gradio",
   configSchema: {
     type: "object",
     required: ["baseUrl"],
     properties: {
-      baseUrl: { type: "string", title: "Endpoint URL" },
-      name: { type: "string", title: "Display name (optional)" },
-      authHeader: { type: "string", title: "Authorization header (optional)" },
+      baseUrl: { type: "string", title: "URL du point d’accès" },
+      name: { type: "string", title: "Nom d’affichage (facultatif)" },
+      authHeader: { type: "string", title: "En-tête d’autorisation (facultatif)" },
     },
   },
   factory: (cfg: unknown, ctx) => {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useKernelEvents } from "@/kernel/react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { listScenes, createScene, listShots, type SceneView, type ShotView } from "./server";
+import { ErrorBlock } from "@/components/ui/error-block";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export function StoryboardPanel() {
   const projectId = useLibraryProject();
@@ -42,7 +44,7 @@ export function StoryboardPanel() {
   if (!projectId)
     return (
       <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-        No project open.
+        {UI_LABELS.scenes.sansProjet}
       </div>
     );
 
@@ -50,14 +52,14 @@ export function StoryboardPanel() {
     <div className="flex h-full flex-col overflow-auto bg-[var(--surface-1)] p-4 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Storyboard
+          {UI_LABELS.scenes.titre}
         </div>
         <div className="flex gap-2">
           <input
             value={sceneName}
             onChange={(e) => setSceneName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addScene()}
-            placeholder="New scene name"
+            placeholder={UI_LABELS.scenes.nouvelleScene}
             className="w-48 rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1 text-sm"
           />
           <button
@@ -65,17 +67,22 @@ export function StoryboardPanel() {
             disabled={!sceneName.trim()}
             className="rounded bg-[var(--accent)] px-2 py-1 text-[11px] text-[var(--accent-fg)] disabled:opacity-50"
           >
-            Add scene
+            {UI_LABELS.scenes.ajouterScene}
           </button>
         </div>
       </div>
       <div className="mt-3 space-y-3">
         {error ? (
-          <div className="rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[11px] text-[var(--status-err)]">
-            {error}
-          </div>
+          <ErrorBlock
+            message={UI_LABELS.scenes.erreur}
+            error={error}
+            context="storyboard.scenes"
+            compact
+          />
         ) : null}
-        {scenes.length === 0 ? <div className="text-[var(--text-dim)]">No scenes yet.</div> : null}
+        {scenes.length === 0 ? (
+          <div className="text-[var(--text-dim)]">{UI_LABELS.scenes.vide}</div>
+        ) : null}
         {scenes.map((s) => (
           <div key={s.id} className="rounded border border-[var(--line)] bg-[var(--surface-2)] p-3">
             <div className="flex items-center justify-between">
@@ -87,7 +94,7 @@ export function StoryboardPanel() {
                 onClick={() => loadShots(s.id)}
                 className="rounded border border-[var(--line)] px-2 py-0.5 text-[10px] uppercase tracking-widest text-[var(--text-dim)]"
               >
-                Shots
+                {UI_LABELS.scenes.plans}
               </button>
             </div>
             {shots[s.id]?.length > 0 ? (

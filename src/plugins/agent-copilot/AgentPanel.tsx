@@ -4,6 +4,7 @@
 // are processed locally for now (phase 10 will add real LLM inference).
 
 import { useState, useCallback } from "react";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export function AgentPanel() {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
@@ -45,7 +46,7 @@ export function AgentPanel() {
               className={`mb-2 ${m.role === "assistant" ? "text-[var(--text)]" : "text-[var(--accent)]"}`}
             >
               <span className="text-[9px] font-medium uppercase tracking-widest text-[var(--text-dim)]">
-                {m.role}
+                {m.role === "assistant" ? UI_LABELS.agent.assistant : UI_LABELS.agent.vous}
               </span>
               <div className="mt-0.5 whitespace-pre-wrap">{m.text}</div>
             </div>
@@ -57,7 +58,7 @@ export function AgentPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Type a message…"
+          placeholder={UI_LABELS.agent.saisirMessage}
           className="flex-1 rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1 text-[11px] outline-none"
         />
         <button
@@ -65,7 +66,7 @@ export function AgentPanel() {
           disabled={!input.trim()}
           className="rounded bg-[var(--accent)] px-2 text-[11px] text-[var(--accent-fg)] disabled:opacity-50"
         >
-          Send
+          {UI_LABELS.agent.envoyer}
         </button>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useKernelEvents } from "@/kernel/react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { listCharacters, saveCharacter, deleteCharacter, type CharacterView } from "./server";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export function CharactersPanel() {
   const projectId = useLibraryProject();
@@ -57,7 +58,7 @@ export function CharactersPanel() {
   if (!projectId) {
     return (
       <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-        No project open.
+        {UI_LABELS.personnages.sansProjet}
       </div>
     );
   }
@@ -66,13 +67,13 @@ export function CharactersPanel() {
     <div className="flex h-full flex-col overflow-auto bg-[var(--surface-1)] p-4 text-xs text-[var(--text-muted)]">
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Characters
+          {UI_LABELS.personnages.titre}
         </div>
         <button
           onClick={() => setEditing(true)}
           className="rounded-md bg-[var(--accent)] px-2 py-1 text-[11px] font-medium text-[var(--accent-fg)]"
         >
-          + New
+          {UI_LABELS.personnages.nouveau}
         </button>
       </div>
       {editing ? (
@@ -80,32 +81,32 @@ export function CharactersPanel() {
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Name *"
+            placeholder={UI_LABELS.personnages.nom}
             className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
           />
           <input
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            placeholder="Description"
+            placeholder={UI_LABELS.personnages.description}
             className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
           />
           <input
             value={form.portraitIds}
             onChange={(e) => setForm((f) => ({ ...f, portraitIds: e.target.value }))}
-            placeholder="Portrait asset IDs (comma-separated)"
+            placeholder={UI_LABELS.personnages.portraits}
             className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
           />
           <div className="flex gap-2">
             <input
               value={form.voiceRef}
               onChange={(e) => setForm((f) => ({ ...f, voiceRef: e.target.value }))}
-              placeholder="Voice ref"
+              placeholder={UI_LABELS.personnages.voix}
               className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
             />
             <input
               value={form.styleRef}
               onChange={(e) => setForm((f) => ({ ...f, styleRef: e.target.value }))}
-              placeholder="Style ref"
+              placeholder={UI_LABELS.personnages.style}
               className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
             />
           </div>
@@ -114,21 +115,21 @@ export function CharactersPanel() {
               onClick={() => setEditing(false)}
               className="rounded border border-[var(--line)] px-2 py-1 text-[11px]"
             >
-              Cancel
+              {UI_LABELS.personnages.annuler}
             </button>
             <button
               onClick={submit}
               disabled={!form.name.trim()}
               className="rounded bg-[var(--accent)] px-2 py-1 text-[11px] text-[var(--accent-fg)] disabled:opacity-50"
             >
-              Save
+              {UI_LABELS.personnages.enregistrer}
             </button>
           </div>
         </div>
       ) : null}
       <div className="mt-3 space-y-2">
         {chars.length === 0 ? (
-          <div className="text-[var(--text-dim)]">No characters yet.</div>
+          <div className="text-[var(--text-dim)]">{UI_LABELS.personnages.vide}</div>
         ) : null}
         {chars.map((c) => (
           <div
@@ -147,7 +148,7 @@ export function CharactersPanel() {
               onClick={() => remove(c.id)}
               className="text-[9px] uppercase tracking-widest text-[var(--status-err)] hover:underline"
             >
-              Del
+              {UI_LABELS.personnages.supprimer}
             </button>
           </div>
         ))}

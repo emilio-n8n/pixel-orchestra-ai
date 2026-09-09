@@ -31,7 +31,7 @@ class ComfyUIConnector implements Connector {
         id: "comfyui.execute",
         kind: "generate",
         media: ["image"],
-        displayName: "ComfyUI workflow",
+        displayName: "Flux ComfyUI",
         inputs: { type: "object", properties: { workflow_json: { type: "string" } } },
         outputs: { type: "object" },
         tags: ["comfyui"],
@@ -65,11 +65,11 @@ class ComfyUIConnector implements Connector {
 
 export const connectorComfyuiContribution: ConnectorContribution = {
   kind: "comfyui",
-  displayName: "ComfyUI endpoint",
+  displayName: "Point d’accès ComfyUI",
   configSchema: {
     type: "object",
     required: ["baseUrl"],
-    properties: { baseUrl: { type: "string", title: "ComfyUI URL" } },
+    properties: { baseUrl: { type: "string", title: "URL ComfyUI" } },
   },
   factory: (cfg: unknown) => {
     const c = cfg as { baseUrl: string };

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { useLibrary } from "@/plugins/library/store";
+import { UI_LABELS } from "@/lib/ui/labels";
 import { listSnapshots, createSnapshot, restoreSnapshot, type SnapshotView } from "./server";
 
 export function VersionsPanel() {
@@ -56,17 +57,17 @@ export function VersionsPanel() {
     <div className="border-b border-[var(--line)] p-3 text-[10px] text-[var(--text-muted)]">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Versions
+          {UI_LABELS.versions.titre}
         </div>
         <button
           onClick={snap}
           className="rounded border border-[var(--line)] px-2 py-0.5 text-[9px] uppercase tracking-widest hover:border-[var(--accent)]"
         >
-          Snapshot
+          {UI_LABELS.versions.instantane}
         </button>
       </div>
       {snapshots.length === 0 ? (
-        <div className="text-[var(--text-dim)]">No snapshots yet.</div>
+        <div className="text-[var(--text-dim)]">{UI_LABELS.versions.vide}</div>
       ) : null}
       <ul className="space-y-1">
         {snapshots.map((s) => (
@@ -76,9 +77,13 @@ export function VersionsPanel() {
           >
             <div>
               <span className="mono text-[var(--text)]">v{s.version}</span>
-              {s.reason ? <span className="ml-1 text-[var(--text-dim)]">· {s.reason}</span> : null}
+              {s.reason ? (
+                <span className="ml-1 text-[var(--text-dim)]">
+                  · {s.reason === "manual snapshot" ? UI_LABELS.versions.raisonManuelle : s.reason}
+                </span>
+              ) : null}
               <div className="mono text-[9px] text-[var(--text-dim)]">
-                {new Date(s.createdAt).toLocaleString()}
+                {new Date(s.createdAt).toLocaleString("fr-FR")}
               </div>
             </div>
             <button
@@ -86,7 +91,7 @@ export function VersionsPanel() {
               disabled={restored === s.id}
               className="text-[9px] uppercase tracking-widest text-[var(--accent)] hover:underline disabled:opacity-50"
             >
-              {restored === s.id ? "✓" : "Restore"}
+              {restored === s.id ? "✓" : UI_LABELS.versions.restaurer}
             </button>
           </li>
         ))}
