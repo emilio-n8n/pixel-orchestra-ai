@@ -9,22 +9,22 @@ export function HelloPanel() {
         <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-dim)]">
           Lilium Studio
         </div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Welcome to your workspace</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Bienvenue dans votre espace</h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--text-muted)]">
-          Everything here is a plugin. This panel, the sidebar, the viewers, the connectors — the
-          kernel only orchestrates contracts. Open the command palette (⌘K) to see what's wired in
-          so far.
+          Ici, tout est un plugin. Ce panneau, la barre latérale, les visionneuses, les
+          connexions — le noyau ne fait qu’orchestrer les contrats. Ouvrez la palette de
+          commandes (⌘K) pour voir ce qui est déjà branché.
         </p>
       </div>
       <div className="grid flex-1 grid-cols-2 gap-px overflow-hidden bg-[var(--line)]">
         <div className="flex flex-col overflow-hidden bg-[var(--surface-1)]">
           <div className="px-4 pt-3 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-            Kernel event stream
+            Flux d’évènements du noyau
           </div>
           <div className="flex-1 overflow-auto px-4 pb-4">
             {events.length === 0 ? (
               <div className="mono text-xs text-[var(--text-dim)]">
-                no events yet — try ⌘K → Hello: Ping
+                aucun évènement — essayez ⌘K → Bonjour : Ping du bus
               </div>
             ) : (
               <ul className="space-y-1">
@@ -37,7 +37,7 @@ export function HelloPanel() {
                       className="mono text-[11px] leading-relaxed text-[var(--text-muted)]"
                     >
                       <span className="text-[var(--text-dim)]">
-                        {new Date(e.ts).toLocaleTimeString()}
+                        {new Date(e.ts).toLocaleTimeString("fr-FR")}
                       </span>{" "}
                       <span className="text-[var(--accent)]">{e.type}</span>
                     </li>
@@ -48,22 +48,23 @@ export function HelloPanel() {
         </div>
         <div className="flex flex-col overflow-hidden bg-[var(--surface-1)]">
           <div className="px-4 pt-3 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-            Roadmap
+            Feuille de route
           </div>
           <div className="space-y-3 px-4 pb-4 text-sm">
-            <Step n={1} title="Kernel & Shell" done>
-              Event bus, plugin host, registry, resizable workspace shell.
+            <Step n={1} title="Noyau & Shell" done>
+              Bus d’évènements, hôte de plugins, registre, shell redimensionnable.
             </Step>
-            <Step n={2} title="Assets & Library">
-              Storage adapter, asset model, drag & drop import, typed viewers.
+            <Step n={2} title="Médias & Médiathèque">
+              Adaptateur de stockage, modèle de médias, import par glisser-déposer, visionneuses
+              typées.
             </Step>
-            <Step n={3} title="Connectors & Capabilities">
-              Gradio, ComfyUI, OpenAI, MCP… introspected, auto-formed.
+            <Step n={3} title="Connexions & Moteurs">
+              Gradio, ComfyUI, OpenAI, MCP… introspectés, formulaires auto-générés.
             </Step>
-            <Step n={4} title="Node Graph & Scheduler">
-              Every generation compiles to a graph the scheduler runs.
+            <Step n={4} title="Flux créatif & Planificateur">
+              Chaque génération compile un flux que le planificateur exécute.
             </Step>
-            <Step n={5} title="AI Context, Storyboard, Timeline, Versioning, Agent, Public API" />
+            <Step n={5} title="Contexte IA, Scènes, Éditeur, Versions, Agent, API publique" />
           </div>
         </div>
       </div>

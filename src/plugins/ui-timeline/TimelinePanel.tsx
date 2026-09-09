@@ -300,11 +300,11 @@ export function TimelinePanel() {
   // canvas rect (the same box the file encodes), never the whole
   // container — otherwise preview and file frame the card differently.
   useEffect(() => {
-    const canvasEl = canvasRef.current;
-    const iframeEl = htmlOverlayRef.current;
-    const wrapEl = previewRef.current;
-    if (!canvasEl || !iframeEl || !wrapEl) return;
     function sync() {
+      const canvasEl = canvasRef.current;
+      const iframeEl = htmlOverlayRef.current;
+      const wrapEl = previewRef.current;
+      if (!canvasEl || !iframeEl || !wrapEl) return;
       const c = canvasEl.getBoundingClientRect();
       const w = wrapEl.getBoundingClientRect();
       iframeEl.style.width = `${c.width}px`;

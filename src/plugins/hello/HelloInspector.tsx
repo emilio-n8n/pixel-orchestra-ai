@@ -10,7 +10,7 @@ export function HelloInspector() {
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-[var(--line)] px-3 py-2">
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-          Hello plugin
+          Plugin Bonjour
         </div>
       </div>
       <div className="flex-1 overflow-auto p-3 text-[12px] text-[var(--text-muted)]">
@@ -22,22 +22,22 @@ export function HelloInspector() {
           <Row k="plugins" v={String(host.count())} />
           <div className="mt-3 border-t border-[var(--line)] pt-3">
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-              Last ping
+              Dernier ping
             </div>
             <div className="mono mt-1 text-[11px]">
               {last ? (
                 <>
                   <span className="text-[var(--text-dim)]">
-                    {new Date(last.ts).toLocaleTimeString()}
+                    {new Date(last.ts).toLocaleTimeString("fr-FR")}
                   </span>{" "}
                   <span className="text-[var(--accent)]">{last.type}</span>
                 </>
               ) : (
-                <span className="text-[var(--text-dim)]">— (try ⌘K → Hello: Ping)</span>
+                <span className="text-[var(--text-dim)]">— (essayez ⌘K → Bonjour : Ping du bus)</span>
               )}
             </div>
             <div className="mt-2 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-              Pings seen
+              Pings reçus
             </div>
             <div className="mono mt-1 text-[11px]">{pings.length}</div>
           </div>

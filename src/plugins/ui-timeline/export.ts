@@ -684,7 +684,8 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
 
     const audioClips = clips.filter(
       (c) =>
-        (c.track === "Audio" || c.track === "Music" || c.track === "SFX") && isHttpUrl(c.assets?.url),
+        (c.track === "Audio" || c.track === "Music" || c.track === "SFX") &&
+        isHttpUrl(c.assets?.url),
     );
     const decoded = await Promise.all(
       audioClips.map(async (c) => {
@@ -700,7 +701,9 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
           if (e instanceof ExportError) throw e;
           const label = clipLabel(c);
           throw new ExportError(
-            e instanceof Error && /decode|encode/i.test(e.message) ? "decode-failed" : "fetch-failed",
+            e instanceof Error && /decode|encode/i.test(e.message)
+              ? "decode-failed"
+              : "fetch-failed",
             label,
           );
         }

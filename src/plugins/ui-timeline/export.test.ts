@@ -8,11 +8,7 @@
  */
 import { describe, it, expect } from "bun:test";
 import { computeDuckingCurve } from "@/lib/director/ducking";
-import {
-  exportErrorMessage,
-  exportFileName,
-  exportPhaseLabel,
-} from "@/lib/ui/labels";
+import { exportErrorMessage, exportFileName, exportPhaseLabel } from "@/lib/ui/labels";
 import {
   blackFadeAlpha,
   clipLabel,
@@ -234,7 +230,9 @@ describe("subtitleLayout", () => {
     expect(l.text.endsWith("…")).toBe(true);
   });
   it("returns null without text", () => {
-    expect(subtitleLayout(clip({ track: "Subtitles", assets: null, meta: {} }), 1920, 1080, measure)).toBeNull();
+    expect(
+      subtitleLayout(clip({ track: "Subtitles", assets: null, meta: {} }), 1920, 1080, measure),
+    ).toBeNull();
   });
 });
 
