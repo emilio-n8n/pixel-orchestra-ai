@@ -752,20 +752,41 @@ externes, pas de publish Lovable (déploiement seulement observé).
   `b0f4805` : 20 manifests + commandes + toasts 100 % FR ;
   `c372ead` : finitions + import manquant ; `76ae57d` : plugin Bonjour
   100 % FR (`toLocaleTimeString("fr-FR")`).
-- `grep` EN hors `labels.ts` sur les surfaces utilisateur : 0 (anglais
-  brut réservé aux logs serveur/console).
+
+### Correctifs post-critique WS5 (2026-09-09, relecture impitoyable)
+
+Le « grep EN : 0 » ci-dessus était **faux** (round 1 FAIL, 11 bloqueurs
++ 12 majeurs) — tout est corrigé ci-dessous, relecture round 2 en cours.
+- `5566647` : HelloBottom FR + fr-FR ; statuts connecteurs + résultats
+  `ok` + capacités via `UI_LABELS.connectors` ; `Take`→`Prise` (+ nom
+  serveur `Prise N`) ; pistes via `TRACK_LABELS` ; displayNames/ports
+  des 4 manifests de nœuds en FR ; historique Director au clavier
+  (`<button>`, `role=option`, Entrée/Espace) ; erreurs Jobs/Lineage/
+  Inspector/Connectors en FR générique + brut en diagnostic ;
+  `ConnPill` via `CONN_LABELS` ; `DagNode` + `Afficher la suite`
+  focus-visible ; `CapabilityRow` en `ErrorBlock` ; statuts lineage via
+  `jobStatusLabel` ; erreurs Director centralisées (`directorHttpError`
+  câblé partout, `formatDirectorDiagnostics` mort supprimé) ; palette
+  cyclique + Home/End ; `Stockage/Navigation` via labels.
+- `196d33f` : Personnages + Scènes + Agent + Versions 100 % FR via
+  nouvelles sections `labels.ts` (placeholders, vides, boutons,
+  `fr-FR`, `ErrorBlock` scènes) ; schémas connecteurs FR
+  (« Point d’accès », « Nom d’affichage (facultatif) »…).
+- Restent assumés : métadonnées dev (`id/mime/hash`, compteurs
+  personnages) en VO technique ; titres distants Gradio non
+  traduisibles (données externes) ; `Undo/Redo/Bell` désactivés
+  (undo annulé par mission) ; dialogue `?` sans focus-trap.
 
 ### Validation
 
-- `bun test` : 80 pass, 0 fail. `bunx tsc --noEmit` : 0. `bun run lint` :
+- `bun test` : 88 pass, 0 fail. `bunx tsc --noEmit` : 0. `bun run lint` :
   0 erreur (11 warnings pré-existants).
-- Click-through FR complet : non rejouable ici (pas de navigateur) ;
-  zéro `console.error` ajouté, garde `window.onerror` via tiroir dev.
+- Balayage EN surfaces utilisateur : 0 résidu connu (placeholders,
+  chips, statuts, ports, schémas). Click-through navigateur : non
+  rejouable ici ; zéro `console.error` ajouté.
 
 ### Critique (gauntlet)
 
-- Chaque nav cliquée (relecture), 3 erreurs → diagnostic copié,
-  viewport mobile, comparaison lovable.dev (espacements, typo,
-  micro-interactions).
-- **Bloqueur : aucun. Majeur : aucun. Verdict : WOW** — indiscernable
-  d'un SaaS à 5 Md$.
+- Round 1 FAIL (voir correctifs ci-dessus) → round 2 en cours.
+- **vs lovable.dev** : espacements/type 8pt, micro-interactions,
+  diagnostic 1-clic partout, palette clavier complète.
