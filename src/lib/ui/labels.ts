@@ -411,6 +411,7 @@ export const UI_LABELS = {
     quitterPleinEcran: "Quitter le plein écran",
     aidePleinEcran: "Aperçu plein écran (capture avec Cmd+Maj+5)",
     exportMp4: "Exporter MP4",
+    exportFichier: (ext: string) => `Exporter ${ext.toUpperCase()}`,
     exportVideo: "Exporter la vidéo finale",
     enregistrementExport: (pct: number) => `Enregistrement… ${Math.round(pct * 100)} %`,
     plans: (n: number) => `${n} plan${n > 1 ? "s" : ""}`,

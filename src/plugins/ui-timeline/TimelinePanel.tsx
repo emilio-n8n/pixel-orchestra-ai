@@ -33,6 +33,7 @@ import {
   formatTimeMs as fmt,
   renderTimelineFrame,
   runExport,
+  pickExportMime,
   progressFraction,
   EXPORT_WIDTH as LOGICAL_W,
   EXPORT_HEIGHT as LOGICAL_H,
@@ -1037,6 +1038,12 @@ export function TimelinePanel() {
 
   const T = UI_LABELS.timeline;
   const empty = clips.length === 0;
+  // The button promises the container the browser will actually record
+  // (MP4 on Chrome, WebM where MP4 is unsupported) — never "MP4" for a .webm.
+  const exportExt =
+    typeof MediaRecorder !== "undefined"
+      ? pickExportMime((m) => MediaRecorder.isTypeSupported(m)).ext
+      : "mp4";
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-1)] text-xs text-[var(--text-muted)]">
@@ -1212,7 +1219,7 @@ export function TimelinePanel() {
           ) : (
             <Download className="h-3 w-3" />
           )}
-          {T.exportMp4}
+          {T.exportFichier(exportExt)}
         </button>
       </div>
 

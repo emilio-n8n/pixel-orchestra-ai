@@ -46,7 +46,8 @@ export const FRAME_MS = 1000 / EXPORT_FPS;
 /**
  * Audio graphs start 150ms after the recorder: lets the canvas
  * captureStream attach so the head of the file is never chopped.
- * Verified constant — preview and file both honour it.
+ * The video capture waits out the same lead (see runExport) so audio
+ * and picture stay aligned exactly as heard in the preview.
  */
 export const AUDIO_LEAD_S = 0.15;
 export const VIDEO_BITS_PER_SECOND = 3_000_000;
@@ -483,7 +484,12 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
       typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9"
         : "video/webm";
-    const rec = new MediaRecorder(stream, { mimeType: recMime });
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, { mimeType: recMime });
+    } catch {
+      throw new ExportError("prerender-failed", `carte ${label}`);
+    }
     const chunks: BlobPart[] = [];
     rec.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
@@ -786,6 +792,9 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     // 1920×1080 regardless of the preview canvas backing store (HiDPI
     // ×dpr), and the preview never flashes while the file encodes.
     const canvas = opts.canvas ?? makeExportCanvas();
+    if (canvas.width !== EXPORT_WIDTH || canvas.height !== EXPORT_HEIGHT) {
+      throw new ExportError("unexpected", "canvas d’export 1920×1080 requis");
+    }
     stream = canvas.captureStream(EXPORT_FPS);
     const AC: typeof AudioContext =
       window.AudioContext ||
@@ -849,11 +858,16 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
 
     // ---- mime negotiation (MP4 first, extension always matches) ----
     const picked = pickExportMime((m) => MediaRecorder.isTypeSupported(m));
-    const rec = new MediaRecorder(stream, {
-      mimeType: picked.mime,
-      videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
-      audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
-    });
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, {
+        mimeType: picked.mime,
+        videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      });
+    } catch {
+      throw new ExportError("recorder-unsupported");
+    }
     const chunks: BlobPart[] = [];
     rec.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
@@ -905,6 +919,15 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
         htmlVideoEls,
       });
     render(0);
+    // A/V alignment: audio sources were scheduled at startAt (now +
+    // LEAD for a clean file head), so hold the video capture back by the
+    // same lead — otherwise every voice/music lands ~150ms late in the
+    // file versus what the preview played.
+    const leadWaitMs = Math.round(AUDIO_LEAD_S * 1000);
+    for (let waited = 0; waited < leadWaitMs; waited += 25) {
+      throwIfCancelled(signal);
+      await sleep(Math.min(25, leadWaitMs - waited));
+    }
     rec.start(100);
     const startedAt = performance.now();
     let activeHtmlId: string | null = null;
