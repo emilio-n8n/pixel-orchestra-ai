@@ -500,21 +500,35 @@ export function TimelinePanel() {
     const clip = clipsRef.current.find((c) => c.id === id);
     if (!clip) return;
     setActionError(null);
+    // Optimistic UI: the realtime channel confirms a frame later.
+    const removedEnd = (clip.start_ms ?? 0) + (clip.duration_ms ?? 0);
+    const later = ripple
+      ? clipsRef.current.filter(
+          (c) => c.track === clip.track && (c.start_ms ?? 0) >= removedEnd && c.id !== id,
+        )
+      : [];
+    setClips((prev) => {
+      const rest = prev.filter((c) => c.id !== id);
+      if (!ripple) return rest;
+      return rest.map((c) =>
+        later.some((l) => l.id === c.id)
+          ? { ...c, start_ms: Math.max(0, (c.start_ms ?? 0) - (clip.duration_ms ?? 0)) }
+          : c,
+      );
+    });
+    selectClip(null);
     try {
       await supabase.from("timeline_clips").delete().eq("id", id);
-      if (ripple) {
-        const removedEnd = (clip.start_ms ?? 0) + (clip.duration_ms ?? 0);
-        const later = clipsRef.current.filter(
-          (c) => c.track === clip.track && (c.start_ms ?? 0) >= removedEnd && c.id !== id,
+      if (later.length > 0) {
+        await Promise.all(
+          later.map((c) =>
+            supabase
+              .from("timeline_clips")
+              .update({ start_ms: Math.max(0, (c.start_ms ?? 0) - (clip.duration_ms ?? 0)) })
+              .eq("id", c.id),
+          ),
         );
-        for (const c of later) {
-          await supabase
-            .from("timeline_clips")
-            .update({ start_ms: Math.max(0, (c.start_ms ?? 0) - (clip.duration_ms ?? 0)) })
-            .eq("id", c.id);
-        }
       }
-      selectClip(null);
     } catch (e) {
       if (isOfflineError(e)) return;
       setActionError(UI_LABELS.timeline.erreurSuppression);
@@ -617,46 +631,62 @@ export function TimelinePanel() {
     };
   }
 
+  /**
+   * Resize geometry clamped so a resize can never create an overlap that
+   * drag forbids: left edge stops at the previous neighbour's end, right
+   * edge stops at the next neighbour's start (dissolve overlaps set via
+   * set_clip_transitions stay the only legal overlaps).
+   */
+  function computeResize(
+    r: { clipId: string; side: "left" | "right"; startMs: number; durationMs: number },
+    dxMs: number,
+  ): { start_ms: number; duration_ms: number } {
+    const end = r.startMs + r.durationMs;
+    const track = clipsRef.current.find((x) => x.id === r.clipId)?.track;
+    const others = clipsRef.current.filter((c) => c.track === track && c.id !== r.clipId);
+    if (r.side === "left") {
+      const prevEnd = Math.max(
+        0,
+        ...others
+          .filter((o) => (o.start_ms ?? 0) < end)
+          .map((o) => Math.min((o.start_ms ?? 0) + (o.duration_ms ?? 3000), end - MIN_DURATION_MS)),
+      );
+      const rawStart = Math.max(
+        prevEnd,
+        Math.min(r.startMs + dxMs, end - MIN_DURATION_MS),
+      );
+      const newStart = snapMs(Math.max(0, rawStart));
+      return {
+        start_ms: newStart,
+        duration_ms: snapMs(Math.max(MIN_DURATION_MS, end - newStart)),
+      };
+    }
+    const nextStart = Math.min(
+      Number.POSITIVE_INFINITY,
+      ...others
+        .filter((o) => (o.start_ms ?? 0) >= r.startMs)
+        .map((o) => o.start_ms ?? 0),
+    );
+    return {
+      start_ms: r.startMs,
+      duration_ms: snapMs(
+        Math.max(MIN_DURATION_MS, Math.min(r.durationMs + dxMs, nextStart - r.startMs)),
+      ),
+    };
+  }
+
   useEffect(() => {
     function onMove(e: MouseEvent) {
       const r = resizeRef.current;
       if (!r) return;
       const dx = (e.clientX - r.startClientX) / PX_PER_MS;
-      if (r.side === "left") {
-        const rawStart = Math.max(
-          0,
-          Math.min(r.startMs + dx, r.startMs + r.durationMs - MIN_DURATION_MS),
-        );
-        const newStart = snapMs(rawStart);
-        patchClipLocal(r.clipId, {
-          start_ms: newStart,
-          duration_ms: snapMs(Math.max(MIN_DURATION_MS, r.durationMs - (newStart - r.startMs))),
-        });
-      } else {
-        patchClipLocal(r.clipId, {
-          duration_ms: snapMs(Math.max(MIN_DURATION_MS, r.durationMs + dx)),
-        });
-      }
+      patchClipLocal(r.clipId, computeResize(r, dx));
     }
     function onUp(e: MouseEvent) {
       const r = resizeRef.current;
       if (r) {
         const dx = (e.clientX - r.startClientX) / PX_PER_MS;
-        if (r.side === "left") {
-          const rawStart = Math.max(
-            0,
-            Math.min(r.startMs + dx, r.startMs + r.durationMs - MIN_DURATION_MS),
-          );
-          const newStart = snapMs(rawStart);
-          void updateClip(r.clipId, {
-            start_ms: newStart,
-            duration_ms: snapMs(Math.max(MIN_DURATION_MS, r.durationMs - (newStart - r.startMs))),
-          });
-        } else {
-          void updateClip(r.clipId, {
-            duration_ms: snapMs(Math.max(MIN_DURATION_MS, r.durationMs + dx)),
-          });
-        }
+        void updateClip(r.clipId, computeResize(r, dx));
       }
       resizeRef.current = null;
     }
