@@ -613,6 +613,43 @@ export const UI_LABELS = {
     restaurer: "Restaurer",
     raisonManuelle: "manuel",
   },
+  graphe: {
+    palette: "Palette",
+    titre: (noeuds: number, liens: number) =>
+      `Flux créatif · ${noeuds} nœud${noeuds > 1 ? "s" : ""} · ${liens} lien${liens > 1 ? "s" : ""}`,
+    executer: "Exécuter",
+    executionEnCours: "Exécution…",
+    vide: "Ajoutez des nœuds depuis la palette pour commencer.",
+    resultat: (statut: string, ok: number, err: number, ms: number) =>
+      `${statut} · ok=${ok} err=${err} · ${ms}ms`,
+    executionsRecentes: "Exécutions récentes",
+    aucuneExecution: "Aucune exécution pour l’instant.",
+    supprimer: "Suppr.",
+    connecter: "Connecter →",
+    choisirCible: "choisir une cible",
+    connecteur: "Connecteur",
+    choisirConnecteur: "choisir un connecteur",
+    capacite: "Capacité",
+    chargementCapacites: "chargement…",
+    choisirCapacite: "choisir une capacité",
+    sansCapacites:
+      "Aucune capacité détectée — le point d’accès est peut-être injoignable. Essayez « Tester » dans l’onglet Connexions.",
+    sansConnecteurs:
+      "Aucun connecteur enregistré — ajoutez un point d’accès Gradio dans l’onglet Connexions.",
+  },
+  visionneuse: {
+    modifierHtml: (nom: string) => `Modifier le HTML — ${nom}`,
+    annuler: "Annuler",
+    enregistrement: "Enregistrement…",
+    enregistrer: "Enregistrer",
+    modifier: "Modifier",
+    chargementHtml: "Chargement du HTML…",
+    chargementImage: "Chargement de l’image…",
+    chargementVideo: "Chargement de la vidéo…",
+    chargementAudio: "Chargement de l’audio…",
+    erreurChargement: "Chargement du média impossible.",
+    erreurEnregistrement: "Enregistrement impossible.",
+  },
   toasts: {
     biblioActualisee: "Actualisation de la médiathèque demandée",
     pingEmis: "Ping émis",

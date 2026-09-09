@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { getAssetBytes } from "@/plugins/library/server";
+import { ErrorBlock } from "@/components/ui/error-block";
+import { UI_LABELS } from "@/lib/ui/labels";
 import type { ViewerAsset } from "@/kernel";
 
 export function ImageViewer({ asset }: { asset: ViewerAsset }) {
@@ -31,15 +33,19 @@ export function ImageViewer({ asset }: { asset: ViewerAsset }) {
 
   if (err) {
     return (
-      <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-        {err}
+      <div className="flex h-full items-center justify-center p-8">
+        <ErrorBlock
+          message={UI_LABELS.visionneuse.erreurChargement}
+          error={err}
+          context="viewer.image"
+        />
       </div>
     );
   }
   if (!src) {
     return (
       <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-        Loading image…
+        {UI_LABELS.visionneuse.chargementImage}
       </div>
     );
   }

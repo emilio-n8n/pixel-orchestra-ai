@@ -8,6 +8,7 @@ import {
   type ConnectorView,
 } from "@/plugins/connectors-panel/server";
 import { CAPABILITY_NODE_ID } from "@/plugins/node-capability/manifest";
+import { UI_LABELS, jobStatusLabel } from "@/lib/ui/labels";
 import { listGraphRuns, listNodeTypes, runGraphFn } from "./server";
 import type { EdgeSpec, GraphDocument, NodeSpec } from "@/kernel";
 
@@ -118,9 +119,8 @@ export function NodeGraphPanel() {
         errorCount: r.errorCount ?? 0,
         totalMs: r.totalMs ?? 0,
       });
-    } catch (e) {
+    } catch {
       setLastResult({ status: "error", okCount: 0, errorCount: 1, totalMs: 0 });
-      console.error(e);
     } finally {
       setRunning(false);
     }
@@ -139,7 +139,7 @@ export function NodeGraphPanel() {
       {/* Palette */}
       <div className="w-56 shrink-0 overflow-auto border-r border-[var(--line)] p-3 text-xs">
         <div className="text-[10px] font-medium uppercase tracking-widest text-[var(--text-dim)]">
-          Palette
+          {UI_LABELS.graphe.palette}
         </div>
         {Object.entries(grouped).map(([cat, ts]) => (
           <div key={cat} className="mt-3">
@@ -164,21 +164,19 @@ export function NodeGraphPanel() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-            Node graph · {doc.nodes.length} nodes · {doc.edges.length} edges
+            {UI_LABELS.graphe.titre(doc.nodes.length, doc.edges.length)}
           </div>
           <button
             onClick={run}
             disabled={running || doc.nodes.length === 0}
             className="rounded-md bg-[var(--accent)] px-3 py-1 text-[11px] font-medium text-[var(--accent-fg)] hover:bg-[var(--accent-strong)] disabled:opacity-50"
           >
-            {running ? "Running…" : "Run"}
+            {running ? UI_LABELS.graphe.executionEnCours : UI_LABELS.graphe.executer}
           </button>
         </div>
         <div className="flex-1 overflow-auto p-3 text-xs text-[var(--text-muted)]">
           {doc.nodes.length === 0 ? (
-            <div className="text-center text-[var(--text-dim)]">
-              Add nodes from the palette to start.
-            </div>
+            <div className="text-center text-[var(--text-dim)]">{UI_LABELS.graphe.vide}</div>
           ) : (
             <div className="space-y-3">
               {doc.nodes.map((n) => (
@@ -200,8 +198,12 @@ export function NodeGraphPanel() {
           )}
           {lastResult ? (
             <div className="mono mt-3 rounded border border-[var(--line)] bg-[var(--surface-2)] p-2 text-[10px]">
-              {lastResult.status} · ok={lastResult.okCount} err={lastResult.errorCount} ·{" "}
-              {lastResult.totalMs}ms
+              {UI_LABELS.graphe.resultat(
+                jobStatusLabel(lastResult.status),
+                lastResult.okCount,
+                lastResult.errorCount,
+                lastResult.totalMs,
+              )}
             </div>
           ) : null}
         </div>
@@ -210,10 +212,10 @@ export function NodeGraphPanel() {
       {/* Jobs sidebar */}
       <div className="w-64 shrink-0 overflow-auto border-l border-[var(--line)] p-3 text-xs">
         <div className="text-[10px] font-medium uppercase tracking-widest text-[var(--text-dim)]">
-          Recent runs
+          {UI_LABELS.graphe.executionsRecentes}
         </div>
         {runs.length === 0 ? (
-          <div className="mt-2 text-[var(--text-dim)]">No runs yet.</div>
+          <div className="mt-2 text-[var(--text-dim)]">{UI_LABELS.graphe.aucuneExecution}</div>
         ) : (
           <ul className="mt-2 space-y-1">
             {runs.map((r) => (
@@ -232,11 +234,11 @@ export function NodeGraphPanel() {
                           : "bg-[var(--status-warn)]/20 text-[var(--status-warn)]"
                     }`}
                   >
-                    {r.status}
+                    {jobStatusLabel(r.status)}
                   </span>
                 </div>
                 <div className="mono mt-1 text-[9px] text-[var(--text-dim)]">
-                  {new Date(r.startedAt).toLocaleTimeString()}
+                  {new Date(r.startedAt).toLocaleTimeString("fr-FR")}
                 </div>
               </li>
             ))}
@@ -290,7 +292,7 @@ function NodeCard({
           onClick={onRemove}
           className="rounded border border-[var(--line)] px-2 py-0.5 text-[10px] uppercase tracking-widest text-[var(--status-err)] hover:border-[var(--status-err)]"
         >
-          Del
+          {UI_LABELS.graphe.supprimer}
         </button>
       </div>
       <div className="mt-2">
@@ -302,7 +304,7 @@ function NodeCard({
       {otherNodes.length > 0 ? (
         <div className="mt-2 flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-            Connect →
+            {UI_LABELS.graphe.connecter}
           </span>
           <select
             defaultValue=""
@@ -312,7 +314,7 @@ function NodeCard({
             }}
             className="rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]"
           >
-            <option value="">pick a target</option>
+            <option value="">{UI_LABELS.graphe.choisirCible}</option>
             {otherNodes.map((n) => (
               <option key={n.id} value={n.id}>
                 {types.find((t) => t.id === n.type)?.displayName ?? n.type} ({n.id})
@@ -426,14 +428,14 @@ function CapabilityConfig({
     <div className="mb-2 space-y-1.5 rounded border border-[var(--line)] bg-[var(--surface-3)] p-2">
       <label className="flex items-center gap-2">
         <span className="w-16 shrink-0 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-          Connector
+          {UI_LABELS.graphe.connecteur}
         </span>
         <select
           value={connectorId}
           onChange={(e) => onConnectorChange(e.target.value)}
           className="flex-1 rounded border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] text-[var(--text)]"
         >
-          <option value="">pick a connector</option>
+          <option value="">{UI_LABELS.graphe.choisirConnecteur}</option>
           {connectors.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name} · {c.kind}
@@ -443,7 +445,7 @@ function CapabilityConfig({
       </label>
       <label className="flex items-center gap-2">
         <span className="w-16 shrink-0 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-          Capability
+          {UI_LABELS.graphe.capacite}
         </span>
         <select
           value={capId}
@@ -451,7 +453,9 @@ function CapabilityConfig({
           disabled={!connectorId || loadingCaps}
           className="flex-1 rounded border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] text-[var(--text)] disabled:opacity-50"
         >
-          <option value="">{loadingCaps ? "loading…" : "pick a capability"}</option>
+          <option value="">
+            {loadingCaps ? UI_LABELS.graphe.chargementCapacites : UI_LABELS.graphe.choisirCapacite}
+          </option>
           {caps.map((c) => (
             <option key={c.id} value={c.id}>
               {c.displayName || c.id} · {c.kind}
@@ -461,13 +465,12 @@ function CapabilityConfig({
       </label>
       {connectorId && !loadingCaps && caps.length === 0 ? (
         <div className="text-[10px] text-[var(--status-warn)]">
-          No capabilities detected — the endpoint may be unreachable. Try "Probe" in the Connectors
-          tab.
+          {UI_LABELS.graphe.sansCapacites}
         </div>
       ) : null}
       {connectors.length === 0 ? (
         <div className="text-[10px] text-[var(--status-warn)]">
-          No connectors registered yet — add a Gradio endpoint in the Connectors tab.
+          {UI_LABELS.graphe.sansConnecteurs}
         </div>
       ) : null}
     </div>

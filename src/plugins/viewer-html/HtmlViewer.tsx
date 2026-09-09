@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAssetBytes, updateHtmlAsset } from "@/plugins/library/server";
+import { ErrorBlock } from "@/components/ui/error-block";
+import { UI_LABELS } from "@/lib/ui/labels";
 import type { ViewerAsset } from "@/kernel";
 
 export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
@@ -75,8 +77,12 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
 
   if (err) {
     return (
-      <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-        {err}
+      <div className="flex h-full items-center justify-center p-8">
+        <ErrorBlock
+          message={UI_LABELS.visionneuse.erreurChargement}
+          error={err}
+          context="viewer.html"
+        />
       </div>
     );
   }
@@ -85,21 +91,21 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
       <div className="flex h-full flex-col bg-[var(--surface-0)] p-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-            Edit HTML — {asset.name}
+            {UI_LABELS.visionneuse.modifierHtml(asset.name)}
           </span>
           <div className="flex gap-2">
             <button
               onClick={() => setEditing(false)}
               className="rounded border border-[var(--line)] px-2 py-1 text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--line-strong)]"
             >
-              Cancel
+              {UI_LABELS.visionneuse.annuler}
             </button>
             <button
               onClick={save}
               disabled={busy}
               className="rounded bg-[var(--accent)] px-2 py-1 text-[10px] font-medium uppercase tracking-widest text-[var(--accent-fg)] disabled:opacity-50"
             >
-              {busy ? "Saving…" : "Save"}
+              {busy ? UI_LABELS.visionneuse.enregistrement : UI_LABELS.visionneuse.enregistrer}
             </button>
           </div>
         </div>
@@ -110,9 +116,12 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
           className="mono flex-1 resize-none rounded border border-[var(--line)] bg-[var(--surface-1)] p-3 text-[11px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
         />
         {saveErr ? (
-          <div className="mt-2 rounded border border-[var(--status-err)] bg-[var(--status-err)]/10 p-2 text-[10px] text-[var(--status-err)]">
-            {saveErr}
-          </div>
+          <ErrorBlock
+            message={UI_LABELS.visionneuse.erreurEnregistrement}
+            error={saveErr}
+            context="viewer.html"
+            compact
+          />
         ) : null}
       </div>
     );
@@ -121,7 +130,7 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
     <div className="relative h-full bg-[var(--surface-0)] p-4">
       {!src ? (
         <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-muted)]">
-          Loading html…
+          {UI_LABELS.visionneuse.chargementHtml}
         </div>
       ) : (
         <iframe
@@ -135,7 +144,7 @@ export function HtmlViewer({ asset }: { asset: ViewerAsset }) {
         onClick={startEdit}
         className="absolute right-6 top-6 rounded-md bg-[var(--surface-2)] px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest text-[var(--text-muted)] shadow-[var(--shadow-pop)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
       >
-        Edit
+        {UI_LABELS.visionneuse.modifier}
       </button>
     </div>
   );
