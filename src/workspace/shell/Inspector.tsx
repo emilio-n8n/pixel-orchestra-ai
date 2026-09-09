@@ -15,7 +15,7 @@ import { usePanelStore } from "@/stores/panels";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useTimelineUi,
-  DEFAULT_SUBTITLE_STYLE,
+  resolveSubtitleStyle,
   SUBTITLE_MAX_CHARS,
   formatSubtitleText,
   type TimelineClip,
@@ -34,9 +34,9 @@ const FONT_OPTIONS = [
 ];
 
 const POSITION_OPTIONS = [
-  { value: "bottom", label: "Bas" },
-  { value: "center", label: "Centre" },
-  { value: "top", label: "Haut" },
+  { value: "bottom", label: UI_LABELS.inspector.positionBas },
+  { value: "center", label: UI_LABELS.inspector.positionCentre },
+  { value: "top", label: UI_LABELS.inspector.positionHaut },
 ];
 
 export function Inspector() {
@@ -200,7 +200,7 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                   ) : null}
                   {isCurrent ? (
                     <span className="shrink-0 text-[9px] uppercase tracking-widest text-[var(--accent-strong)]">
-                      actif
+                      {UI_LABELS.inspector.actif}
                     </span>
                   ) : null}
                 </div>
@@ -266,11 +266,11 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
         <Row k={UI_LABELS.inspector.duree} v={`${((clip.duration_ms ?? 0) / 1000).toFixed(2)} s`} />
         <Row
           k={UI_LABELS.inspector.contenu}
-          v={isSilence ? "Silence" : kindLabel(clip.assets?.kind ?? "other")}
+          v={isSilence ? kindLabel("silence") : kindLabel(clip.assets?.kind ?? "other")}
         />
         {clip.assets?.prompt ? (
           <div className="pt-1">
-            <div className="text-[11px] text-[var(--text-dim)]">Prompt</div>
+            <div className="text-[11px] text-[var(--text-dim)]">{UI_LABELS.inspector.consigne}</div>
             <div className="mt-0.5 line-clamp-3 whitespace-pre-wrap text-[11.5px] text-[var(--text)]">
               {clip.assets.prompt}
             </div>
@@ -285,22 +285,22 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
 function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
   const selectClip = useTimelineUi((s) => s.selectClip);
   const meta = useMemo(() => clip.meta ?? {}, [clip.meta]);
-  const prevStyle = (meta.style ?? {}) as {
-    font?: string;
-    size?: number;
-    color?: string;
-    position?: string;
-  };
+  // Init through the shared resolver: the canvas clamps the same way,
+  // so the editor never shows a style the renderer would not use.
+  const initial = useMemo(() => resolveSubtitleStyle(meta), [meta]);
   const [text, setText] = useState<string>(
     (meta.text as string | undefined) ?? clip.assets?.prompt ?? "",
   );
-  const [font, setFont] = useState(prevStyle.font ?? DEFAULT_SUBTITLE_STYLE.font);
-  const [size, setSize] = useState(prevStyle.size ?? DEFAULT_SUBTITLE_STYLE.size);
-  const [color, setColor] = useState(prevStyle.color ?? DEFAULT_SUBTITLE_STYLE.color);
-  const [position, setPosition] = useState(prevStyle.position ?? DEFAULT_SUBTITLE_STYLE.position);
+  const [font, setFont] = useState(initial.font);
+  const [size, setSize] = useState(initial.size);
+  const [color, setColor] = useState(initial.color);
+  const [position, setPosition] = useState<"bottom" | "center" | "top">(initial.position);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previewText = formatSubtitleText(text);
+  // Preview through the same resolver as the canvas: identical
+  // font/size/color/position mapping (box scaled to the preview width).
+  const resolved = resolveSubtitleStyle({ style: { font, size, color, position } });
 
   const save = useCallback(async () => {
     setBusy(true);
@@ -358,16 +358,20 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
           </div>
           <div
             className={`flex min-h-14 items-center rounded bg-black p-2 ${
-              position === "top"
+              resolved.position === "top"
                 ? "justify-center items-start"
-                : position === "center"
+                : resolved.position === "center"
                   ? "justify-center items-center"
                   : "justify-center items-end"
             }`}
           >
             <span
               className="rounded bg-black/55 px-2 py-1 text-center"
-              style={{ fontFamily: font, fontSize: Math.min(20, Math.max(10, size * 0.55)), color }}
+              style={{
+                fontFamily: resolved.font,
+                fontSize: Math.min(20, Math.max(10, resolved.size * 0.55)),
+                color: resolved.color,
+              }}
             >
               {previewText || "…"}
             </span>
@@ -425,7 +429,13 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             </div>
             <select
               value={position}
-              onChange={(e) => setPosition(e.target.value)}
+              onChange={(e) =>
+                setPosition(
+                  e.target.value === "top" || e.target.value === "center"
+                    ? e.target.value
+                    : "bottom",
+                )
+              }
               className="h-7 w-full rounded border border-[var(--line)] bg-[var(--surface-1)] px-1.5 text-[11px] text-[var(--text)] outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
             >
               {POSITION_OPTIONS.map((p) => (

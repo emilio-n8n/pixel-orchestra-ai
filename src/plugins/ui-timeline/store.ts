@@ -104,7 +104,10 @@ export function formatSubtitleText(raw: string): string {
   // Code-point aware: never split a surrogate pair / grapheme.
   const points = [...raw];
   if (points.length <= SUBTITLE_MAX_CHARS) return raw;
-  return `${points.slice(0, SUBTITLE_MAX_CHARS - 1).join("").trimEnd()}…`;
+  return `${points
+    .slice(0, SUBTITLE_MAX_CHARS - 1)
+    .join("")
+    .trimEnd()}…`;
 }
 
 /** True when keyboard shortcuts must stay silent (user is typing). */
@@ -113,7 +116,11 @@ export function isTypingTarget(t: HTMLElement | null): boolean {
   const tag = t.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   if (t.isContentEditable) return true;
-  if (t.closest?.('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'))
+  if (
+    t.closest?.(
+      '[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
+    )
+  )
     return true;
   if (t.closest?.('[role="textbox"]')) return true;
   return false;

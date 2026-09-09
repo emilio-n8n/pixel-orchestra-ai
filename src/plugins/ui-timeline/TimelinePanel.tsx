@@ -45,6 +45,7 @@ import {
   exportPhaseLabel,
   UI_LABELS,
   TRACK_LABELS,
+  kindLabel,
 } from "@/lib/ui/labels";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -219,13 +220,8 @@ export function TimelinePanel() {
   }, [clips, playhead]);
 
   // --------------- HiDPI canvas backing store ---------------
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = LOGICAL_W * dpr;
-    canvas.height = LOGICAL_H * dpr;
-  }, []);
+  // Backing size is (re)applied next to draw() below (after its
+  // declaration) so resize/zoom never flashes low-res.
 
   // --------------- preload images (LRU-capped + decode, WS6) ---------------
   const MAX_IMG_CACHE = 60;
@@ -273,6 +269,9 @@ export function TimelinePanel() {
     if (playing) currentHtmlUrlRef.current = null;
   }, [playing]);
 
+  // HTML overlay: activation follows the per-frame playhead ref (no
+  // 100 ms mirror lag when scrubbing), loading follows the active clip.
+  const activeHtmlIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!playing && !exporting) return;
     const active = clipsRef.current.find(
@@ -281,8 +280,14 @@ export function TimelinePanel() {
         playhead >= c.start_ms &&
         playhead < c.start_ms + c.duration_ms,
     );
-    setActiveHtmlClip(active ?? null);
+    if ((active?.id ?? null) !== activeHtmlIdRef.current) {
+      activeHtmlIdRef.current = active?.id ?? null;
+      setActiveHtmlClip(active ?? null);
+    }
+  }, [playhead, playing, exporting]);
 
+  useEffect(() => {
+    const active = activeHtmlClip;
     if (!active) {
       currentHtmlUrlRef.current = null;
       return;
@@ -306,7 +311,7 @@ export function TimelinePanel() {
         }
       })
       .catch(() => {});
-  }, [playhead, playing, exporting]);
+  }, [activeHtmlClip]);
 
   // Overlay ≡ canvas parity: the card iframe exactly covers the drawn
   // canvas rect (the same box the file encodes), never the whole
@@ -360,6 +365,26 @@ export function TimelinePanel() {
   useEffect(() => {
     draw(playhead);
   }, [playhead, clips, draw]);
+
+  // HiDPI backing store (LOGICAL×dpr≤2), re-evaluated on resize/zoom so
+  // the first paint after a dpr change never flashes low-res.
+  useEffect(() => {
+    function apply() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = LOGICAL_W * dpr;
+      const h = LOGICAL_H * dpr;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        draw(playheadRef.current);
+      }
+    }
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [draw]);
 
   /** Move the playhead without a React render (rAF-hot path). */
   const paintPlayhead = useCallback(
@@ -423,12 +448,13 @@ export function TimelinePanel() {
   }
 
   // --------------- drag & drop + resize clips ---------------
+  // getBoundingClientRect is already scroll-correct (viewport-relative
+  // on both sides) — no manual scrollLeft fudge.
   function msFromClientX(clientX: number): number {
     const el = trackAreaRef.current;
     if (!el) return 0;
     const rect = el.getBoundingClientRect();
-    const scrollLeft = (el.parentElement as HTMLElement | null)?.scrollLeft ?? 0;
-    return Math.max(0, (clientX - rect.left + scrollLeft) / PX_PER_MS);
+    return Math.max(0, (clientX - rect.left) / PX_PER_MS);
   }
 
   /** Push `startMs` after any overlapping clip on `track` (same logic as add_to_timeline). */
@@ -582,8 +608,11 @@ export function TimelinePanel() {
         return;
       }
       if (e.key === " " || e.code === "Space") {
-        // Let focused buttons keep their native Space activation.
-        if (onButtonOrLink) return;
+        // Let focused buttons keep their native Space activation —
+        // except range sliders, where Space is dead natively.
+        const isRange =
+          target?.tagName === "INPUT" && (target as HTMLInputElement).type === "range";
+        if (onButtonOrLink && !isRange) return;
         e.preventDefault();
         setPlaying((p) => !p);
       }
@@ -651,10 +680,7 @@ export function TimelinePanel() {
           .filter((o) => (o.start_ms ?? 0) < end)
           .map((o) => Math.min((o.start_ms ?? 0) + (o.duration_ms ?? 3000), end - MIN_DURATION_MS)),
       );
-      const rawStart = Math.max(
-        prevEnd,
-        Math.min(r.startMs + dxMs, end - MIN_DURATION_MS),
-      );
+      const rawStart = Math.max(prevEnd, Math.min(r.startMs + dxMs, end - MIN_DURATION_MS));
       const newStart = snapMs(Math.max(0, rawStart));
       return {
         start_ms: newStart,
@@ -663,9 +689,7 @@ export function TimelinePanel() {
     }
     const nextStart = Math.min(
       Number.POSITIVE_INFINITY,
-      ...others
-        .filter((o) => (o.start_ms ?? 0) >= r.startMs)
-        .map((o) => o.start_ms ?? 0),
+      ...others.filter((o) => (o.start_ms ?? 0) >= r.startMs).map((o) => o.start_ms ?? 0),
     );
     return {
       start_ms: r.startMs,
@@ -807,6 +831,15 @@ export function TimelinePanel() {
       }
       paintPlayhead(p);
       mirrorPlayheadUi(p);
+      // Card activation on the exact frame (no 100 ms mirror lag).
+      const htmlActive =
+        clipsRef.current.find(
+          (c) => c.assets?.kind === "html" && p >= c.start_ms && p < c.start_ms + c.duration_ms,
+        ) ?? null;
+      if ((htmlActive?.id ?? null) !== activeHtmlIdRef.current) {
+        activeHtmlIdRef.current = htmlActive?.id ?? null;
+        setActiveHtmlClip(htmlActive);
+      }
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -915,7 +948,7 @@ export function TimelinePanel() {
             ref={htmlOverlayRef}
             className="pointer-events-none absolute z-10"
             sandbox="allow-scripts"
-            title="html-preview"
+            title={T.appercuCarte}
           />
         )}
         {exporting && (
@@ -1147,6 +1180,7 @@ export function TimelinePanel() {
                 return (
                   <div
                     key={t}
+                    onClick={() => selectClip(null)}
                     onDragOver={(e) => {
                       e.preventDefault();
                       setDragOverTrack(t);
@@ -1217,10 +1251,10 @@ export function TimelinePanel() {
                             />
                           ) : c.assets?.kind === "html" ? (
                             <div className="flex h-full items-center justify-center bg-white/10 p-1 text-[9px] uppercase tracking-wider text-white/70">
-                              HTML
+                              {kindLabel("html")}
                             </div>
                           ) : (
-                            <div className="truncate p-1">{c.assets?.kind ?? "?"}</div>
+                            <div className="truncate p-1">{kindLabel(c.assets?.kind ?? "")}</div>
                           )}
                           <div
                             onMouseDown={(e) => handleResizeStart(e, c, "left")}
@@ -1230,13 +1264,13 @@ export function TimelinePanel() {
                           {hasFadeIn ? (
                             <div
                               className="absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]/80"
-                              title={`Fondu d'entrée ${Math.max(fadeInMs, tInMs)}ms`}
+                              title={T.fonduEntree(Math.max(fadeInMs, tInMs))}
                             />
                           ) : null}
                           {hasFadeOut ? (
                             <div
                               className="absolute inset-y-0 right-0 w-[3px] bg-[var(--accent)]/80"
-                              title={`Fondu de sortie ${Math.max(fadeOutMs, tOutMs)}ms`}
+                              title={T.fonduSortie(Math.max(fadeOutMs, tOutMs))}
                             />
                           ) : null}
                           <div

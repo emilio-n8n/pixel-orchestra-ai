@@ -433,6 +433,9 @@ export const UI_LABELS = {
     astuceNudge: "←/→ ±100 ms, Maj+←/→ ±1 s",
     astuceCurseur: "Cliquer pour déplacer la tête de lecture",
     duckGain: (db: string) => `Atténué ${db} dB — le point respire avec le volume réel`,
+    fonduEntree: (ms: number) => `Fondu d’entrée ${ms} ms`,
+    fonduSortie: (ms: number) => `Fondu de sortie ${ms} ms`,
+    appercuCarte: "Aperçu de la carte",
   },
   shell: {
     aucunEspace: "Aucun espace",
@@ -495,6 +498,11 @@ export const UI_LABELS = {
     sousTitreCompteur: (n: number) => `${n}/120`,
     sousTitreLimite: "120 caractères max — l’aperçu coupe avec …",
     sousTitreApercu: "Aperçu fidèle au rendu",
+    consigne: "Consigne",
+    actif: "actif",
+    positionBas: "Bas",
+    positionCentre: "Centre",
+    positionHaut: "Haut",
   },
   diagnostics: {
     copier: "Copier le diagnostic",
