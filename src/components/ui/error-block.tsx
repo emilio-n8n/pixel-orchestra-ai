@@ -11,17 +11,21 @@ export function ErrorBlock({
   message,
   error,
   context,
+  model,
+  session,
   compact,
 }: {
   message: string;
   error: unknown;
   context?: string;
+  model?: string;
+  session?: string;
   compact?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
   async function onCopy() {
-    const ok = await copyDiagnostics(error, { context });
+    const ok = await copyDiagnostics(error, { context, model, session });
     setCopied(ok);
     if (ok) window.setTimeout(() => setCopied(false), 2000);
   }

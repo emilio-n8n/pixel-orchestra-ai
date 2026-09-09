@@ -1,6 +1,6 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLibraryProject } from "@/plugins/library/project";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -75,24 +75,49 @@ export function DirectorPanel() {
 
   const effectiveModel = model === "__custom__" ? customModel : model;
 
+  // Request body as a function of a ref: DefaultChatTransport resolves
+  // `body`/`headers` at request time, so conversation switches always send
+  // the current sessionId (stable per-conversation id → x-opencode-session).
+  const bodyRef = useRef({
+    projectId: pid,
+    apiKey,
+    model: effectiveModel,
+    customModels,
+    cloudflareAccountId,
+    cloudflareApiKey,
+    groqApiKey,
+    sessionId: currentId ?? undefined,
+  });
+  bodyRef.current = {
+    projectId: pid,
+    apiKey,
+    model: effectiveModel,
+    customModels,
+    cloudflareAccountId,
+    cloudflareApiKey,
+    groqApiKey,
+    // Stable per-conversation id → forwarded as x-opencode-session
+    // (required by OpenCode Go for routing + prompt caching).
+    sessionId: currentId ?? undefined,
+  };
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = token;
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/director",
+        body: () => ({ ...bodyRef.current }),
+        headers: () => {
+          const t = tokenRef.current;
+          return t ? { Authorization: `Bearer ${t}` } : {};
+        },
+      }),
+    [],
+  );
+
   const { messages, sendMessage, status, error, setMessages } = useChat({
     id: currentId ?? "new",
-    transport: new DefaultChatTransport({
-      api: "/api/director",
-      body: {
-        projectId: pid,
-        apiKey,
-        model: effectiveModel,
-        customModels,
-        cloudflareAccountId,
-        cloudflareApiKey,
-        groqApiKey,
-        // Stable per-conversation id → forwarded as x-opencode-session
-        // (required by OpenCode Go for routing + prompt caching).
-        sessionId: currentId ?? undefined,
-      },
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
+    transport,
   });
 
   const busy = status === "streaming" || status === "submitted";
@@ -280,7 +305,7 @@ export function DirectorPanel() {
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder={UI_LABELS.director.cleApiPlaceholder}
               className="h-7 text-xs"
             />
           </div>
@@ -405,7 +430,7 @@ export function DirectorPanel() {
             className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3"
           >
             <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
-              {m.role === "user" ? "Vous" : UI_LABELS.director.titre}
+              {m.role === "user" ? UI_LABELS.director.vous : UI_LABELS.director.titre}
             </div>
             {m.parts.map((p, i) => {
               if (p.type === "text")
@@ -433,6 +458,8 @@ export function DirectorPanel() {
               message={String((error as Error)?.message || UI_LABELS.director.erreurGenerique)}
               error={error}
               context="director.chat"
+              model={effectiveModel || undefined}
+              session={currentId ?? undefined}
             />
           </div>
         ) : null}
@@ -454,7 +481,7 @@ export function DirectorPanel() {
           className="flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
         />
         <Button type="submit" size="sm" disabled={busy || !apiKey}>
-          {busy ? "…" : UI_LABELS.director.envoyer}
+          {busy ? UI_LABELS.director.envoiEnCours : UI_LABELS.director.envoyer}
         </Button>
       </form>
     </div>
@@ -526,7 +553,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Libellé (facultatif)"
+          placeholder={UI_LABELS.director.etiquettePersoPlaceholder}
           className="h-6 flex-1 text-[10px]"
         />
         <div className="flex items-center gap-2">

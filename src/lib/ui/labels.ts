@@ -326,6 +326,9 @@ export const UI_LABELS = {
     invitePlaceholder: "Dirigez l’IA…",
     envoyer: "Envoyer",
     envoiEnCours: "…",
+    vous: "Vous",
+    cleApiPlaceholder: "Clé API (p. ex. zen-go-…)",
+    etiquettePersoPlaceholder: "Étiquette (facultatif)",
     erreurGenerique: "La requête à l’Assistant a échoué.",
     arretDirecteur: "L’Assistant s’est interrompu",
     limiteAtteinte:

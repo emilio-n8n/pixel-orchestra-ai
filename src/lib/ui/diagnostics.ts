@@ -6,6 +6,8 @@
 export interface DiagnosticsExtra {
   context?: string;
   detail?: string;
+  model?: string;
+  session?: string;
 }
 
 export function deploymentId(): string {
@@ -23,6 +25,8 @@ export function buildDiagnostics(error: unknown, extra?: DiagnosticsExtra): stri
     `url : ${typeof window !== "undefined" ? window.location.href : "n/a"}`,
     `déploiement : ${deploymentId()}`,
     extra?.context ? `contexte : ${extra.context}` : null,
+    extra?.model ? `modèle : ${extra.model}` : null,
+    extra?.session ? `session : ${extra.session}` : null,
     extra?.detail ? `détail : ${extra.detail}` : null,
     `erreur : ${err.message || "(sans message)"}`,
     `pile : ${stack}`,
