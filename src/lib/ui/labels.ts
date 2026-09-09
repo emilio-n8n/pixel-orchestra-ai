@@ -125,6 +125,8 @@ export const KIND_LABELS: Record<string, string> = {
   other: "Fichier",
   pending: "En attente",
   silence: "Silence",
+  text: "Texte",
+  "3d": "3D",
 };
 
 export function kindLabel(kind: string): string {
@@ -252,6 +254,8 @@ export const UI_LABELS = {
     graphe: "flux",
     statistiqueVide: "—",
     suite: "Afficher la suite",
+    erreur: "Impossible de charger les rendus.",
+    echecRendu: "Ce rendu a échoué — le détail technique est copiable pour diagnostic.",
   },
   lineage: {
     titre: "Origines",
@@ -295,6 +299,35 @@ export const UI_LABELS = {
     erreur: (msg: string) => `erreur · ${msg}`,
     okSansSortie: "ok · (aucune sortie)",
     erreurInconnue: "erreur · cause inconnue",
+    echecAppel: "L’appel a échoué — le détail technique est copiable pour diagnostic.",
+    erreurAjout: "Ajout de la connexion impossible.",
+    erreurAction: "Opération sur la connexion impossible.",
+    ou: "ou",
+    statut: (kind: string, status: string) => {
+      const s =
+        status === "online"
+          ? "en ligne"
+          : status === "offline"
+            ? "hors ligne"
+            : "non pris en charge";
+      return `${kind} · ${s}`;
+    },
+    reussite: (sortie: string) => `ok · ${sortie}`,
+    capacite: (kind: string, media: string) => {
+      const k =
+        kind === "generate"
+          ? "génération"
+          : kind === "transform"
+            ? "transformation"
+            : kind === "analyze"
+              ? "analyse"
+              : kind === "tool"
+                ? "outil"
+                : kind === "stream"
+                  ? "flux"
+                  : kind;
+      return `${k} · ${media}`;
+    },
   },
   director: {
     titre: "Assistant",
@@ -336,6 +369,8 @@ export const UI_LABELS = {
     etiquettePersoPlaceholder: "Étiquette (facultatif)",
     modeleIdPlaceholderCloudflare: "identifiant du modèle (p. ex. @cf/…/flux-1-schnell)",
     pointAccesPlaceholder: "URL du point d’accès",
+    pointGradio: "Point Gradio",
+    capaciteImage: "Image",
     erreurGenerique: "La requête à l’Assistant a échoué.",
     arretDirecteur: "L’Assistant s’est interrompu",
     limiteAtteinte:
@@ -360,6 +395,18 @@ export const UI_LABELS = {
       `⚠️ Ce plan chevauche désormais un autre plan sur « ${piste} » (${debutMs} ms → ${finMs} ms). Déplacez ou raccourcissez l’un des deux pour garder un mix propre.`,
     modeleImageNonPrisEnCharge: (id: string) =>
       `Le modèle « ${id} » n’est pas pris en charge pour la génération d’images ici (seuls les modèles Cloudflare configurés le sont). Relancez sans model_id pour utiliser le moteur par défaut.`,
+    envoiMediaImpossible: (detail: string) => `Envoi du média impossible — ${detail}`,
+    mediaIntrouvable: "Média introuvable — vérifiez son identifiant",
+    mediaSansUrl: "Média sans URL signée — régénérez la voix ou réimportez le fichier",
+    transcriptionVide: "Transcription vide — l’audio est peut-être silencieux ou illisible",
+    planIntrouvable: "Plan introuvable — vérifiez l’identifiant du clip",
+    planAIntrouvable: "Plan A introuvable — vérifiez son identifiant",
+    planBIntrouvable: "Plan B introuvable — vérifiez son identifiant",
+    transitionMemePiste: "La transition exige deux plans sur la même piste",
+    dureePositive: "La durée doit être positive (duration_ms > 0)",
+    attenuationPlage: "L’atténuation doit être entre −40 et 0 dB",
+    pisteCibleVide: (piste: string) =>
+      `Aucun plan sur la piste cible « ${piste} » — rien à atténuer`,
     actionCopierDiagnostic: "Copier le diagnostic",
     diagnosticCopie: "Diagnostic copié.",
     etapeCreative: "Étape créative",
@@ -470,6 +517,8 @@ export const UI_LABELS = {
     studioPret: "Studio prêt",
     renduCloud: "Rendu cloud",
     stockage: "Stockage",
+    stockageValeur: "Lilium Cloud",
+    navigationPrincipale: "Navigation principale",
     aucuneTache: "Aucune tâche",
     tachesEnCours: (n: number) => `${n} tâche${n > 1 ? "s" : ""} en cours`,
     journalDev: "Journal développeur",
@@ -507,6 +556,10 @@ export const UI_LABELS = {
     sousTitreApercu: "Aperçu fidèle au rendu",
     consigne: "Consigne",
     actif: "actif",
+    priseDefaut: (label: string) => `Prise ${label}`,
+    erreurPrise: "Impossible d’appliquer cette prise.",
+    erreurSousTitre: "Enregistrement du sous-titre impossible.",
+    erreurMedia: "Opération sur le média impossible.",
     positionBas: "Bas",
     positionCentre: "Centre",
     positionHaut: "Haut",
@@ -574,6 +627,7 @@ export function jobStatusLabel(status: string): string {
 export const CONN_LABELS = {
   reconnecting: "Reconnexion…",
   offline: "Hors ligne — reconnexion auto…",
+  horsLigneCourt: "Hors ligne",
 } as const;
 
 /* ------------------------------------------------------------------ */
@@ -594,27 +648,4 @@ export function providerBodySlice(body: string): string {
 export function directorHttpError(service: string, status: number, body: string): string {
   const extrait = providerBodySlice(body);
   return UI_LABELS.director.erreurHttp(service, status, extrait);
-}
-
-export interface DirectorDiagnostics {
-  url: string;
-  deployment: string;
-  model?: string;
-  session?: string;
-  error: string;
-  stack?: string;
-}
-
-/** One-click diagnostics block copied from the Director error card. */
-export function formatDirectorDiagnostics(d: DirectorDiagnostics): string {
-  const lines = [
-    `heure : ${new Date().toISOString()}`,
-    `url : ${d.url}`,
-    `déploiement : ${d.deployment}`,
-  ];
-  if (d.model) lines.push(`modèle : ${d.model}`);
-  if (d.session) lines.push(`session : ${d.session}`);
-  lines.push(`erreur : ${d.error}`);
-  lines.push(`pile : ${d.stack ?? "(aucune)"}`);
-  return lines.join("\n");
 }

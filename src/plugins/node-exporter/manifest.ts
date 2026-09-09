@@ -7,9 +7,9 @@ function uid(prefix: string) {
 const exporterExec: NodeExecutor = {
   id: "exporter.library",
   category: "exporter",
-  displayName: "Export to library",
+  displayName: "Exporter vers la médiathèque",
   defaultInputs: [],
-  defaultOutputs: [{ id: "assetId", label: "asset id", type: "string" }],
+  defaultOutputs: [{ id: "assetId", label: "id du média", type: "string" }],
   async execute(input, ctx) {
     if (!ctx.env.db) throw new Error("exporter.library: db is not available");
     const projectId = String(input.projectId ?? "");
@@ -20,7 +20,7 @@ const exporterExec: NodeExecutor = {
     if (!blobHash) {
       throw new Error("exporter.library: missing blobHash (connect a node that produces it)");
     }
-    const name = String(input.name ?? "untitled");
+    const name = String(input.name ?? "sans-titre");
     const mime = input.mime ? String(input.mime) : null;
     const kind = String(input.kind ?? "other");
     const size = Number(input.size ?? 0);

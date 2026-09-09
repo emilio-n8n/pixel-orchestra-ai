@@ -24,7 +24,7 @@ export function ConnPill({ state }: { state: ConnState }) {
           offline ? "bg-[var(--status-err)]" : "bg-[var(--status-warn)]"
         }`}
       />
-      {offline ? "Hors ligne" : "Reconnexion…"}
+      {offline ? CONN_LABELS.horsLigneCourt : CONN_LABELS.reconnecting}
     </span>
   );
 }

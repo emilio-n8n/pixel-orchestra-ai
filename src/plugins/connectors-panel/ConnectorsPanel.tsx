@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useKernelEvents } from "@/kernel/react";
 import { SchemaForm } from "./SchemaForm";
-import { UI_LABELS } from "@/lib/ui/labels";
+import { UI_LABELS, kindLabel } from "@/lib/ui/labels";
 import { ErrorBlock } from "@/components/ui/error-block";
 import {
   addConnector,
@@ -124,7 +124,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
       {error ? (
         <div className="mt-2">
           <ErrorBlock
-            message={String((error as Error)?.message ?? error)}
+            message={UI_LABELS.connectors.erreurAjout}
             error={error}
             context="connectors.add"
             compact
@@ -209,7 +209,7 @@ function ConnectorCard({
             {connector.name}
           </div>
           <div className="mono mt-0.5 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
-            {connector.kind} · {connector.status}
+            {UI_LABELS.connectors.statut(connector.kind, connector.status)}
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -241,7 +241,7 @@ function ConnectorCard({
       {actionError ? (
         <div className="mt-2">
           <ErrorBlock
-            message={String((actionError as Error)?.message ?? actionError)}
+            message={UI_LABELS.connectors.erreurAction}
             error={actionError}
             context={`connectors.${connector.id}`}
             compact
@@ -264,10 +264,12 @@ function CapabilityRow({ connectorId, cap }: { connectorId: string; cap: Capabil
   const [values, setValues] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [runError, setRunError] = useState<unknown>(null);
 
   const run = useCallback(async () => {
     setRunning(true);
     setResult(null);
+    setRunError(null);
     try {
       const r = await invokeCapability({
         data: { connectorId, capId: cap.id, input: values },
@@ -277,12 +279,12 @@ function CapabilityRow({ connectorId, cap }: { connectorId: string; cap: Capabil
           .slice(0, 3)
           .map((s) => s.slice(0, 100))
           .join(" · ");
-        setResult(out ? `ok · ${out}` : UI_LABELS.connectors.okSansSortie);
+        setResult(out ? UI_LABELS.connectors.reussite(out) : UI_LABELS.connectors.okSansSortie);
       } else {
-        setResult(UI_LABELS.connectors.erreur(r.error ?? UI_LABELS.connectors.erreurInconnue));
+        setRunError(r.error ?? UI_LABELS.connectors.erreurInconnue);
       }
     } catch (e) {
-      setResult(UI_LABELS.connectors.erreur((e as Error).message));
+      setRunError(e);
     } finally {
       setRunning(false);
     }
@@ -296,7 +298,10 @@ function CapabilityRow({ connectorId, cap }: { connectorId: string; cap: Capabil
             {cap.displayName || cap.id}
           </div>
           <div className="text-[9px] uppercase tracking-widest text-[var(--text-dim)]">
-            {cap.kind} · {cap.media.join(", ") || "—"}
+            {UI_LABELS.connectors.capacite(
+              cap.kind,
+              cap.media.map((m) => kindLabel(m)).join(", ") || "—",
+            )}
           </div>
         </div>
         <button
@@ -331,6 +336,14 @@ function CapabilityRow({ connectorId, cap }: { connectorId: string; cap: Capabil
             <div className="mono break-all rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[10px] text-[var(--text-muted)]">
               {result}
             </div>
+          ) : null}
+          {runError ? (
+            <ErrorBlock
+              message={UI_LABELS.connectors.echecAppel}
+              error={runError}
+              context={`connectors.${connectorId}.${cap.id}`}
+              compact
+            />
           ) : null}
         </div>
       ) : null}

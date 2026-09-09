@@ -8,6 +8,7 @@
 // the schema — phase 9 will plug a Zod validator in.
 
 import { useCallback, useRef, useState } from "react";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 export interface SchemaFormProps {
   schema: Record<string, unknown>;
@@ -95,7 +96,7 @@ export function SchemaForm({ schema, onChange, initial }: SchemaFormProps) {
             <Field key={name} label={label} required={isRequired}>
               <input
                 type="text"
-                placeholder="https://… or lilium-blob://…"
+                placeholder={`https://… ${UI_LABELS.connectors.ou} lilium-blob://…`}
                 value={String(values[name] ?? "")}
                 onChange={(e) => set(name, e.target.value)}
                 className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"

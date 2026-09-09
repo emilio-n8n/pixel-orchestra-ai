@@ -198,7 +198,7 @@ export function JobsPanel() {
         {loadError ? (
           <div className="mb-3">
             <ErrorBlock
-              message={UI_LABELS.lineage.erreur}
+              message={UI_LABELS.jobs.erreur}
               error={loadError}
               context="jobs.listGraphRuns"
             />
@@ -242,7 +242,7 @@ export function JobsPanel() {
                   {j.error ? (
                     <div className="mt-1">
                       <ErrorBlock
-                        message={j.error}
+                        message={UI_LABELS.jobs.echecRendu}
                         error={j.error}
                         context={`jobs.${j.id}`}
                         compact
@@ -288,7 +288,7 @@ export function JobsPanel() {
               <div className="mt-3 flex justify-center pb-2">
                 <button
                   onClick={() => setLimit((l) => l + PAGE_SIZE)}
-                  className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)]"
+                  className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                 >
                   {UI_LABELS.jobs.suite} ({jobs.length})
                 </button>

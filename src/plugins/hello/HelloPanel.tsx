@@ -16,7 +16,7 @@ export function HelloPanel() {
           ce qui est déjà branché.
         </p>
       </div>
-      <div className="grid flex-1 grid-cols-2 gap-px overflow-hidden bg-[var(--line)]">
+      <div className="grid flex-1 grid-cols-1 gap-px overflow-hidden bg-[var(--line)] md:grid-cols-2">
         <div className="flex flex-col overflow-hidden bg-[var(--surface-1)]">
           <div className="px-4 pt-3 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
             Flux d’évènements du noyau

@@ -55,7 +55,7 @@ export function StatusBar() {
           </span>
           <span className="hidden items-center gap-1.5 lg:flex">
             {UI_LABELS.shell.stockage}{" "}
-            <span className="text-[var(--text-muted)]">Lilium Cloud</span>
+            <span className="text-[var(--text-muted)]">{UI_LABELS.shell.stockageValeur}</span>
           </span>
           {runningJobs > 0 ? (
             <StatusPill tone="running" pulse>

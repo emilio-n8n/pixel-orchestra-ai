@@ -6,7 +6,7 @@
 // responsible for storing the result as an asset.
 
 import type { DirectorModel } from "./catalog";
-import { UI_LABELS } from "@/lib/ui/labels";
+import { UI_LABELS, directorHttpError } from "@/lib/ui/labels";
 
 export interface ModelCreds {
   cloudflareAccountId?: string;
@@ -42,7 +42,7 @@ export async function generateImageCloudflare(
   });
   if (!res.ok) {
     const body = (await res.text()).slice(0, 500);
-    throw new Error(`Cloudflare (image) a répondu HTTP ${res.status} — ${body}`);
+    throw new Error(directorHttpError("Cloudflare (image)", res.status, body));
   }
   const contentType = res.headers.get("content-type") ?? "";
   if (contentType.includes("image/")) {
@@ -74,7 +74,7 @@ export async function generateImageLovable(
   });
   if (!res.ok) {
     const body = (await res.text()).slice(0, 500);
-    throw new Error(`Lovable (image) a répondu HTTP ${res.status} — ${body}`);
+    throw new Error(directorHttpError("Lovable (image)", res.status, body));
   }
   const data = await res.json();
   const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
@@ -106,7 +106,7 @@ export async function transcribeAudioGroq(
   });
   if (!res.ok) {
     const body = (await res.text()).slice(0, 500);
-    throw new Error(`Groq (transcription) a répondu HTTP ${res.status} — ${body}`);
+    throw new Error(directorHttpError("Groq (transcription)", res.status, body));
   }
   const data = (await res.json()) as { text?: string };
   return { text: (data?.text ?? "").trim() };

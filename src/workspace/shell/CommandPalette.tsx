@@ -76,11 +76,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
-              setI((v) => Math.min(v + 1, items.length - 1));
+              setI((v) => (items.length > 0 ? (v + 1) % items.length : 0));
             }
             if (e.key === "ArrowUp") {
               e.preventDefault();
-              setI((v) => Math.max(v - 1, 0));
+              setI((v) => (items.length > 0 ? (v - 1 + items.length) % items.length : 0));
+            }
+            if (e.key === "Home") {
+              e.preventDefault();
+              setI(0);
+            }
+            if (e.key === "End") {
+              e.preventDefault();
+              setI(items.length - 1);
             }
             if (e.key === "Enter" && items[i]) {
               e.preventDefault();

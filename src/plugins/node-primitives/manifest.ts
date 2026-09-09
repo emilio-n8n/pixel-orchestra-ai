@@ -1,13 +1,13 @@
 import { addNodeExecutor, type PluginManifest, type NodeExecutor } from "@/kernel";
 import type { PortSpec } from "@/kernel";
 
-const STRING_OUT: PortSpec = { id: "out", label: "value", type: "string" };
-const NUMBER_OUT: PortSpec = { id: "out", label: "value", type: "number" };
+const STRING_OUT: PortSpec = { id: "out", label: "valeur", type: "string" };
+const NUMBER_OUT: PortSpec = { id: "out", label: "valeur", type: "number" };
 
 const stringExec: NodeExecutor = {
   id: "primitives.string",
   category: "primitives",
-  displayName: "String",
+  displayName: "Texte",
   defaultInputs: [],
   defaultOutputs: [STRING_OUT],
   async execute(input) {
@@ -18,7 +18,7 @@ const stringExec: NodeExecutor = {
 const numberExec: NodeExecutor = {
   id: "primitives.number",
   category: "primitives",
-  displayName: "Number",
+  displayName: "Nombre",
   defaultInputs: [],
   defaultOutputs: [NUMBER_OUT],
   async execute(input) {
@@ -30,9 +30,9 @@ const numberExec: NodeExecutor = {
 const promptTemplateExec: NodeExecutor = {
   id: "primitives.prompt-template",
   category: "primitives",
-  displayName: "Prompt template",
+  displayName: "Modèle de consigne",
   defaultInputs: [],
-  defaultOutputs: [{ id: "prompt", label: "prompt", type: "string" }],
+  defaultOutputs: [{ id: "prompt", label: "consigne", type: "string" }],
   async execute(input) {
     // Very small template engine: replaces {{key}} with the value from
     // input[key] (or input.params if missing). Phase 6 will replace with

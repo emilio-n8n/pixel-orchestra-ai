@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLibrary } from "@/plugins/library/store";
 import type { AssetKind, AssetRow } from "@/plugins/library/types";
 import { getLineage, type LineageAsset, type LineageView } from "./server";
-import { UI_LABELS } from "@/lib/ui/labels";
+import { UI_LABELS, jobStatusLabel } from "@/lib/ui/labels";
 import { ErrorBlock } from "@/components/ui/error-block";
 import { ConnPill } from "@/lib/realtime/ConnPill";
 import type { ConnState } from "@/lib/realtime/channel";
@@ -42,7 +42,7 @@ function DagNode({ asset, onOpen }: { asset: LineageAsset; onOpen: (a: LineageAs
     <button
       onClick={() => onOpen(asset)}
       title={`${asset.name} — ${UI_LABELS.library.voirOrigine}`}
-      className="mono flex w-full items-center gap-1.5 truncate rounded border border-[var(--line)] bg-[var(--surface-2)] px-1.5 py-1 text-left text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)]"
+      className="mono flex w-full items-center gap-1.5 truncate rounded border border-[var(--line)] bg-[var(--surface-2)] px-1.5 py-1 text-left text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
     >
       <span className="shrink-0 text-[var(--text-dim)]">{KIND_GLYPH[asset.kind] ?? "·"}</span>
       <span className="min-w-0 flex-1 truncate" title={asset.id}>
@@ -238,7 +238,7 @@ export function LineagePanel() {
           {lineage.nodeRun ? (
             <div className="mono truncate text-[9px] text-[var(--text-dim)]">
               {UI_LABELS.lineage.noeudProducteur} · {lineage.nodeRun.nodeId} ·{" "}
-              {lineage.nodeRun.status}
+              {jobStatusLabel(lineage.nodeRun.status)}
             </div>
           ) : null}
           {lineage.capabilities.length > 0 ? (

@@ -12,10 +12,10 @@ export const CAPABILITY_NODE_ID = "capability.run";
 const capabilityExec: NodeExecutor = {
   id: CAPABILITY_NODE_ID,
   category: "capability",
-  displayName: "Capability run",
+  displayName: "Exécution de capacité",
   defaultInputs: [],
   defaultOutputs: [
-    { id: "outputs", label: "outputs", type: "any" },
+    { id: "outputs", label: "sorties", type: "any" },
     { id: "ok", label: "ok", type: "boolean" },
   ],
   async execute(input, ctx) {

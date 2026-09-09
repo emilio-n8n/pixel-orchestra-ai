@@ -50,7 +50,7 @@ export function Sidebar() {
 
   return (
     <aside
-      aria-label="Navigation principale"
+      aria-label={UI_LABELS.shell.navigationPrincipale}
       className={`flex h-full shrink-0 flex-col border-r border-[var(--line)] bg-[var(--rail)] transition-[width] duration-200 ease-out ${
         collapsed ? "w-[52px]" : "w-[52px] md:w-[186px]"
       }`}

@@ -198,18 +198,20 @@ export function DirectorPanel() {
   return (
     <div className="flex h-full flex-col bg-[var(--surface-1)]">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--line)] px-3">
-        <span
+        <button
+          type="button"
           onClick={() => {
             setShowHistory(!showHistory);
             setShowSettings(false);
           }}
-          className={`flex-1 cursor-pointer truncate pr-2 text-[11px] font-medium uppercase tracking-[0.16em] ${
+          aria-expanded={showHistory}
+          className={`flex-1 truncate pr-2 text-left text-[11px] font-medium uppercase tracking-[0.16em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
             showHistory ? "text-[var(--text)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
           }`}
           title={UI_LABELS.director.conversationsTitre}
         >
           {currentTitle}
-        </span>
+        </button>
         <div className="flex items-center gap-1">
           <button
             onClick={handleNewConversation}
@@ -270,8 +272,17 @@ export function DirectorPanel() {
               conversations.map((c) => (
                 <div
                   key={c.id}
+                  role="option"
+                  tabIndex={0}
+                  aria-selected={c.id === currentId}
                   onClick={() => handleSwitchConversation(c.id)}
-                  className={`group flex cursor-pointer items-center justify-between gap-1 rounded px-2 py-1.5 ${
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleSwitchConversation(c.id);
+                    }
+                  }}
+                  className={`group flex cursor-pointer items-center justify-between gap-1 rounded px-2 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
                     c.id === currentId
                       ? "bg-[var(--surface-3)] text-[var(--text)]"
                       : "text-[var(--text-muted)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
@@ -489,7 +500,7 @@ export function DirectorPanel() {
 }
 
 const CAP_OPTIONS: { value: DirectorModel["capabilities"][number]; label: string }[] = [
-  { value: "image", label: "Image" },
+  { value: "image", label: UI_LABELS.director.capaciteImage },
   { value: "audio.speech", label: UI_LABELS.director.voix },
   { value: "audio.transcribe", label: UI_LABELS.director.sousTitres },
 ];
@@ -517,7 +528,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
       id: `custom/${provider}/${idVal}`,
       provider,
       modelId: idVal,
-      label: label.trim() || (provider === "gradio" ? "Point Gradio" : idVal),
+      label: label.trim() || (provider === "gradio" ? UI_LABELS.director.pointGradio : idVal),
       capabilities: [...caps] as DirectorModel["capabilities"],
       custom: true,
     });
@@ -534,7 +545,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           className="h-6 rounded border border-[var(--line)] bg-[var(--surface-3)] px-1.5 text-[10px] text-[var(--text-muted)]"
         >
           <option value="cloudflare">Cloudflare</option>
-          <option value="gradio">Point Gradio</option>
+          <option value="gradio">{UI_LABELS.director.pointGradio}</option>
         </select>
         <Input
           type="text"

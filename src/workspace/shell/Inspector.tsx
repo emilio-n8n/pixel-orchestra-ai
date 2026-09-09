@@ -10,7 +10,7 @@ import {
 } from "@/plugins/library/server";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBlock } from "@/components/ui/error-block";
-import { kindLabel, UI_LABELS } from "@/lib/ui/labels";
+import { kindLabel, TRACK_LABELS, UI_LABELS } from "@/lib/ui/labels";
 import { usePanelStore } from "@/stores/panels";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -175,7 +175,9 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
               ? `${(tMeta.duration_ms / 1000).toFixed(1)}s`
               : null;
           const displayName =
-            (typeof tMeta.name === "string" && tMeta.name) || t.prompt || `Take ${label}`;
+            (typeof tMeta.name === "string" && tMeta.name) ||
+            t.prompt ||
+            UI_LABELS.inspector.priseDefaut(label);
           return (
             <div
               key={t.id}
@@ -236,7 +238,12 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
       ) : null}
       {error ? (
         <div className="mt-1.5">
-          <ErrorBlock message={String(error)} error={error} context="inspector.take" compact />
+          <ErrorBlock
+            message={UI_LABELS.inspector.erreurPrise}
+            error={error}
+            context="inspector.take"
+            compact
+          />
         </div>
       ) : null}
     </div>
@@ -261,7 +268,7 @@ function ClipSummary({ clip }: { clip: TimelineClip }) {
         </button>
       </div>
       <div className="mt-2.5 space-y-1.5">
-        <Row k={UI_LABELS.inspector.piste} v={clip.track} />
+        <Row k={UI_LABELS.inspector.piste} v={TRACK_LABELS[clip.track] ?? clip.track} />
         <Row k={UI_LABELS.inspector.debut} v={`${((clip.start_ms ?? 0) / 1000).toFixed(2)} s`} />
         <Row k={UI_LABELS.inspector.duree} v={`${((clip.duration_ms ?? 0) / 1000).toFixed(2)} s`} />
         <Row
@@ -464,7 +471,12 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
         </div>
 
         {error ? (
-          <ErrorBlock message={String(error)} error={error} context="inspector.subtitle" compact />
+          <ErrorBlock
+            message={UI_LABELS.inspector.erreurSousTitre}
+            error={error}
+            context="inspector.subtitle"
+            compact
+          />
         ) : null}
       </div>
     </div>
@@ -621,7 +633,12 @@ function AssetInspector({ asset, onClose }: { asset: AssetRow; onClose: () => vo
 
       {error ? (
         <div className="mt-2">
-          <ErrorBlock message={String(error)} error={error} context="inspector.asset" compact />
+          <ErrorBlock
+            message={UI_LABELS.inspector.erreurMedia}
+            error={error}
+            context="inspector.asset"
+            compact
+          />
         </div>
       ) : null}
     </div>

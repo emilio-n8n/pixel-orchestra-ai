@@ -3,11 +3,11 @@ import { addNodeExecutor, type PluginManifest, type NodeExecutor } from "@/kerne
 const assetExec: NodeExecutor = {
   id: "asset.reference",
   category: "asset",
-  displayName: "Asset reference",
+  displayName: "Référence de média",
   defaultInputs: [],
   defaultOutputs: [
-    { id: "asset", label: "asset", type: "asset" },
-    { id: "blobHash", label: "blob hash", type: "string" },
+    { id: "asset", label: "média", type: "asset" },
+    { id: "blobHash", label: "empreinte", type: "string" },
   ],
   async execute(input) {
     return {
