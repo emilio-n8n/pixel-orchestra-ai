@@ -18,27 +18,18 @@ export function AgentPanel() {
     // Stub: reply with the plan description. Phase 10 will call
     // the AI Gateway with Lovable API key.
     setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          text: `I understand you want to "${userMsg}". In this phase of the platform, I can help you:\n• Create characters (via Characters panel)\n• Add Gradio connectors (via Connectors panel)\n• Build and run node graphs (via Node Graph panel)\n• Import and view assets (via Library panel)\n\nPhase 10 will make me a real agent wired to the LLM.`,
-        },
-      ]);
+      setMessages((m) => [...m, { role: "assistant", text: UI_LABELS.agent.reponseStub(userMsg) }]);
     }, 400);
   }, [input]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden border-b border-[var(--line)] bg-[var(--surface-2)] text-xs text-[var(--text-muted)]">
       <div className="flex h-8 shrink-0 items-center border-b border-[var(--line)] px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--text-dim)]">
-        Agent Copilot
+        {UI_LABELS.agent.titre}
       </div>
       <div className="flex-1 overflow-auto p-3 text-[11px] leading-relaxed">
         {messages.length === 0 ? (
-          <div className="text-[var(--text-dim)]">
-            Describe what you want to create. Example: "Add a scene with a cyberpunk detective in
-            neon Tokyo."
-          </div>
+          <div className="text-[var(--text-dim)]">{UI_LABELS.agent.vide}</div>
         ) : (
           messages.map((m, i) => (
             <div

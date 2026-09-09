@@ -263,7 +263,11 @@ export function DirectorPanel() {
             <Plus size={12} />
             {UI_LABELS.director.nouveauMessage}
           </button>
-          <div className="max-h-64 space-y-0.5 overflow-auto">
+          <div
+            className="max-h-64 space-y-0.5 overflow-auto"
+            role="listbox"
+            aria-label={UI_LABELS.director.conversationsTitre}
+          >
             {conversations.length === 0 ? (
               <div className="px-2 py-2 text-[11px] text-[var(--text-dim)]">
                 {UI_LABELS.director.aucuneConversation}

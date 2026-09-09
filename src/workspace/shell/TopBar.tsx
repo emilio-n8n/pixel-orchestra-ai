@@ -74,7 +74,7 @@ export function TopBar({
       </div>
 
       <nav
-        aria-label={moduleMeta("timeline").label}
+        aria-label={UI_LABELS.shell.navigationModules}
         className="hidden items-center gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5 md:flex"
       >
         <SegmentTab

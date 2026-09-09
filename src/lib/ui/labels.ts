@@ -310,7 +310,8 @@ export const UI_LABELS = {
           : status === "offline"
             ? "hors ligne"
             : "non pris en charge";
-      return `${kind} · ${s}`;
+      const k = kind === "gradio" ? "Gradio" : kind === "comfyui" ? "ComfyUI" : kind;
+      return `${k} · ${s}`;
     },
     reussite: (sortie: string) => `ok · ${sortie}`,
     capacite: (kind: string, media: string) => {
@@ -519,6 +520,7 @@ export const UI_LABELS = {
     stockage: "Stockage",
     stockageValeur: "Lilium Cloud",
     navigationPrincipale: "Navigation principale",
+    navigationModules: "Modules du studio",
     aucuneTache: "Aucune tâche",
     tachesEnCours: (n: number) => `${n} tâche${n > 1 ? "s" : ""} en cours`,
     journalDev: "Journal développeur",
@@ -582,6 +584,8 @@ export const UI_LABELS = {
     vide: "Aucun personnage pour l’instant.",
     supprimer: "Suppr.",
     sansProjet: "Aucun projet ouvert.",
+    details: (id: string, portraits: number, voix: string, style: string) =>
+      `id : ${id} · portraits : ${portraits} · voix : ${voix} · style : ${style}`,
   },
   scenes: {
     titre: "Scènes",
@@ -597,6 +601,10 @@ export const UI_LABELS = {
     envoyer: "Envoyer",
     vous: "Vous",
     assistant: "Assistant",
+    titre: "Copilote",
+    vide: "Décrivez ce que vous voulez créer. Exemple : « Ajoute une scène avec un détective cyberpunk dans un Tokyo au néon. »",
+    reponseStub: (demande: string) =>
+      `J’ai bien noté : « ${demande} ». À ce stade de la plateforme, je peux vous aider à :\n• Créer des personnages (panneau Personnages)\n• Ajouter des connecteurs Gradio (panneau Connexions)\n• Construire et lancer des flux (panneau Flux créatif)\n• Importer et voir des médias (panneau Médias)`,
   },
   versions: {
     titre: "Versions",

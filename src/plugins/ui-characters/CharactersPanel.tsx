@@ -140,8 +140,12 @@ export function CharactersPanel() {
               <div className="text-[12px] font-medium text-[var(--text)]">{c.name}</div>
               {c.description ? <div className="text-[10px]">{c.description}</div> : null}
               <div className="mono mt-1 text-[9px] text-[var(--text-dim)]">
-                id: {c.id.slice(0, 12)} · portraits: {c.portraitIds.length} · voice:{" "}
-                {c.voiceRef ?? "—"} · style: {c.styleRef ?? "—"}
+                {UI_LABELS.personnages.details(
+                  c.id.slice(0, 12),
+                  c.portraitIds.length,
+                  c.voiceRef ?? "—",
+                  c.styleRef ?? "—",
+                )}
               </div>
             </div>
             <button

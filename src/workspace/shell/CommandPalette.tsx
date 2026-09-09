@@ -88,7 +88,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             }
             if (e.key === "End") {
               e.preventDefault();
-              setI(items.length - 1);
+              setI(Math.max(0, items.length - 1));
             }
             if (e.key === "Enter" && items[i]) {
               e.preventDefault();
