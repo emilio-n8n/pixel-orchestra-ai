@@ -581,7 +581,11 @@ export function TimelinePanel() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      if (isTypingTarget(target)) return;
+      // Range sliders: arrows/Delete keep native behavior, but Space is
+      // dead natively — let it toggle playback (isTypingTarget covers INPUT).
+      const isRange = target?.tagName === "INPUT" && (target as HTMLInputElement).type === "range";
+      const isSpace = e.key === " " || e.code === "Space";
+      if (isTypingTarget(target) && !(isRange && isSpace)) return;
       const onButtonOrLink =
         !!target?.closest?.('button, a, [role="button"]') ||
         target?.tagName === "BUTTON" ||
@@ -610,9 +614,9 @@ export function TimelinePanel() {
       if (e.key === " " || e.code === "Space") {
         // Let focused buttons keep their native Space activation —
         // except range sliders, where Space is dead natively.
-        const isRange =
+        const isRangeTarget =
           target?.tagName === "INPUT" && (target as HTMLInputElement).type === "range";
-        if (onButtonOrLink && !isRange) return;
+        if (onButtonOrLink && !isRangeTarget) return;
         e.preventDefault();
         setPlaying((p) => !p);
       }
@@ -776,6 +780,9 @@ export function TimelinePanel() {
     playheadRef.current = startFrom;
     const startedAt = performance.now();
     startedIdsRef.current.clear();
+    scheduledIdsRef.current.clear();
+    pendingTimersRef.current.forEach((t) => window.clearTimeout(t));
+    pendingTimersRef.current = [];
 
     // Prime every audible clip: active now, or preloaded for lookahead.
     for (const c of clipsRef.current) {
@@ -815,8 +822,19 @@ export function TimelinePanel() {
           if (p >= c.start_ms) {
             startAudioFor(c, p);
           } else {
+            // Fire exactly on the downbeat; re-lookup the clip at fire
+            // time so a moved/deleted clip never plays stale audio.
             scheduledIdsRef.current.add(c.id);
-            const t = window.setTimeout(() => startAudioFor(c, c.start_ms), c.start_ms - p);
+            const clipId = c.id;
+            const headMs = c.start_ms;
+            const t: number = window.setTimeout(() => {
+              pendingTimersRef.current = pendingTimersRef.current.filter((x) => x !== t);
+              scheduledIdsRef.current.delete(clipId);
+              const fresh = clipsRef.current.find((x) => x.id === clipId);
+              if (!fresh || (fresh.start_ms ?? 0) !== headMs) return;
+              if (!AUDIO_TRACKS.has(fresh.track) || !isHttpUrl(fresh.assets?.url)) return;
+              startAudioFor(fresh, fresh.start_ms ?? 0);
+            }, c.start_ms - p);
             pendingTimersRef.current.push(t);
           }
         }
@@ -1151,7 +1169,7 @@ export function TimelinePanel() {
                       className="inline-flex items-center gap-1 rounded bg-[var(--accent-quiet)] px-1 py-px text-[8px] font-bold tracking-widest text-[var(--accent-strong)]"
                       title={db != null ? T.duckGain(db) : T.duckBadge}
                     >
-                      duck
+                      {T.duckCourt}
                       <span
                         aria-hidden
                         className={`inline-block h-1.5 w-1.5 rounded-full bg-current transition-all duration-150 ${

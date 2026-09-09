@@ -418,6 +418,7 @@ export const UI_LABELS = {
     silenceDuree: "Durée du silence en secondes",
     insererSilence: "Insérer un silence (Audio) à la fin de la piste",
     duckBadge: "Atténuation active sur cette piste",
+    duckCourt: "duck",
     videTitre: "Timeline vide",
     videDescription:
       "Ajoutez des médias depuis la médiathèque ou demandez au Director de générer une scène.",
