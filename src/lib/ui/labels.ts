@@ -153,6 +153,9 @@ export const EXPORT_LABELS = {
   button: "Export MP4",
   cancel: "Annuler",
   dismiss: "Fermer",
+  dureeEstimee: (duree: string) => `Durée estimée ≈ ${duree} + pré-rendu des cartes`,
+  imagesIgnorees: (n: number) =>
+    `${n} image${n > 1 ? "s" : ""} de carte ignorée${n > 1 ? "s" : ""} au pré-rendu (animation non capturable) — le reste du fichier est intact.`,
 } as const;
 
 /** Per-phase progress line shown under the preview while exporting. */

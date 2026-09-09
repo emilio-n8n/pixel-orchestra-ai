@@ -13,13 +13,17 @@
  * - video dissolves .............. dissolveMix (overlap blend)
  * - fade to/from black ........... blackFadeAlpha (transition_in/out_ms)
  * - subtitle box ................. subtitleLayout (font/size/color/position)
- * - HTML card timing ............. htmlFrameIndex + the deterministic
- *                                  prerender schedule (clip-local wall clock
+ * - HTML card timing ............. htmlFrameIndex/htmlFrameMs + the
+ *                                  prerender schedule (clip-local origin
  *                                  restarted at activation, see
  *                                  prerenderHtmlClip). The live preview
  *                                  iframe reloads its srcdoc at the same
  *                                  activation point, so both advance from
  *                                  the same origin at the same rate.
+ *                                  Fidelity is best-effort: WAAPI seeks are
+ *                                  deterministic, other motion falls back
+ *                                  to wall-clock capture and dropped
+ *                                  frames are counted, never hidden.
  *
  * Failure paths throw ExportError (FR copy from `lib/ui/labels.ts`) —
  * media is never silently skipped. All blob URLs, video elements,
@@ -203,11 +207,17 @@ export function htmlFrameCount(durationMs: number): number {
   return Math.max(1, Math.ceil(durationMs / FRAME_MS));
 }
 
+/** Canonical frame step for a card: duration split into htmlFrameCount frames. */
+export function htmlFrameMs(durationMs: number): number {
+  return durationMs / htmlFrameCount(durationMs);
+}
+
 /**
- * Unified HTML timing source: clip-local offset → deterministic frame
- * index. The prerender captures frame i at clip-local t = i·FRAME_MS and
- * the encode maps playback offset through this same function, so the card
- * motion in the file matches the preview activation origin frame by frame.
+ * Shared HTML timing source, used on both sides: the prerender seeks
+ * animations to `index × htmlFrameMs` (via this function, so the tested
+ * helper IS the capture schedule) and the encode maps playback offset
+ * through it for progress. WAAPI seeks are deterministic; non-WAAPI
+ * motion falls back to wall-clock capture (see prerenderHtmlClip).
  */
 export function htmlFrameIndex(offsetMs: number, durationMs: number): number {
   const frames = htmlFrameCount(durationMs);
@@ -405,22 +415,34 @@ export interface PrerenderOpts {
   onFrame?: (done: number, total: number) => void;
 }
 
+export interface PrerenderResult {
+  url: string;
+  droppedFrames: number;
+  totalFrames: number;
+}
+
 /**
  * Pre-render an HTML card to a WebM blob URL at EXPORT_W×H / EXPORT_FPS.
  *
- * Deterministic timing: after a warm load (fonts/cache), the document is
- * restarted and every Web Animation is paused, then frame i is captured
- * with all animations seeking to clip-local t = i·FRAME_MS. Capture
- * overruns skip ahead on the wall-clock schedule so the resulting video
- * lasts exactly `durationMs` — the encode then plays it back in realtime
- * from the clip activation, the same origin the preview iframe reloads
- * from. Card motion in the file mirrors the preview instead of drifting
- * with capture speed.
+ * Fidelity is best-effort and honest: after a warm load (fonts awaited
+ * via document.fonts.ready, 2s max) the document restarts and every Web
+ * Animation is paused, then frame i seeks all animations to the shared
+ * schedule (htmlFrameIndex/htmlFrameMs). Cards without WAAPI support
+ * fall back to wall-clock capture; html2canvas gaps (WebGL, SMIL, very
+ * new CSS) drop individual frames — counted in droppedFrames, never
+ * hidden. Capture overruns skip ahead on the wall-clock schedule so the
+ * resulting video lasts exactly `durationMs` — the encode then plays it
+ * back in realtime from the clip activation, the same origin the preview
+ * iframe reloads from.
  *
  * Throws ExportError (FR) on any failure — a card is never silently
- * dropped from the file. The hidden iframe is always removed.
+ * dropped from the file. The hidden iframe is always removed, including
+ * on cancel (loadSrcdoc rejects on abort immediately).
  */
-export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts): Promise<string> {
+export async function prerenderHtmlClip(
+  clip: TimelineClip,
+  opts?: PrerenderOpts,
+): Promise<PrerenderResult> {
   const label = clipLabel(clip);
   const url = clip.assets?.url;
   if (!isHttpUrl(url)) throw new ExportError("relative-url", `carte ${label}`);
@@ -444,14 +466,23 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
     throwIfCancelled(opts?.signal);
     // Warm load (fonts, sub-resources), then restart so animations run
     // from t=0 at capture start — the same origin as the preview reload.
-    await loadSrcdoc(iframe, html);
+    await loadSrcdoc(iframe, html, opts?.signal);
     throwIfCancelled(opts?.signal);
-    await loadSrcdoc(iframe, html);
+    await loadSrcdoc(iframe, html, opts?.signal);
     throwIfCancelled(opts?.signal);
 
     const doc = iframe.contentDocument;
     const body = doc?.body;
     if (!body) throw new ExportError("prerender-failed", `carte ${label}`);
+
+    // Freeze webfonts before capture so two exports of the same card
+    // render the same glyphs (2s max — fonts stay best-effort).
+    try {
+      const fontsReady = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
+      if (fontsReady) await Promise.race([fontsReady, sleep(2000)]);
+    } catch {
+      /* fonts best-effort */
+    }
 
     // Pause every Web Animation (CSS keyframes + transitions are all
     // Animation objects) so each frame seeks deterministically. Cards
@@ -508,15 +539,19 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
       }
     }, clip.duration_ms + 10_000);
 
+    let droppedFrames = 0;
     try {
       const t0 = performance.now();
+      const frameMs = htmlFrameMs(clip.duration_ms);
       for (let frame = 0; frame < totalFrames; frame++) {
         throwIfCancelled(opts?.signal);
         // Stay on the wall-clock schedule under overrun: the video must
         // last exactly durationMs for realtime playback to stay in sync.
-        const scheduled = Math.floor((performance.now() - t0) / FRAME_MS);
+        // The seek time routes through the shared htmlFrameIndex helper
+        // (unit-tested) — capture schedule and tests share one source.
+        const scheduled = htmlFrameIndex(performance.now() - t0, clip.duration_ms);
         if (scheduled > frame) frame = Math.min(scheduled, totalFrames - 1);
-        const t = frame * FRAME_MS;
+        const t = htmlFrameIndex(frame * FRAME_MS, clip.duration_ms) * frameMs;
         for (const a of animations) {
           try {
             a.currentTime = t;
@@ -536,12 +571,15 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
           octx.clearRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
           octx.drawImage(captured, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
         } catch {
-          /* dropped frame — keep the previous one */
+          // Dropped frame — keep the previous one, but count it (the
+          // caller reports the total instead of staying silent).
+          droppedFrames++;
         }
         opts?.onFrame?.(frame + 1, totalFrames);
         const target = t0 + (frame + 1) * FRAME_MS;
         const wait = target - performance.now();
-        if (wait > 0) await sleep(wait);
+        // Skip the pacing sleep when cancelling so Annuler answers fast.
+        if (wait > 0 && !opts?.signal?.aborted) await sleep(wait);
       }
     } finally {
       clearTimeout(safetyTimeout);
@@ -560,7 +598,11 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
       });
     }
 
-    return URL.createObjectURL(new Blob(chunks, { type: "video/webm" }));
+    return {
+      url: URL.createObjectURL(new Blob(chunks, { type: "video/webm" })),
+      droppedFrames,
+      totalFrames,
+    };
   } catch (e) {
     throwIfCancelled(opts?.signal);
     if (e instanceof ExportError) throw e;
@@ -570,15 +612,38 @@ export async function prerenderHtmlClip(clip: TimelineClip, opts?: PrerenderOpts
   }
 }
 
-function loadSrcdoc(iframe: HTMLIFrameElement, html: string, timeoutMs = 15_000): Promise<void> {
+function loadSrcdoc(
+  iframe: HTMLIFrameElement,
+  html: string,
+  signal?: AbortSignal,
+  timeoutMs = 15_000,
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("iframe load timeout")), timeoutMs);
+    if (signal?.aborted) {
+      reject(new ExportError("cancelled"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      reject(new Error("iframe load timeout"));
+    }, timeoutMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      iframe.onload = null;
+      iframe.onerror = null;
+      // The caller finally removes the iframe; reject now so Annuler
+      // answers even while a heavy card is still loading.
+      reject(new ExportError("cancelled"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
     iframe.onload = () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       resolve();
     };
     iframe.onerror = () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       reject(new Error("iframe load error"));
     };
     iframe.srcdoc = html;
@@ -691,6 +756,8 @@ export interface RunExportResult {
   blob: Blob;
   ext: "mp4" | "webm";
   mime: string;
+  /** Prerender frames dropped (html2canvas gaps) — reported, never hidden. */
+  droppedFrames: number;
 }
 
 /**
@@ -768,10 +835,11 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     // ---- phase 1: pre-render HTML cards ----
     const htmlClips = clips.filter((c) => c.assets?.kind === "html");
     onProgress?.({ phase: "prerender", done: 0, total: htmlClips.length });
+    let droppedFrames = 0;
     for (let i = 0; i < htmlClips.length; i++) {
       throwIfCancelled(signal);
       const clip = htmlClips[i];
-      const blobUrl = await prerenderHtmlClip(clip, {
+      const pre = await prerenderHtmlClip(clip, {
         signal,
         onFrame: (done, total) => {
           // Per-card frame progress rolls into the phase fraction.
@@ -782,7 +850,8 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
           });
         },
       });
-      prerendered.set(clip.id, blobUrl);
+      droppedFrames += pre.droppedFrames;
+      prerendered.set(clip.id, pre.url);
       onProgress?.({ phase: "prerender", done: i + 1, total: htmlClips.length });
     }
 
@@ -1003,7 +1072,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
         }
         onProgress?.({
           phase: "encode",
-          done: Math.min(totalFrames, Math.floor(p / FRAME_MS)),
+          done: Math.min(totalFrames, htmlFrameIndex(p, totalMs)),
           total: totalFrames,
         });
         if (p >= totalMs) {
@@ -1020,7 +1089,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     rec.stop();
     const blob = await done;
     onProgress?.({ phase: "finalize", done: 1, total: 1 });
-    return { blob, ext: picked.ext, mime: picked.mime };
+    return { blob, ext: picked.ext, mime: picked.mime, droppedFrames };
   } finally {
     cleanup();
     if (stream) {

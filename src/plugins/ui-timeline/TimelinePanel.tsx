@@ -968,6 +968,7 @@ export function TimelinePanel() {
   // 1920×1080 canvas so the HiDPI preview backing store never shifts the
   // file layout; progress + playhead mirror keep the UX alive.
   const [exportLabel, setExportLabel] = useState<string | null>(null);
+  const [exportNote, setExportNote] = useState<string | null>(null);
   const cancelRef = useRef<AbortController | null>(null);
   const exportUiRef = useRef({ frac: -1, at: 0 });
   async function exportVideo() {
@@ -978,16 +979,19 @@ export function TimelinePanel() {
     setExporting(true);
     setExportPct(0);
     setExportLabel(null);
+    setExportNote(null);
     setActionError(null);
     try {
-      const { blob, ext } = await runExport({
+      const { blob, ext, droppedFrames } = await runExport({
         clips: clipsRef.current,
         totalMs: totalMsRef.current,
         getImage: (url) => imgCacheRef.current.get(url),
         signal: ctrl.signal,
         onProgress: (p) => {
           // Throttled React mirror: the encode ticks at 60 fps and must
-          // never freeze the UI — labels + bar move at ~7 Hz.
+          // never freeze the UI — labels + bar move at ~7 Hz. The preview
+          // canvas is deliberately left untouched (the engine encodes on
+          // its own offscreen canvas).
           const frac = progressFraction(p);
           const now = performance.now();
           const ui = exportUiRef.current;
@@ -997,13 +1001,9 @@ export function TimelinePanel() {
           setExportPct(frac);
           const phasePct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
           setExportLabel(exportPhaseLabel(p.phase, Math.floor(p.done), p.total, phasePct));
-          if (p.phase === "encode" && p.total > 0) {
-            const approx = Math.min(totalMsRef.current, (p.done / p.total) * totalMsRef.current);
-            setPlayhead(approx);
-            paintPlayhead(approx);
-          }
         },
       });
+      if (droppedFrames > 0) setExportNote(EXPORT_LABELS.imagesIgnorees(droppedFrames));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -1070,7 +1070,12 @@ export function TimelinePanel() {
         {exporting && (
           <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-black/70 px-3 py-2 text-[11px] text-white">
             <Loader2 className="h-3 w-3 animate-spin" />
-            <span className="flex-1">{exportLabel ?? T.enregistrementExport(exportPct)}</span>
+            <span className="flex-1">
+              {exportLabel ?? T.enregistrementExport(exportPct)}
+              <span className="ml-2 text-white/60">
+                {EXPORT_LABELS.dureeEstimee(fmt(totalMsRef.current))}
+              </span>
+            </span>
             <button
               onClick={() => cancelRef.current?.abort()}
               className="rounded border border-white/30 px-2 py-0.5 text-[10px] hover:bg-white/10"
@@ -1222,6 +1227,18 @@ export function TimelinePanel() {
           {T.exportFichier(exportExt)}
         </button>
       </div>
+
+      {exportNote && !exporting ? (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--status-warn)]/30 bg-[var(--status-warn)]/10 px-3 py-1.5 text-[11px] text-[var(--status-warn)]">
+          <span>{exportNote}</span>
+          <button
+            onClick={() => setExportNote(null)}
+            className="rounded border border-current px-1.5 py-px text-[10px] hover:bg-[var(--status-warn)]/10"
+          >
+            {UI_LABELS.common.fermer}
+          </button>
+        </div>
+      ) : null}
 
       {loadError || actionError ? (
         <div
