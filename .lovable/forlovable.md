@@ -686,20 +686,49 @@ externes, pas de publish Lovable (déploiement seulement observé).
 - `d16d9fa` : tests parité + copie FR.
 - MP4 prioritaire (3 Mbps, offset audio +0,15 s vérifié), repli WebM ;
   extension accordée au mime, lisible VLC + Chrome + mobile.
+- Enveloppe `volAt` échantillonnée tous les 25 ms (même pas que la
+  courbe ducking `ducking.ts`) — pas 50 ms.
+
+### Correctifs post-critique WS4 (2026-09-09, relecture impitoyable)
+
+- `4c3d24d` (B1+B3) : les clips **vidéo** sont rendus (preview + export,
+  éléments muted, mix depuis WebAudio) ; `assertMediaReady` refuse les
+  médias morts en FR avec position du plan (fini le noir silencieux).
+- `8cabed9` (M1+m1+m9+m4) : capture vidéo retardée du lead +0,15 s
+  (audio aligné comme entendu) ; garde taille canvas ; `MediaRecorder`
+  en try/catch ; libellé bouton suit le conteneur réel (MP4/WebM).
+- `d6cc9cb` (B2+M2/M3/M4) : `htmlFrameIndex`/`htmlFrameMs` câblés des
+  deux côtés ; `loadSrcdoc` abortable ; frames droppées comptées et
+  affichées (note ambre) ; durée estimée dans la barre ; contrat
+  **best-effort honnête** (WAAPI déterministe, sinon wall-clock).
+- `dc9f3a3` (m7+m10+M5) : sous-titres wrappés 2 lignes + shrink-to-fit
+  (jamais hors cadre) ; audios preview libérés en fin de plan ; 8 tests
+  renderer (dissolve, voile noir, lignes, vidéo prête ou non,
+  `htmlFrameMs`, poids de progression exacts) — 88 pass au total.
+- `6a98ea7` (D1-D5) : cancel pendant la sonde → `cancelled` (jamais de
+  faux `fetch-failed`) ; éléments probés **réutilisés** (zéro double
+  téléchargement) ; FR via labels partout ; `a audiosRef` purgé ;
+  `previewHtmlElsRef` mort supprimé ; progress encode au compte juste.
+- Limites assumées (documentées dans le code) : cartes HTML en
+  best-effort (html2canvas : pas de WebGL/SMIL), export temps réel
+  (60 s de timeline = 60 s d'export), pas de validation navigateur
+  dans ce sandbox (clés + navigateur fournis séparément).
 
 ### Validation
 
-- `bun test` : 80 pass, 0 fail. `bunx tsc --noEmit` : 0. `bun run lint` :
-  0 erreur.
-- Export manuel : non rejouable ici (pas de navigateur) ; enveloppes
-  couvertes par tests, zéro `console.error` ajouté.
+- `bun test` : 88 pass, 0 fail. `bunx tsc --noEmit` : 0. `bun run lint` :
+  0 erreur (11 warnings pré-existants).
+- Export manuel navigateur : non rejouable ici ; enveloppes, renderer,
+  parité et annulation couverts par tests, zéro `console.error` ajouté
+  (mieux : les 2 historiques du panel sont supprimés).
 
 ### Critique (gauntlet)
 
-- 3 timelines types (voix+musique duckée, sous-titres stylés, dissolve,
-  carte HTML) : durées ±100 ms, duck audible, progression sans blocage.
-- **vs lovable.dev** : un clic, zéro anxiété de réglages, fichier parfait.
-- **Bloqueur : aucun. Majeur : aucun. Verdict : WOW.**
+- Round 1 FAIL (B1 vidéo noire, B2 code mort, B3 noir silencieux, M1
+  biais 150 ms, M2/M4 sur-vendus, M5 façade, M6 freeze) → tout corrigé
+  ci-dessus, relecture round 2 en cours.
+- **vs lovable.dev** : un clic, zéro anxiété de réglages, phases FR,
+  annulation qui répond, fichier au conteneur promis.
 
 ---
 
