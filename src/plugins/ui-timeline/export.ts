@@ -298,6 +298,8 @@ export interface RenderFrameOpts {
   clips: TimelineClip[];
   ms: number;
   getImage: (url: string) => HTMLImageElement | undefined;
+  /** Live video picture sources, keyed by clip id (preview + export). */
+  videoFrameMap?: Map<string, HTMLVideoElement>;
   /** Absent in preview (the live iframe overlay shows the card instead). */
   htmlVideoMap?: Map<string, string>;
   /** Optional: only touched when htmlVideoMap is present (export). */
@@ -305,13 +307,13 @@ export interface RenderFrameOpts {
 }
 
 export function renderTimelineFrame(opts: RenderFrameOpts): void {
-  const { ctx, width, height, clips, ms, getImage, htmlVideoMap } = opts;
+  const { ctx, width, height, clips, ms, getImage, videoFrameMap, htmlVideoMap } = opts;
   const htmlVideoEls = opts.htmlVideoEls ?? new Map<string, HTMLVideoElement>();
 
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, width, height);
 
-  // Video / image / HTML clips — dissolve while two overlap on Video.
+  // Video / image / video-file / HTML clips — dissolve while two overlap.
   const activeVideos = clips
     .filter((c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms)
     .sort((a, b) => a.start_ms - b.start_ms);
@@ -328,6 +330,16 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
         const w = iw * scale;
         const h = ih * scale;
         ctx.drawImage(img, (width - w) / 2, (height - h) / 2, w, h);
+      }
+    } else if (c.assets?.kind === "video" && videoFrameMap) {
+      const ve = videoFrameMap.get(c.id);
+      if (ve && ve.readyState >= 2 && ve.videoWidth > 0) {
+        const vw = ve.videoWidth;
+        const vh = ve.videoHeight;
+        const scale = Math.min(width / vw, height / vh);
+        const w = vw * scale;
+        const h = vh * scale;
+        ctx.drawImage(ve, (width - w) / 2, (height - h) / 2, w, h);
       }
     } else if (c.assets?.kind === "html" && htmlVideoMap) {
       const vidUrl = htmlVideoMap.get(c.id);
@@ -569,6 +581,90 @@ function loadSrcdoc(iframe: HTMLIFrameElement, html: string, timeoutMs = 15_000)
 
 /* ---------------- full export orchestration ---------------- */
 
+const MEDIA_CHECK_TIMEOUT_MS = 10_000;
+
+function abortableTimeout(
+  ms: number,
+  signal: AbortSignal | undefined,
+  onAbort: () => void,
+): { timer: ReturnType<typeof setTimeout>; cleanup: () => void } {
+  const onAb = () => {
+    onAbort();
+  };
+  signal?.addEventListener("abort", onAb, { once: true });
+  const timer = setTimeout(onAb, ms);
+  return {
+    timer,
+    cleanup: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAb);
+    },
+  };
+}
+
+/** Fail in French (with clip position) when an image URL is dead. */
+function checkImageUrl(url: string, clip: TimelineClip, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    // Same CORS mode as the preview preload: a URL that loads here
+    // draws identically in the file.
+    img.crossOrigin = "anonymous";
+    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, () =>
+      reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`)),
+    );
+    img.onload = () => {
+      cleanup();
+      resolve();
+    };
+    img.onerror = () => {
+      cleanup();
+      reject(new ExportError("fetch-failed", `image ${clipLabel(clip)}`));
+    };
+    img.src = url;
+  });
+}
+
+/** Fail in French (with clip position) when a video URL is dead. */
+function checkVideoUrl(url: string, clip: TimelineClip, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ve = document.createElement("video");
+    ve.preload = "auto";
+    ve.muted = true;
+    const { cleanup } = abortableTimeout(MEDIA_CHECK_TIMEOUT_MS, signal, () =>
+      reject(new ExportError("fetch-failed", `vidéo ${clipLabel(clip)}`)),
+    );
+    const done = (ok: boolean) => {
+      cleanup();
+      ve.removeAttribute("src");
+      ve.remove();
+      if (ok) resolve();
+      else reject(new ExportError("fetch-failed", `vidéo ${clipLabel(clip)}`));
+    };
+    ve.oncanplay = () => done(true);
+    ve.onerror = () => done(false);
+    ve.src = url;
+  });
+}
+
+/**
+ * Upfront availability probe: every image/video clip must actually load
+ * (signed URLs can expire between preload and export while staying
+ * absolute). Nothing renders black silently — dead media throws FR.
+ */
+export async function assertMediaReady(clips: TimelineClip[], signal?: AbortSignal): Promise<void> {
+  throwIfCancelled(signal);
+  await Promise.all(
+    clips.flatMap((c) => {
+      if (c.meta?.silence === true || c.track === "Subtitles") return [];
+      const url = c.assets?.url;
+      if (!isHttpUrl(url)) return [];
+      if (c.assets?.kind === "image") return [checkImageUrl(url, c, signal)];
+      if (c.assets?.kind === "video") return [checkVideoUrl(url, c, signal)];
+      return [];
+    }),
+  );
+}
+
 export interface RunExportOpts {
   /**
    * Capture canvas. When omitted the engine encodes on a dedicated
@@ -621,9 +717,13 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     if (!isHttpUrl(c.assets?.url)) throw new ExportError("relative-url", clipLabel(c));
   }
   throwIfCancelled(signal);
+  // Availability probe: absolute URLs can still be dead (expired signed
+  // URL, 404, CORS) — those throw FR instead of rendering black.
+  await assertMediaReady(clips, signal);
 
   const prerendered = new Map<string, string>();
   const htmlVideoEls = new Map<string, HTMLVideoElement>();
+  const videoEls = new Map<string, HTMLVideoElement>();
   let ac: AudioContext | null = null;
   let stream: MediaStream | null = null;
 
@@ -646,6 +746,16 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
       ve.remove();
     });
     htmlVideoEls.clear();
+    videoEls.forEach((ve) => {
+      try {
+        ve.pause();
+      } catch {
+        /* noop */
+      }
+      ve.removeAttribute("src");
+      ve.remove();
+    });
+    videoEls.clear();
   };
 
   try {
@@ -752,7 +862,8 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
       rec.onstop = () => res(new Blob(chunks, { type: picked.container }));
     });
 
-    // Pre-create (preloaded) video elements for the pre-rendered cards.
+    // Pre-create (preloaded) video elements for the pre-rendered cards
+    // and for video-file clips on the Video track.
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new ExportError("unexpected", "canvas 2d indisponible");
     for (const [clipId, blobUrl] of prerendered) {
@@ -765,6 +876,19 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
       document.body.appendChild(ve);
       htmlVideoEls.set(clipId, ve);
     }
+    for (const c of clips) {
+      if (c.track !== "Video" || c.assets?.kind !== "video") continue;
+      const url = c.assets.url;
+      if (!isHttpUrl(url)) continue;
+      const ve = document.createElement("video");
+      ve.src = url;
+      ve.preload = "auto";
+      ve.muted = true;
+      (ve as HTMLVideoElement & { playsInline?: boolean }).playsInline = true;
+      ve.style.display = "none";
+      document.body.appendChild(ve);
+      videoEls.set(c.id, ve);
+    }
 
     // ---- phase 3: realtime-paced encode ----
     const totalFrames = Math.max(1, Math.ceil(totalMs / FRAME_MS));
@@ -776,6 +900,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
         clips,
         ms: p,
         getImage,
+        videoFrameMap: videoEls,
         htmlVideoMap: prerendered,
         htmlVideoEls,
       });
@@ -783,6 +908,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     rec.start(100);
     const startedAt = performance.now();
     let activeHtmlId: string | null = null;
+    const activeVideoIds = new Set<string>();
 
     await new Promise<void>((resolve, reject) => {
       const onAbort = () => reject(new ExportError("cancelled"));
@@ -824,6 +950,34 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
           }
         }
         render(p);
+        // Keep video-file picture sources playing while active so the
+        // file shows the same motion as the preview (muted — the mix
+        // comes from the WebAudio graph, never from these elements).
+        for (const [id, ve] of videoEls) {
+          const c = clips.find((x) => x.id === id);
+          const activeNow =
+            !!c && p >= (c.start_ms ?? 0) && p < (c.start_ms ?? 0) + (c.duration_ms ?? 0);
+          if (activeNow && !activeVideoIds.has(id)) {
+            activeVideoIds.add(id);
+            try {
+              ve.currentTime = Math.max(0, (p - (c!.start_ms ?? 0)) / 1000);
+            } catch {
+              /* not seekable yet */
+            }
+            try {
+              void ve.play().catch(() => {});
+            } catch {
+              /* first frames stay black until the video can play */
+            }
+          } else if (!activeNow && activeVideoIds.has(id)) {
+            activeVideoIds.delete(id);
+            try {
+              ve.pause();
+            } catch {
+              /* noop */
+            }
+          }
+        }
         onProgress?.({
           phase: "encode",
           done: Math.min(totalFrames, Math.floor(p / FRAME_MS)),

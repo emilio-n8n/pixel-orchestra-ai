@@ -86,6 +86,8 @@ export function TimelinePanel() {
   const clipsRef = useRef<TimelineClip[]>([]);
   const htmlOverlayRef = useRef<HTMLIFrameElement>(null);
   const previewHtmlElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  // Muted picture sources for video-file clips (preview + scrub).
+  const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const trackAreaRef = useRef<HTMLDivElement>(null);
   const playheadLineRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef(0);
@@ -349,6 +351,22 @@ export function TimelinePanel() {
     if (!ctx) return;
     const dpr = canvas.width / LOGICAL_W || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Scrub/pause path: paused video elements seek to the exact offset so
+    // the still frame matches the playhead (during playback the tick
+    // keeps them playing instead — never fight play() with seeks).
+    for (const [id, ve] of videoElsRef.current) {
+      const c = clipsRef.current.find((x) => x.id === id);
+      if (!c) continue;
+      const inClip = ms >= c.start_ms && ms < c.start_ms + c.duration_ms;
+      if (ve.paused && inClip && ve.readyState >= 1) {
+        const want = (ms - c.start_ms) / 1000;
+        try {
+          if (Math.abs(ve.currentTime - want) > 0.3) ve.currentTime = want;
+        } catch {
+          /* not seekable yet */
+        }
+      }
+    }
     renderTimelineFrame({
       ctx,
       width: LOGICAL_W,
@@ -356,6 +374,7 @@ export function TimelinePanel() {
       clips: clipsRef.current,
       ms,
       getImage: (url) => imgCacheRef.current.get(url),
+      videoFrameMap: videoElsRef.current,
       htmlVideoEls: previewHtmlElsRef.current,
     });
     // Reset so later 2d users (export temp canvas aside) start identity.
@@ -847,6 +866,26 @@ export function TimelinePanel() {
           /* element already gone */
         }
       }
+      // Video-file picture sources follow activation (muted — the mix
+      // comes from the <audio> elements above, same as the export).
+      for (const [id, ve] of videoElsRef.current) {
+        const c = clipsRef.current.find((x) => x.id === id);
+        const activeNow =
+          !!c && p >= (c.start_ms ?? 0) && p < (c.start_ms ?? 0) + (c.duration_ms ?? 0);
+        if (activeNow && ve.paused) {
+          try {
+            void ve.play().catch(() => {});
+          } catch {
+            /* not playable yet */
+          }
+        } else if (!activeNow && !ve.paused) {
+          try {
+            ve.pause();
+          } catch {
+            /* noop */
+          }
+        }
+      }
       paintPlayhead(p);
       mirrorPlayheadUi(p);
       // Card activation on the exact frame (no 100 ms mirror lag).
@@ -868,7 +907,59 @@ export function TimelinePanel() {
     };
   }, [playing, paintPlayhead, mirrorPlayheadUi, stopAudios]);
 
-  useEffect(() => () => stop(), [stop]);
+  // --------------- video-file picture sources (preview) ---------------
+  useEffect(() => {
+    const map = videoElsRef.current;
+    const live = new Set<string>();
+    for (const c of clips) {
+      if (c.track !== "Video" || c.assets?.kind !== "video") continue;
+      const url = c.assets.url;
+      if (!isHttpUrl(url)) continue;
+      live.add(c.id);
+      if (!map.has(c.id)) {
+        const ve = document.createElement("video");
+        ve.src = url;
+        ve.preload = "auto";
+        ve.muted = true;
+        (ve as HTMLVideoElement & { playsInline?: boolean }).playsInline = true;
+        ve.style.display = "none";
+        document.body.appendChild(ve);
+        map.set(c.id, ve);
+      } else {
+        const ve = map.get(c.id);
+        if (ve && ve.src !== url) ve.src = url;
+      }
+    }
+    for (const [id, ve] of [...map]) {
+      if (!live.has(id)) {
+        try {
+          ve.pause();
+        } catch {
+          /* noop */
+        }
+        ve.removeAttribute("src");
+        ve.remove();
+        map.delete(id);
+      }
+    }
+  }, [clips]);
+
+  useEffect(
+    () => () => {
+      stop();
+      videoElsRef.current.forEach((ve) => {
+        try {
+          ve.pause();
+        } catch {
+          /* noop */
+        }
+        ve.removeAttribute("src");
+        ve.remove();
+      });
+      videoElsRef.current.clear();
+    },
+    [stop],
+  );
 
   // --------------- export (single source: export.ts engine) ---------------
   // Preview ≡ file by construction: runExport reuses renderTimelineFrame,
