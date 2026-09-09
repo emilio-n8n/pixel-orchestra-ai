@@ -82,19 +82,18 @@ export function JobsPanel() {
   const last = useKernelEvents(1)[0];
   const jobsAttempt = useRef(0);
   const runsAttempt = useRef(0);
-  const retryTimer = useRef<number | null>(null);
+  // Separate timers: a simultaneous double failure must not cancel
+  // the other loader's retry.
+  const jobsRetryTimer = useRef<number | null>(null);
+  const runsRetryTimer = useRef<number | null>(null);
 
-  const clearRetry = () => {
-    if (retryTimer.current != null) {
-      window.clearTimeout(retryTimer.current);
-      retryTimer.current = null;
-    }
-  };
-
-  const scheduleRetry = useCallback((fn: () => void, attempt: number) => {
-    clearRetry();
-    retryTimer.current = window.setTimeout(fn, nextBackoff(attempt));
-  }, []);
+  const scheduleRetry = useCallback(
+    (timer: React.MutableRefObject<number | null>, fn: () => void, attempt: number) => {
+      if (timer.current != null) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(fn, nextBackoff(attempt));
+    },
+    [],
+  );
 
   // Local graph runs — the kernel event bus drives refetch.
   const loadRuns = useCallback(() => {
@@ -110,7 +109,7 @@ export function JobsPanel() {
         if (isOfflineError(e)) return;
         setLoadError(e);
         const n = runsAttempt.current++;
-        scheduleRetry(loadRuns, n);
+        scheduleRetry(runsRetryTimer, loadRuns, n);
       });
   }, [scheduleRetry]);
 
@@ -131,7 +130,7 @@ export function JobsPanel() {
       .catch((e) => {
         if (isOfflineError(e)) return; // silent; channel online-flush reloads
         const n = jobsAttempt.current++;
-        scheduleRetry(() => loadJobs(), n);
+        scheduleRetry(jobsRetryTimer, () => loadJobs(), n);
       });
   }, [pid, limit, scheduleRetry]);
 
@@ -154,7 +153,13 @@ export function JobsPanel() {
     }
   }, [online, loadJobs, loadRuns]);
 
-  useEffect(() => () => clearRetry(), []);
+  useEffect(
+    () => () => {
+      if (jobsRetryTimer.current != null) window.clearTimeout(jobsRetryTimer.current);
+      if (runsRetryTimer.current != null) window.clearTimeout(runsRetryTimer.current);
+    },
+    [],
+  );
 
   // Realtime — cleanup via supabase.removeChannel inside the shared hook
   // (never the mock unsubscribe), CHANNEL_ERROR/CLOSED → backoff resubscribe,

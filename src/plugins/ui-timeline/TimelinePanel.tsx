@@ -81,6 +81,10 @@ export function TimelinePanel() {
   const rafRef = useRef<number | null>(null);
   const audiosRef = useRef<HTMLAudioElement[]>([]);
   const audioMapRef = useRef<Map<string, { el: HTMLAudioElement; clip: TimelineClip }>>(new Map());
+  // Offline write queue (last-write-wins per clip) replayed on reconnect.
+  const pendingWritesRef = useRef<
+    Map<string, { start_ms?: number; duration_ms?: number; track?: string }>
+  >(new Map());
   const startedIdsRef = useRef<Set<string>>(new Set());
   const scheduledIdsRef = useRef<Set<string>>(new Set());
   const pendingTimersRef = useRef<number[]>([]);
@@ -162,12 +166,36 @@ export function TimelinePanel() {
     };
   }, [loadClips]);
 
-  // Auto-flush when the network comes back (storm stays silent meanwhile).
+  // Auto-flush when the network comes back (storm stays silent meanwhile):
+  // reload server truth, then replay queued offline writes last-write-wins.
+  // wasOnline guard: the mount effect above already loads once — this
+  // fires only on a real offline→online transition (no double-fetch).
+  const wasOnline = useRef(online);
   useEffect(() => {
-    if (online) {
-      loadAttempt.current = 0;
+    const back = online && !wasOnline.current;
+    wasOnline.current = online;
+    if (!back) return;
+    loadAttempt.current = 0;
+    void loadClips();
+    const queued = [...pendingWritesRef.current];
+    pendingWritesRef.current.clear();
+    if (queued.length === 0) return;
+    void (async () => {
+      for (const [id, patch] of queued) {
+        try {
+          await supabase.from("timeline_clips").update(patch).eq("id", id);
+        } catch (e) {
+          // Still offline (flapping): re-queue for the next reconnect.
+          if (isOfflineError(e)) {
+            pendingWritesRef.current.set(id, {
+              ...(pendingWritesRef.current.get(id) ?? {}),
+              ...patch,
+            });
+          }
+        }
+      }
       void loadClips();
-    }
+    })();
   }, [online, loadClips]);
 
   const clipsChannel = pid ? `clips:${pid}` : null;
@@ -504,7 +532,17 @@ export function TimelinePanel() {
   ) {
     try {
       await supabase.from("timeline_clips").update(patch).eq("id", id);
-    } catch {
+      pendingWritesRef.current.delete(id);
+    } catch (e) {
+      if (isOfflineError(e)) {
+        // Offline: queue last-write-wins per clip, replayed on reconnect.
+        // Reads stay silent; the write itself is never lost.
+        pendingWritesRef.current.set(id, {
+          ...(pendingWritesRef.current.get(id) ?? {}),
+          ...patch,
+        });
+        return;
+      }
       /* the realtime channel keeps the UI in sync; ignore transient errors */
     }
   }
@@ -530,7 +568,10 @@ export function TimelinePanel() {
       });
     } catch (e) {
       // Offline → silent (auto-flush on reconnect); real errors still surface once.
-      if (isOfflineError(e)) return;
+      if (isOfflineError(e)) {
+        setActionError(UI_LABELS.timeline.erreurHorsLigne);
+        return;
+      }
       setActionError(UI_LABELS.timeline.erreurSilence);
     } finally {
       setAddingSilence(false);
@@ -574,7 +615,23 @@ export function TimelinePanel() {
         );
       }
     } catch (e) {
-      if (isOfflineError(e)) return;
+      if (isOfflineError(e)) {
+        // The server never saw the delete: roll back the optimistic patch
+        // (reconnect refetch would otherwise resurrect the clip silently)
+        // and say so once — reads stay silent, failed writes do not.
+        setClips((prev) => {
+          const restored = [...prev, clip];
+          if (!ripple) return restored;
+          return restored.map((c) =>
+            later.some((l) => l.id === c.id)
+              ? { ...c, start_ms: (c.start_ms ?? 0) + (clip.duration_ms ?? 0) }
+              : c,
+          );
+        });
+        selectClip(id);
+        setActionError(UI_LABELS.timeline.erreurHorsLigne);
+        return;
+      }
       setActionError(UI_LABELS.timeline.erreurSuppression);
     }
   }

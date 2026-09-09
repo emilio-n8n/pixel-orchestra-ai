@@ -59,6 +59,9 @@ export function LineagePanel() {
   const online = useOnlineStatus();
   const [lineage, setLineage] = useState<LineageView | null>(null);
   const [busy, setBusy] = useState(false);
+  // True only while a failed load backs off silently — nav refetches
+  // (busy) never flash the pill (ConnPill contract: never in normal op).
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const attempt = useRef(0);
   const timer = useRef<number | null>(null);
@@ -75,6 +78,7 @@ export function LineagePanel() {
       .then((r) => {
         attempt.current = 0;
         setError(null);
+        setRetrying(false);
         setLineage(r as unknown as LineageView);
         setBusy(false);
       })
@@ -85,6 +89,7 @@ export function LineagePanel() {
         // Real error → keep stale DAG (stale-while-reconnect), one compact
         // ErrorBlock, silent backoff retry (no error storm).
         setError(e);
+        setRetrying(true);
         const delay = nextBackoff(attempt.current++);
         timer.current = window.setTimeout(() => {
           timer.current = null;
@@ -119,7 +124,7 @@ export function LineagePanel() {
 
   const conn: ConnState = !online
     ? "offline"
-    : error || (busy && lineage)
+    : error || (retrying && lineage)
       ? "reconnecting"
       : "live";
 

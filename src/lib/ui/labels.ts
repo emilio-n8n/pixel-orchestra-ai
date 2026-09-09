@@ -478,6 +478,7 @@ export const UI_LABELS = {
       "Ajoutez des médias depuis la médiathèque ou demandez au Director de générer une scène.",
     erreurChargement: "Impossible de charger la timeline.",
     erreurSuppression: "Suppression impossible — réessayez.",
+    erreurHorsLigne: "Hors ligne — modification non enregistrée. Reconnectez-vous puis réessayez.",
     erreurSilence: "Insertion du silence impossible — vérifiez la durée puis réessayez.",
     astuceLecture: "Lecture / Pause — Espace",
     astuceArret: "Arrêter — retour au début",

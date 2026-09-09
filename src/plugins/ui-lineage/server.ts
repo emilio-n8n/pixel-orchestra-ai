@@ -86,8 +86,9 @@ function listAssetsBySourceIds(ids: string[]): AssetRowLite[] {
     .all<AssetRowLite>(...ids);
 }
 
-function listAssetsByProvenanceSource(id: string, maxDepth: number): LineageAsset[] {
-  // Walk upward: assets whose source_asset_ids include `id` (transitively).
+function listDescendantsBySource(id: string, maxDepth: number): LineageAsset[] {
+  // Walk downward: assets whose source_asset_ids include `id` (transitively)
+  // are derived FROM it — its descendants.
   const seen = new Set<string>([id]);
   const out: LineageAsset[] = [];
   type QueueItem = { id: string; depth: number; path: string[] };
@@ -117,7 +118,7 @@ function listAssetsByProvenanceSource(id: string, maxDepth: number): LineageAsse
         name: asset.name,
         kind: asset.kind,
         createdAt: asset.created_at,
-        relation: "ancestor",
+        relation: "descendant",
         depth: depth + 1,
         path: [...path, p.node_run_id ?? p.asset_id],
       });
@@ -131,8 +132,9 @@ function listAssetsByProvenanceSource(id: string, maxDepth: number): LineageAsse
   return out;
 }
 
-function listAssetsByProvenanceDescendant(id: string, maxDepth: number): LineageAsset[] {
-  // Walk downward: assets for which `id` is in their source_asset_ids.
+function listAncestorsBySource(id: string, maxDepth: number): LineageAsset[] {
+  // Walk upward: assets listed in `id`'s own source_asset_ids are what
+  // it was derived FROM — its ancestors.
   const seen = new Set<string>([id]);
   const out: LineageAsset[] = [];
   type QueueItem = { id: string; depth: number; path: string[] };
@@ -158,7 +160,7 @@ function listAssetsByProvenanceDescendant(id: string, maxDepth: number): Lineage
         name: asset.name,
         kind: asset.kind,
         createdAt: asset.created_at,
-        relation: "descendant",
+        relation: "ancestor",
         depth: depth + 1,
         path: [...path, prov.node_run_id ?? cur],
       });
@@ -216,8 +218,8 @@ export const getLineage = createServerFn({ method: "GET" })
         }
       }
     }
-    const ancestors = listAssetsByProvenanceDescendant(data.assetId, maxDepth);
-    const descendants = listAssetsByProvenanceSource(data.assetId, maxDepth);
+    const ancestors = listAncestorsBySource(data.assetId, maxDepth);
+    const descendants = listDescendantsBySource(data.assetId, maxDepth);
     return {
       seed: { id: seed.id, name: seed.name, kind: seed.kind, createdAt: seed.created_at },
       ancestors,
