@@ -824,3 +824,47 @@ Le « grep EN : 0 » ci-dessus était **faux** (round 1 FAIL, 11 bloqueurs
 - Round 3 FAIL : reliquats AgentPanel/méta/palette → `30a4867`.
 - Round 4 : **WOW — zéro bloqueur/majeur** (balayage complet vérifié,
   `tsc`/`lint`/`bun test` verts).
+
+---
+
+## Responsif mobile (2026-09-13)
+
+**Statut** : ✅ livré + **WOW** critic (3 rounds)
+**Référence** : mission « Rendre responsif mobile » (main)
+
+### Livré
+
+- `9814785` : hook `useIsMobile` (<768px live) ; shell adaptatif —
+  inspecteur en drawer (`85vw/max-340px`, backdrop, `role=dialog`
+  + `aria-modal`, `Esc` ferme) et bas en feuille (`65vh`) sur mobile,
+  desktop `PanelGroup` inchangé ; topbar compacte (classe `xs:` morte
+  supprimée, `⌘K` caché <sm, export icône) ; CSS tactile (`ghost-btn`
+  / `touch-44` 44px, `clip-resize` 16px, `pb-safe`, `text-ios` 16px
+  scopé) ; StatusBar safe-area ; bouton fermer mobile du panneau.
+- `87f1bfe` : transport timeline en wrap (slider pleine largeur
+  d'abord sur mobile, compte masqué <sm, plein écran masqué <sm,
+  en-têtes `w-14` + truncate) ; drag tactile par long-press 220ms
+  (`pan-y`, capture, vibration, commit au relâché, clic post-drag
+  supprimé) ; grips en Pointer Events + `touch-action: none`.
+- `17320f0` : 44px opt-in (pilules, formulaires, historique,
+  compositeur, Utiliser, palette, sidebar) ; Origine en vrai
+  `<button>` ; méta tronquée ; historique `40vh` + suppression
+  visible au tactile ; Inspector 1 col <md ; palette tronquée.
+- `1d50ab6` + `c4da9de` : post-critique (exclusion mutuelle des
+  tiroirs, `text-ios` à spécificité garantie, `enterKeyHint`,
+  formulaires 16px, `seekTo` plein écran, pastilles FR).
+
+### Validation
+
+- `bun test` : 88 pass, 0 fail. `bunx tsc --noEmit` : 0.
+  `bun run lint` : 0 erreur (11 warnings pré-existants).
+- Navigateur tactile réel : non rejouable ici ; logique revue +
+  3 rounds de critique impitoyable, zéro `console.error` ajouté.
+
+### Critique (gauntlet)
+
+- Rounds 1-2 FAIL (conflit drag/clic, capture, modales, 16px,
+  tiroirs empilés) → tout corrigé et re-vérifié file:line.
+- Round 3 : **WOW — zéro bloqueur/majeur.**
+- Suivis assumés : focus-trap des modales, dérive buffer vidéo
+  tactile, `visibilitychange` — documented, non bloquants.
