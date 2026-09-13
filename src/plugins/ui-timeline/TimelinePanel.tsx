@@ -1302,7 +1302,7 @@ export function TimelinePanel() {
             <button
               onClick={() => {
                 setPlaying(false);
-                setPlayhead(0);
+                seekTo(0);
               }}
               className="touch-44 flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
               title={T.arret}
