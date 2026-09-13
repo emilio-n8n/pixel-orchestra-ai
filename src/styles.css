@@ -308,6 +308,15 @@
     min-height: 44px;
     min-width: 44px;
   }
+  /* Opt-in 44px targets (icon buttons that stay compact on desktop). */
+  .touch-44 {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Timeline resize grips: bigger grab zone, same 6px visual. */
+  .clip-resize {
+    width: 16px;
+  }
   input,
   select,
   textarea {

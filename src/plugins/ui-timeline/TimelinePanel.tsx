@@ -755,6 +755,94 @@ export function TimelinePanel() {
     };
   }
 
+  /** Touch/pen resize grip: same geometry as the mouse path. */
+  function handleResizePointerDown(
+    e: React.PointerEvent,
+    clip: TimelineClip,
+    side: "left" | "right",
+  ) {
+    if (e.pointerType === "mouse") return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
+    resizeRef.current = {
+      clipId: clip.id,
+      side,
+      startMs: clip.start_ms ?? 0,
+      durationMs: clip.duration_ms ?? 3000,
+      startClientX: e.clientX,
+    };
+  }
+
+  // Touch clip drag: long-press (220ms) arms the move so plain pans
+  // still scroll the track area. Chips use touch-action: pan-y so
+  // horizontal moves reach us once armed while vertical scrolls.
+  const touchDragRef = useRef<{
+    clipId: string;
+    offsetMs: number;
+    startX: number;
+    startY: number;
+    timer: number | null;
+    armed: boolean;
+  } | null>(null);
+  function handleChipPointerDown(e: React.PointerEvent, clip: TimelineClip) {
+    if (e.pointerType === "mouse") return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const td = {
+      clipId: clip.id,
+      offsetMs: (e.clientX - rect.left) / PX_PER_MS,
+      startX: e.clientX,
+      startY: e.clientY,
+      timer: null as number | null,
+      armed: false,
+    };
+    td.timer = window.setTimeout(() => {
+      const cur = touchDragRef.current;
+      if (!cur || cur.clipId !== clip.id) return;
+      cur.armed = true;
+      selectClip(clip.id);
+      try {
+        if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(10);
+      } catch {
+        /* noop */
+      }
+    }, 220);
+    touchDragRef.current = td;
+  }
+  function handleChipPointerMove(e: React.PointerEvent) {
+    const td = touchDragRef.current;
+    if (!td) return;
+    if (!td.armed) {
+      if (Math.hypot(e.clientX - td.startX, e.clientY - td.startY) > 10 && td.timer != null) {
+        window.clearTimeout(td.timer);
+        td.timer = null;
+      }
+      return;
+    }
+    e.preventDefault();
+    const clip = clipsRef.current.find((c) => c.id === td.clipId);
+    if (!clip) return;
+    const el = typeof document !== "undefined" ? document.elementFromPoint(e.clientX, e.clientY) : null;
+    const trackEl = (el as HTMLElement | null)?.closest?.("[data-track]") as HTMLElement | null;
+    const track = trackEl?.dataset.track ?? clip.track;
+    const duration = clip.duration_ms ?? 3000;
+    const start = resolveNoOverlap(track, msFromClientX(e.clientX) - td.offsetMs, duration, clip.id);
+    patchClipLocal(clip.id, { start_ms: start, track });
+  }
+  function endTouchDrag(commit: boolean) {
+    const td = touchDragRef.current;
+    touchDragRef.current = null;
+    if (!td) return;
+    if (td.timer != null) window.clearTimeout(td.timer);
+    if (!td.armed || !commit) return; // plain tap → onClick select runs
+    const clip = clipsRef.current.find((c) => c.id === td.clipId);
+    if (clip) void updateClip(clip.id, { start_ms: clip.start_ms, track: clip.track });
+  }
+
   /**
    * Resize geometry clamped so a resize can never create an overlap that
    * drag forbids: left edge stops at the previous neighbour's end, right
@@ -795,13 +883,13 @@ export function TimelinePanel() {
   }
 
   useEffect(() => {
-    function onMove(e: MouseEvent) {
+    function onMove(e: MouseEvent | PointerEvent) {
       const r = resizeRef.current;
       if (!r) return;
       const dx = (e.clientX - r.startClientX) / PX_PER_MS;
       patchClipLocal(r.clipId, computeResize(r, dx));
     }
-    function onUp(e: MouseEvent) {
+    function onUp(e: MouseEvent | PointerEvent) {
       const r = resizeRef.current;
       if (r) {
         const dx = (e.clientX - r.startClientX) / PX_PER_MS;
@@ -811,9 +899,15 @@ export function TimelinePanel() {
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, []);
 
@@ -1219,12 +1313,12 @@ export function TimelinePanel() {
         )}
       </div>
 
-      {/* Transport */}
-      <div className="flex h-11 shrink-0 items-center gap-2 border-y border-[var(--line)] bg-[var(--surface-2)] px-3">
+      {/* Transport — slider full-width first on phones, actions wrap below. */}
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-y border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5">
         <button
           onClick={() => (playing ? setPlaying(false) : setPlaying(true))}
           disabled={exporting}
-          className="flex h-7 w-7 items-center justify-center rounded bg-[var(--surface-3)] text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40"
+          className="touch-44 flex h-7 w-7 items-center justify-center rounded bg-[var(--surface-3)] text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40"
           title={T.astuceLecture}
         >
           {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -1235,12 +1329,12 @@ export function TimelinePanel() {
             seekTo(0);
           }}
           disabled={exporting}
-          className="flex h-7 w-7 items-center justify-center rounded bg-[var(--surface-3)] text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40"
+          className="touch-44 flex h-7 w-7 items-center justify-center rounded bg-[var(--surface-3)] text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40"
           title={T.astuceArret}
         >
           <Square className="h-3 w-3" />
         </button>
-        <div className="mono text-[11px] tabular-nums text-[var(--text-muted)]">
+        <div className="mono shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
           {fmt(playhead)} / {fmt(totalMs)}
         </div>
         <input
@@ -1254,15 +1348,17 @@ export function TimelinePanel() {
           }}
           disabled={exporting}
           title={T.astuceCurseur}
-          className="flex-1 accent-[var(--accent)]"
+          className="order-first w-full accent-[var(--accent)] sm:order-none sm:w-auto sm:flex-1"
         />
-        <div className="text-[11px] text-[var(--text-dim)]">{T.plans(clips.length)}</div>
+        <div className="hidden text-[11px] text-[var(--text-dim)] sm:block">
+          {T.plans(clips.length)}
+        </div>
         <ConnPill state={connState} />
         {selectedClipId ? (
           <button
             onClick={(e) => void deleteSelected(e.shiftKey)}
             title={T.astuceSupprimer}
-            className="ml-1 flex h-6 items-center gap-1 rounded border border-[var(--status-err)]/40 px-2 text-[10px] font-medium text-[var(--status-err)] transition-colors hover:bg-[var(--status-err)]/10 disabled:opacity-40"
+            className="touch-44 ml-1 flex h-6 items-center gap-1 rounded border border-[var(--status-err)]/40 px-2 text-[10px] font-medium text-[var(--status-err)] transition-colors hover:bg-[var(--status-err)]/10 disabled:opacity-40"
           >
             <Trash2 size={10} />
             {UI_LABELS.common.supprimer}
@@ -1282,7 +1378,7 @@ export function TimelinePanel() {
             onClick={addSilence}
             disabled={exporting || addingSilence || !pid}
             title={T.insererSilence}
-            className="flex h-6 items-center gap-1 rounded bg-[var(--surface-3)] px-1.5 text-[10px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-40"
+            className="touch-44 flex h-6 items-center gap-1 rounded bg-[var(--surface-3)] px-1.5 text-[10px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-40"
           >
             <VolumeX size={10} />
             {T.silence}
@@ -1291,7 +1387,7 @@ export function TimelinePanel() {
         <button
           onClick={toggleFullscreen}
           disabled={exporting}
-          className="ml-2 flex h-7 items-center gap-1.5 rounded bg-[var(--surface-3)] px-2.5 text-[11px] font-medium text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40"
+          className="touch-44 ml-2 hidden h-7 items-center gap-1.5 rounded bg-[var(--surface-3)] px-2.5 text-[11px] font-medium text-[var(--text)] hover:bg-[var(--accent-quiet)] disabled:opacity-40 sm:flex"
           title={T.aidePleinEcran}
         >
           <Maximize2 className="h-3.5 w-3.5" />
@@ -1300,7 +1396,7 @@ export function TimelinePanel() {
         <button
           onClick={exportVideo}
           disabled={exporting || clips.length === 0}
-          className="ml-2 flex items-center gap-1.5 rounded bg-[var(--accent)] px-3 py-1 text-[11px] font-medium text-[var(--accent-fg)] hover:bg-[var(--accent-strong)] disabled:opacity-40"
+          className="touch-44 ml-2 flex items-center gap-1.5 rounded bg-[var(--accent)] px-3 py-1 text-[11px] font-medium text-[var(--accent-fg)] hover:bg-[var(--accent-strong)] disabled:opacity-40"
           title={T.exportVideo}
         >
           {exporting ? (
@@ -1351,7 +1447,7 @@ export function TimelinePanel() {
           </div>
         ) : null}
         <div className="flex gap-3">
-          <div className="w-20 shrink-0 space-y-1">
+          <div className="w-14 shrink-0 space-y-1 sm:w-20">
             {TRACKS.map((t) => {
               const ducked = clips.some((c) => c.track === t && c.meta?.ducking);
               const gain = duckGains.get(t);
@@ -1360,9 +1456,9 @@ export function TimelinePanel() {
               return (
                 <div
                   key={t}
-                  className="flex h-12 items-center gap-1 rounded bg-[var(--surface-2)] px-2 text-[10px] uppercase tracking-widest text-[var(--text-dim)]"
+                  className="flex h-12 min-w-0 items-center gap-1 rounded bg-[var(--surface-2)] px-1.5 text-[10px] uppercase tracking-widest text-[var(--text-dim)] sm:px-2"
                 >
-                  <span>{TRACK_LABELS[t] ?? t}</span>
+                  <span className="truncate">{TRACK_LABELS[t] ?? t}</span>
                   {ducked ? (
                     <span
                       className="inline-flex items-center gap-1 rounded bg-[var(--accent-quiet)] px-1 py-px text-[8px] font-bold tracking-widest text-[var(--accent-strong)]"
@@ -1397,6 +1493,7 @@ export function TimelinePanel() {
                 return (
                   <div
                     key={t}
+                    data-track={t}
                     onClick={() => selectClip(null)}
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -1426,6 +1523,10 @@ export function TimelinePanel() {
                           key={c.id}
                           draggable
                           onDragStart={(e) => handleClipDragStart(e, c)}
+                          onPointerDown={(e) => handleChipPointerDown(e, c)}
+                          onPointerMove={handleChipPointerMove}
+                          onPointerUp={() => endTouchDrag(true)}
+                          onPointerCancel={() => endTouchDrag(true)}
                           onClick={(e) => {
                             e.stopPropagation();
                             selectClip(isSelected ? null : c.id);
@@ -1448,6 +1549,7 @@ export function TimelinePanel() {
                           style={{
                             left: c.start_ms * PX_PER_MS,
                             width: Math.max(24, c.duration_ms * PX_PER_MS),
+                            touchAction: "pan-y",
                           }}
                           title={chipTitle}
                         >
@@ -1475,8 +1577,10 @@ export function TimelinePanel() {
                           )}
                           <div
                             onMouseDown={(e) => handleResizeStart(e, c, "left")}
+                            onPointerDown={(e) => handleResizePointerDown(e, c, "left")}
                             title={T.astuceRedimensionner}
-                            className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
+                            style={{ touchAction: "none" }}
+                            className="clip-resize absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
                           />
                           {hasFadeIn ? (
                             <div
@@ -1492,8 +1596,10 @@ export function TimelinePanel() {
                           ) : null}
                           <div
                             onMouseDown={(e) => handleResizeStart(e, c, "right")}
+                            onPointerDown={(e) => handleResizePointerDown(e, c, "right")}
                             title={T.astuceRedimensionner}
-                            className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
+                            style={{ touchAction: "none" }}
+                            className="clip-resize absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
                           />
                         </div>
                       );
