@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sparkles, SlidersHorizontal } from "lucide-react";
+import { Sparkles, SlidersHorizontal, X } from "lucide-react";
 import { usePanelStore } from "@/stores/panels";
 import { DirectorPanel } from "@/plugins/director/DirectorPanel";
 import { Inspector } from "./Inspector";
@@ -16,6 +16,7 @@ type Tab = "chat" | "inspect";
  */
 export function RightPanel() {
   const active = usePanelStore((s) => s.activeModule);
+  const toggle = usePanelStore((s) => s.toggle);
   const [override, setOverride] = useState<Tab | null>(null);
 
   // Changing sidebar module → return to the default derived from `active`.
@@ -44,6 +45,15 @@ export function RightPanel() {
           active={tab === "inspect"}
           onClick={() => setOverride("inspect")}
         />
+        <button
+          type="button"
+          onClick={() => toggle("inspector")}
+          title={UI_LABELS.common.fermer}
+          aria-label={UI_LABELS.common.fermer}
+          className="ghost-btn h-7 w-7 shrink-0 rounded-lg text-[var(--text-dim)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:hidden"
+        >
+          <X size={14} />
+        </button>
       </div>
       <div className="min-h-0 flex-1">{tab === "chat" ? <DirectorPanel /> : <Inspector />}</div>
     </div>

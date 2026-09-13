@@ -522,6 +522,8 @@ export const UI_LABELS = {
     stockageValeur: "Lilium Cloud",
     navigationPrincipale: "Navigation principale",
     navigationModules: "Modules du studio",
+    panneauLateral: "Panneau latéral",
+    panneauMontage: "Panneau de montage",
     aucuneTache: "Aucune tâche",
     tachesEnCours: (n: number) => `${n} tâche${n > 1 ? "s" : ""} en cours`,
     journalDev: "Journal développeur",

@@ -48,7 +48,7 @@ export function TopBar({
                 "conic-gradient(from 210deg, var(--accent-strong), var(--accent), var(--accent-quiet), var(--accent))",
             }}
           />
-          <span className="hidden xs:inline sm:inline">Lilium</span>
+          <span className="hidden sm:inline">Lilium</span>
         </Link>
         <Crumb />
         {ws ? (
@@ -119,7 +119,7 @@ export function TopBar({
         >
           <Search size={13} />
           <span className="hidden lg:inline">{UI_LABELS.shell.rechercher}</span>
-          <kbd className="rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)]">
+          <kbd className="hidden rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)] sm:inline">
             ⌘K
           </kbd>
         </button>

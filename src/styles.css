@@ -300,3 +300,24 @@
     outline-offset: 1px;
   }
 }
+
+/* Coarse pointers (touch phones/tablets): 44px minimum targets,
+   iOS-friendly inputs, notch-aware insets. */
+@media (pointer: coarse) {
+  .ghost-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  input[type="range"] {
+    min-height: 44px;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}

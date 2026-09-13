@@ -47,7 +47,7 @@ export function StatusBar() {
         </div>
       ) : null}
 
-      <div className="flex h-8 items-center justify-between gap-2 px-2 text-[11px] text-[var(--text-dim)] sm:px-3">
+      <div className="pb-safe flex h-8 items-center justify-between gap-2 px-2 text-[11px] text-[var(--text-dim)] sm:px-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <StatusPill tone="done">{UI_LABELS.shell.studioPret}</StatusPill>
           <span className="hidden items-center gap-1.5 sm:flex">

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { usePanelStore } from "@/stores/panels";
+import { UI_LABELS } from "@/lib/ui/labels";
+import { useIsMobile } from "@/lib/ui/useIsMobile";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { RightPanel } from "./RightPanel";
@@ -21,14 +23,18 @@ export function WorkspaceShell({
   const setLayout = usePanelStore((s) => s.setLayout);
   const inspectorCollapsed = usePanelStore((s) => s.inspectorCollapsed);
   const bottomCollapsed = usePanelStore((s) => s.bottomCollapsed);
+  const toggle = usePanelStore((s) => s.toggle);
+  const mobile = useIsMobile();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  // Mobile first run: collapse to the 52px rail so the canvas keeps room.
+  // Mobile first run: overlay drawers replace side panels, so start
+  // with everything collapsed and let toggles open them on demand.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!window.matchMedia("(max-width: 767px)").matches) return;
     usePanelStore.setState({ sidebarCollapsed: true, bottomCollapsed: true });
+    usePanelStore.setState({ inspectorCollapsed: true });
   }, []);
 
   useEffect(() => {
@@ -59,11 +65,17 @@ export function WorkspaceShell({
       if (e.key === "Escape") {
         setPaletteOpen(false);
         setShortcutsOpen(false);
+        // Mobile: Esc also dismisses overlay drawers/sheets.
+        if (mobile) {
+          const s = usePanelStore.getState();
+          if (!s.inspectorCollapsed) s.toggle("inspector");
+          else if (!s.bottomCollapsed) s.toggle("bottom");
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [mobile]);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--surface-0)] text-[var(--text)]">
@@ -77,45 +89,85 @@ export function WorkspaceShell({
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
 
-        <PanelGroup direction="vertical" className="flex-1" autoSaveId="lilium.main.v">
-          <Panel defaultSize={100 - layout.bottom} minSize={30}>
-            <PanelGroup direction="horizontal" autoSaveId="lilium.main.h">
-              <Panel
-                defaultSize={inspectorCollapsed ? 100 : layout.center}
-                minSize={30}
-                onResize={(size) => setLayout({ center: size })}
-              >
-                <CenterView />
-              </Panel>
-              {!inspectorCollapsed && (
-                <>
-                  <ResizeH />
-                  <Panel
-                    defaultSize={layout.inspector}
-                    minSize={16}
-                    maxSize={50}
-                    onResize={(size) => setLayout({ inspector: size })}
-                  >
-                    <RightPanel />
-                  </Panel>
-                </>
-              )}
-            </PanelGroup>
-          </Panel>
-          {!bottomCollapsed && (
-            <>
-              <ResizeV />
-              <Panel
-                defaultSize={layout.bottom}
-                minSize={12}
-                maxSize={70}
-                onResize={(size) => setLayout({ bottom: size })}
-              >
-                <BottomDock />
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
+        {mobile ? (
+          <div className="relative min-w-0 flex-1">
+            <CenterView />
+            {!inspectorCollapsed && (
+              <>
+                <button
+                  type="button"
+                  aria-label={UI_LABELS.common.fermer}
+                  onClick={() => toggle("inspector")}
+                  className="absolute inset-0 z-30 bg-black/50"
+                />
+                <div
+                  role="dialog"
+                  aria-label={UI_LABELS.shell.panneauLateral}
+                  className="absolute top-0 right-0 bottom-0 z-40 flex w-[85vw] max-w-[340px] flex-col border-l border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
+                >
+                  <RightPanel />
+                </div>
+              </>
+            )}
+            {!bottomCollapsed && (
+              <>
+                <button
+                  type="button"
+                  aria-label={UI_LABELS.common.fermer}
+                  onClick={() => toggle("bottom")}
+                  className="absolute inset-0 z-30 bg-black/50"
+                />
+                <div
+                  role="dialog"
+                  aria-label={UI_LABELS.shell.panneauMontage}
+                  className="absolute inset-x-0 bottom-0 z-40 max-h-[65vh] min-h-[30vh] overflow-hidden rounded-t-2xl border-t border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
+                >
+                  <BottomDock />
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <PanelGroup direction="vertical" className="flex-1" autoSaveId="lilium.main.v">
+            <Panel defaultSize={100 - layout.bottom} minSize={30}>
+              <PanelGroup direction="horizontal" autoSaveId="lilium.main.h">
+                <Panel
+                  defaultSize={inspectorCollapsed ? 100 : layout.center}
+                  minSize={30}
+                  onResize={(size) => setLayout({ center: size })}
+                >
+                  <CenterView />
+                </Panel>
+                {!inspectorCollapsed && (
+                  <>
+                    <ResizeH />
+                    <Panel
+                      defaultSize={layout.inspector}
+                      minSize={16}
+                      maxSize={50}
+                      onResize={(size) => setLayout({ inspector: size })}
+                    >
+                      <RightPanel />
+                    </Panel>
+                  </>
+                )}
+              </PanelGroup>
+            </Panel>
+            {!bottomCollapsed && (
+              <>
+                <ResizeV />
+                <Panel
+                  defaultSize={layout.bottom}
+                  minSize={12}
+                  maxSize={70}
+                  onResize={(size) => setLayout({ bottom: size })}
+                >
+                  <BottomDock />
+                </Panel>
+              </>
+            )}
+          </PanelGroup>
+        )}
       </div>
 
       <StatusBar />
