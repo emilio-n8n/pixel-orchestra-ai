@@ -77,7 +77,7 @@ export function Sidebar() {
                       aria-label={it.label}
                       aria-current={isActive ? "page" : undefined}
                       onClick={() => setActive(it.id)}
-                      className={`group relative flex h-9 items-center rounded-lg text-[12.5px] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:h-8 ${
+                      className={`group touch-44 relative flex h-9 items-center rounded-lg text-[12.5px] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:h-8 ${
                         collapsed
                           ? "justify-center px-0"
                           : "justify-center px-0 md:justify-start md:gap-2.5 md:px-2.5"

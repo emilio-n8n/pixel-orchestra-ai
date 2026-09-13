@@ -125,21 +125,21 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                 onMouseEnter={() => setI(idx)}
                 onFocus={() => setI(idx)}
                 onClick={() => exec(c)}
-                className={`flex w-full items-center justify-between px-4 py-2 text-left text-[13px] outline-none transition-colors ${
+                className={`touch-44 flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-[13px] outline-none transition-colors ${
                   idx === i
                     ? "bg-[var(--accent-quiet)] text-[var(--text)]"
                     : "text-[var(--text-muted)]"
                 } focus-visible:bg-[var(--accent-quiet)] focus-visible:text-[var(--text)]`}
               >
-                <span>{c.title}</span>
-                <span className="mono text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
+                <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                <span className="mono shrink-0 text-[10px] uppercase tracking-widest text-[var(--text-dim)]">
                   {c.category}
                 </span>
               </button>
             ))
           )}
         </div>
-        <div className="border-t border-[var(--line)] px-4 py-1.5 text-[10px] text-[var(--text-dim)]">
+        <div className="hidden border-t border-[var(--line)] px-4 py-1.5 text-[10px] text-[var(--text-dim)] sm:block">
           {UI_LABELS.palette.aideClavier}
         </div>
       </div>

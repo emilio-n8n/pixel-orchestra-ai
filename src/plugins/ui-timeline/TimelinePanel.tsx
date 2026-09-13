@@ -826,11 +826,17 @@ export function TimelinePanel() {
     e.preventDefault();
     const clip = clipsRef.current.find((c) => c.id === td.clipId);
     if (!clip) return;
-    const el = typeof document !== "undefined" ? document.elementFromPoint(e.clientX, e.clientY) : null;
+    const el =
+      typeof document !== "undefined" ? document.elementFromPoint(e.clientX, e.clientY) : null;
     const trackEl = (el as HTMLElement | null)?.closest?.("[data-track]") as HTMLElement | null;
     const track = trackEl?.dataset.track ?? clip.track;
     const duration = clip.duration_ms ?? 3000;
-    const start = resolveNoOverlap(track, msFromClientX(e.clientX) - td.offsetMs, duration, clip.id);
+    const start = resolveNoOverlap(
+      track,
+      msFromClientX(e.clientX) - td.offsetMs,
+      duration,
+      clip.id,
+    );
     patchClipLocal(clip.id, { start_ms: start, track });
   }
   function endTouchDrag(commit: boolean) {

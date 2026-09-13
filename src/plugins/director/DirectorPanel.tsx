@@ -215,7 +215,7 @@ export function DirectorPanel() {
         <div className="flex items-center gap-1">
           <button
             onClick={handleNewConversation}
-            className="rounded p-1 text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            className="touch-44 rounded p-1 text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             title={UI_LABELS.director.nouvelleConversation}
             aria-label={UI_LABELS.director.nouvelleConversation}
           >
@@ -226,7 +226,7 @@ export function DirectorPanel() {
               setShowHistory(!showHistory);
               setShowSettings(false);
             }}
-            className={`rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
+            className={`touch-44 rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
               showHistory
                 ? "text-[var(--text)] bg-[var(--surface-3)]"
                 : "text-[var(--text-dim)] hover:text-[var(--text)]"
@@ -241,7 +241,7 @@ export function DirectorPanel() {
               setShowSettings(!showSettings);
               setShowHistory(false);
             }}
-            className={`rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
+            className={`touch-44 rounded p-1 hover:bg-[var(--surface-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
               showSettings
                 ? "text-[var(--text)] bg-[var(--surface-3)]"
                 : "text-[var(--text-dim)] hover:text-[var(--text)]"
@@ -264,7 +264,7 @@ export function DirectorPanel() {
             {UI_LABELS.director.nouveauMessage}
           </button>
           <div
-            className="max-h-64 space-y-0.5 overflow-auto"
+            className="max-h-[40vh] space-y-0.5 overflow-auto"
             role="listbox"
             aria-label={UI_LABELS.director.conversationsTitre}
           >
@@ -297,7 +297,7 @@ export function DirectorPanel() {
                   </div>
                   <button
                     onClick={(e) => handleDeleteConversation(c.id, e)}
-                    className="rounded p-0.5 text-[var(--text-dim)] opacity-0 hover:text-red-400 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] group-hover:opacity-100"
+                    className="touch-44 rounded p-0.5 text-[var(--text-dim)] opacity-0 hover:text-red-400 group-hover:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-60"
                     title={UI_LABELS.director.effacer}
                     aria-label={UI_LABELS.director.effacer}
                   >
@@ -415,7 +415,7 @@ export function DirectorPanel() {
                     </div>
                     <button
                       onClick={() => removeCustomModel(m.id)}
-                      className="ml-1 shrink-0 rounded p-0.5 text-[var(--text-dim)] hover:text-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                      className="touch-44 ml-1 shrink-0 rounded p-0.5 text-[var(--text-dim)] hover:text-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                       title={UI_LABELS.director.retirer}
                       aria-label={UI_LABELS.director.retirer}
                     >
@@ -495,7 +495,7 @@ export function DirectorPanel() {
           aria-label={UI_LABELS.director.invitePlaceholder}
           className="flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
         />
-        <Button type="submit" size="sm" disabled={busy || !apiKey}>
+        <Button type="submit" size="sm" disabled={busy || !apiKey} className="touch-44">
           {busy ? UI_LABELS.director.envoiEnCours : UI_LABELS.director.envoyer}
         </Button>
       </form>
@@ -542,11 +542,11 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
 
   return (
     <div className="rounded border border-dashed border-[var(--line)] p-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value as "cloudflare" | "gradio")}
-          className="h-6 rounded border border-[var(--line)] bg-[var(--surface-3)] px-1.5 text-[10px] text-[var(--text-muted)]"
+          className="touch-44 h-6 rounded border border-[var(--line)] bg-[var(--surface-3)] px-1.5 text-[10px] text-[var(--text-muted)]"
         >
           <option value="cloudflare">Cloudflare</option>
           <option value="gradio">{UI_LABELS.director.pointGradio}</option>
@@ -560,16 +560,16 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
               ? UI_LABELS.director.modeleIdPlaceholderCloudflare
               : UI_LABELS.director.pointAccesPlaceholder
           }
-          className="h-6 flex-1 text-[10px]"
+          className="h-6 min-w-0 flex-1 text-[10px]"
         />
       </div>
-      <div className="mt-1.5 flex items-center gap-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <Input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder={UI_LABELS.director.etiquettePersoPlaceholder}
-          className="h-6 flex-1 text-[10px]"
+          className="h-6 min-w-0 flex-1 text-[10px]"
         />
         <div className="flex items-center gap-2">
           {CAP_OPTIONS.map((c) => (
@@ -581,7 +581,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
                 type="checkbox"
                 checked={caps.has(c.value)}
                 onChange={() => toggleCap(c.value)}
-                className="h-3 w-3 accent-[var(--accent)]"
+                className="touch-44 h-3 w-3 accent-[var(--accent)]"
               />
               {c.label}
             </label>
@@ -591,7 +591,7 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           size="sm"
           onClick={submit}
           disabled={!modelId.trim()}
-          className="h-6 px-2 text-[10px]"
+          className="touch-44 h-6 px-2 text-[10px]"
         >
           {UI_LABELS.common.ajouter}
         </Button>

@@ -282,7 +282,7 @@ export function LibraryPanel() {
           <button
             key={k}
             onClick={() => setKindFilter(k)}
-            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${FOCUS_RING} ${
+            className={`touch-44 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${FOCUS_RING} ${
               kindFilter === k
                 ? "border-[var(--accent)] bg-[var(--accent-quiet)] text-[var(--text)]"
                 : "border-[var(--line)] text-[var(--text-dim)] hover:border-[var(--line-strong)] hover:text-[var(--text-muted)]"
@@ -479,10 +479,12 @@ function AssetCard({
             {kindLabel(asset.pendingKind ?? "pending")} · {UI_LABELS.library.fichierAttendu}
           </span>
         ) : (
-          <span className="flex items-center gap-1">
+          <span className="flex min-w-0 items-center gap-1">
             <KindIcon kind={asset.kind} size={11} />
-            {kindLabel(asset.kind)} · {formatBytes(asset.sizeBytes)}
-            {durationMs != null ? ` · ${(durationMs / 1000).toFixed(1)}s` : null}
+            <span className="truncate">
+              {kindLabel(asset.kind)} · {formatBytes(asset.sizeBytes)}
+              {durationMs != null ? ` · ${(durationMs / 1000).toFixed(1)}s` : null}
+            </span>
           </span>
         )}
       </div>
@@ -502,30 +504,23 @@ function AssetCard({
               ? ` · ${provenance.parentCount} parent${provenance.parentCount > 1 ? "s" : ""}`
               : ""}
           </span>
-          <span
-            role="button"
-            tabIndex={0}
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onOpen();
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.stopPropagation();
-                onOpen();
-              }
-            }}
-            className="shrink-0 text-[var(--accent)] hover:underline"
+            className="touch-44 shrink-0 text-[var(--accent)] hover:underline"
             title={UI_LABELS.library.voirOrigine}
           >
             {UI_LABELS.library.origine}
-          </span>
+          </button>
         </div>
       ) : null}
       {isPending ? (
         <label
           onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--status-warn)]/40 px-2 py-1 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--status-warn)] hover:text-[var(--text)]"
+          className="touch-44 mt-0.5 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-[var(--status-warn)]/40 px-2 py-1 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--status-warn)] hover:text-[var(--text)]"
         >
           {fulfilling ? UI_LABELS.library.depotEnCours : UI_LABELS.library.depotFichier}
           <input

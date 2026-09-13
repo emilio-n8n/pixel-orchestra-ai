@@ -210,7 +210,7 @@ function VoiceTakeSwitcher({ asset }: { asset: AssetRow }) {
                   <button
                     onClick={() => void applyTake(t.id, label)}
                     disabled={busyId !== null}
-                    className="shrink-0 rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                    className="touch-44 shrink-0 rounded border border-[var(--line)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                     title={UI_LABELS.inspector.remplacerTake}
                     aria-label={UI_LABELS.inspector.ecouterPrise(label)}
                   >
@@ -385,7 +385,7 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <div>
             <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
               {UI_LABELS.inspector.police}
