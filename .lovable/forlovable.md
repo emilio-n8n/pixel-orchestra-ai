@@ -868,3 +868,28 @@ Le « grep EN : 0 » ci-dessus était **faux** (round 1 FAIL, 11 bloqueurs
 - Round 3 : **WOW — zéro bloqueur/majeur.**
 - Suivis assumés : focus-trap des modales, dérive buffer vidéo
   tactile, `visibilitychange` — documented, non bloquants.
+
+---
+
+## Accueil chat mobile façon ChatGPT (2026-09-13)
+
+**Statut** : ✅ livré + **WOW** critic (2 rounds)
+**Demande** : sur iPhone, fini le condensé — une interface chat à la
+ChatGPT + un bouton vers le studio sur une page séparée (façon Lovable :
+chat d'un côté, produit de l'autre).
+
+### Livré
+
+- `3988bfc` : `mobileView: "chat" | "studio"` (persisté, défaut chat) ;
+  `MobileChatView` plein écran (barre Lilium + bouton **Studio**,
+  `DirectorPanel` réutilisé avec ses états FR) ; vue studio = shell
+  condensé + pastille flottante **Chat** ; `StatusBar` masquée en chat ;
+  labels `mobile.*` FR.
+- `fd23d6d` : palette/raccourcis à la racine (⌘K en chat) ; pastille
+  cachée quand un tiroir est ouvert ; safe-area ; libellés.
+- Critique round 1 FAIL → tout corrigé, round 2 **WOW**.
+
+### Validation
+
+- `bun test` : 88 pass. `bunx tsc --noEmit` : 0. `bun run lint` :
+  0 erreur. Test iPhone réel : à faire (hors sandbox).
