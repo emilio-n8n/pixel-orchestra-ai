@@ -82,7 +82,7 @@ export function WorkspaceShell({
   }, [mobile]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--surface-0)] text-[var(--text)]">
+    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[var(--surface-0)] text-[var(--text)]">
       {mobile && mobileView === "chat" ? (
         <MobileChatView />
       ) : (
@@ -182,23 +182,24 @@ export function WorkspaceShell({
             )}
           </div>
 
-          {mobile && mobileView === "studio" ? (
+          {mobile && mobileView === "studio" && inspectorCollapsed && bottomCollapsed ? (
             <button
               type="button"
               onClick={() => setMobileView("chat")}
               title={UI_LABELS.mobile.retourChat}
-              className="touch-44 absolute bottom-20 left-1/2 z-50 flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--surface-3)] px-4 text-[13px] font-medium text-[var(--text)] shadow-2xl ring-1 ring-[var(--line-strong)] transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              aria-label={UI_LABELS.shell.basculeVueMobile}
+              className="touch-44 absolute bottom-20 left-1/2 z-50 mb-[env(safe-area-inset-bottom)] flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--surface-3)] px-4 text-[13px] font-medium text-[var(--text)] shadow-2xl ring-1 ring-[var(--line-strong)] transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             >
               <MessageCircle size={16} />
               {UI_LABELS.mobile.chat}
             </button>
           ) : null}
 
-          {!(mobile && mobileView === "chat") ? <StatusBar /> : null}
-          <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-          <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+          <StatusBar />
         </>
       )}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }
