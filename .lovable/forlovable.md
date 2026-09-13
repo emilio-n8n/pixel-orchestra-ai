@@ -893,3 +893,20 @@ chat d'un côté, produit de l'autre).
 
 - `bun test` : 88 pass. `bunx tsc --noEmit` : 0. `bun run lint` :
   0 erreur. Test iPhone réel : à faire (hors sandbox).
+
+---
+
+## Fix session carte HTML + retry (2026-09-13, retour test 5/7)
+
+**Cause du ⚠️ `generate_html_card`** : le `generateText` standalone de
+`src/lib/director/html-cards.server.ts` n'envoyait pas
+`x-opencode-session` (seule la boucle chat le faisait) → 400
+`MissingSessionID` côté OpenCode Go. Seul autre appel modèle :
+`streamText` (`director.ts`, déjà en règle) — vérifié par grep, un
+seul consommateur du provider.
+**Correctif `b5d972c`** : header `x-opencode-session` (+ `User-Agent`,
+fallback `lilium-<projectId>`) threadé depuis la route, + 1 retry
+silencieux sur erreur transitoire (5xx/réseau, jamais 4xx).
+**Sous-titres ❌** : pas un bug — clé Groq absente (message FR déjà
+en place : « Clé Groq non configurée (Réglages → Groq) »). À
+renseigner côté réglages Director puis relancer `generate_subtitles`.
