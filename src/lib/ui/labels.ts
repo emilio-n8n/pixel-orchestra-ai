@@ -524,6 +524,7 @@ export const UI_LABELS = {
     navigationModules: "Modules du studio",
     panneauLateral: "Panneau latéral",
     panneauMontage: "Panneau de montage",
+    basculeVueMobile: "Basculer entre le chat et le studio",
     aucuneTache: "Aucune tâche",
     tachesEnCours: (n: number) => `${n} tâche${n > 1 ? "s" : ""} en cours`,
     journalDev: "Journal développeur",
@@ -608,6 +609,12 @@ export const UI_LABELS = {
     vide: "Décrivez ce que vous voulez créer. Exemple : « Ajoute une scène avec un détective cyberpunk dans un Tokyo au néon. »",
     reponseStub: (demande: string) =>
       `J’ai bien noté : « ${demande} ». À ce stade de la plateforme, je peux vous aider à :\n• Créer des personnages (panneau Personnages)\n• Ajouter des connecteurs Gradio (panneau Connexions)\n• Construire et lancer des flux (panneau Flux créatif)\n• Importer et voir des médias (panneau Médias)`,
+  },
+  mobile: {
+    studio: "Studio",
+    ouvrirStudio: "Ouvrir le studio",
+    chat: "Chat",
+    retourChat: "Retour au chat",
   },
   versions: {
     titre: "Versions",

@@ -15,6 +15,9 @@ interface PanelStore {
   setDevMode: (v: boolean) => void;
   layout: { center: number; inspector: number; bottom: number };
   setLayout: (l: Partial<PanelStore["layout"]>) => void;
+  /** Mobile-only: ChatGPT-like chat home vs full studio view. */
+  mobileView: "chat" | "studio";
+  setMobileView: (v: "chat" | "studio") => void;
 }
 
 export const usePanelStore = create<PanelStore>()(
@@ -35,6 +38,8 @@ export const usePanelStore = create<PanelStore>()(
       setDevMode: (v) => set({ devMode: v }),
       layout: { center: 74, inspector: 26, bottom: 32 },
       setLayout: (l) => set((s) => ({ layout: { ...s.layout, ...l } })),
+      mobileView: "chat",
+      setMobileView: (mobileView) => set({ mobileView }),
     }),
     { name: "lilium.panels.v2" },
   ),
