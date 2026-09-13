@@ -50,12 +50,13 @@ export function AgentPanel() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={UI_LABELS.agent.saisirMessage}
+          enterKeyHint="send"
           className="text-ios flex-1 rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1 text-[11px] outline-none"
         />
         <button
           onClick={send}
           disabled={!input.trim()}
-          className="rounded bg-[var(--accent)] px-2 text-[11px] text-[var(--accent-fg)] disabled:opacity-50"
+          className="touch-44 rounded bg-[var(--accent)] px-2 text-[11px] text-[var(--accent-fg)] disabled:opacity-50"
         >
           {UI_LABELS.agent.envoyer}
         </button>

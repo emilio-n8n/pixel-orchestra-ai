@@ -323,8 +323,9 @@
 }
 
 /* Opt-in iOS zoom guard: 16px on touch only (global would burst
-   tiny utility inputs like the silence duration field). */
-@utility text-ios {
+   tiny utility inputs like the silence duration field). Doubled class
+   for specificity over text-[*] utilities. */
+.text-ios.text-ios {
   @media (pointer: coarse) {
     font-size: 16px;
   }

@@ -1,6 +1,7 @@
 import { Cloud, PanelBottom, PanelRight, Terminal } from "lucide-react";
 import { useKernel, useKernelEvents } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
+import { useIsMobile } from "@/lib/ui/useIsMobile";
 import { StatusPill } from "@/components/ui/status-pill";
 import { UI_LABELS } from "@/lib/ui/labels";
 
@@ -14,6 +15,18 @@ export function StatusBar() {
   const events = useKernelEvents(24);
   const last = events[events.length - 1];
   const toggle = usePanelStore((s) => s.toggle);
+  const mobile = useIsMobile();
+  // Mobile drawers are mutually exclusive (inspector wins): opening one
+  // closes the other so the toggle never appears dead.
+  function toggleExclusive(which: "bottom" | "inspector") {
+    const s = usePanelStore.getState();
+    const opening = which === "bottom" ? s.bottomCollapsed : s.inspectorCollapsed;
+    toggle(which);
+    if (mobile && opening) {
+      if (which === "bottom" && !s.inspectorCollapsed) s.toggle("inspector");
+      if (which === "inspector" && !s.bottomCollapsed) s.toggle("bottom");
+    }
+  }
   const bottomCollapsed = usePanelStore((s) => s.bottomCollapsed);
   const inspectorCollapsed = usePanelStore((s) => s.inspectorCollapsed);
   const devMode = usePanelStore((s) => s.devMode);
@@ -73,13 +86,13 @@ export function StatusBar() {
           <IconToggle
             label={UI_LABELS.shell.basculeTimeline}
             on={!bottomCollapsed}
-            onClick={() => toggle("bottom")}
+            onClick={() => toggleExclusive("bottom")}
             icon={<PanelBottom size={13} />}
           />
           <IconToggle
             label={UI_LABELS.shell.basculePanneau}
             on={!inspectorCollapsed}
-            onClick={() => toggle("inspector")}
+            onClick={() => toggleExclusive("inspector")}
             icon={<PanelRight size={13} />}
           />
           <IconToggle

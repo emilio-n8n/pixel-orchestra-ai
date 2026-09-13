@@ -352,7 +352,7 @@ function SubtitleClipEditor({ clip }: { clip: TimelineClip }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
-            className="w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
+            className="text-ios w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[11.5px] text-[var(--text)] outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
           />
           <div className="mt-1 text-[10px] text-[var(--text-dim)]">
             {UI_LABELS.inspector.sousTitreLimite}
@@ -611,7 +611,7 @@ function AssetInspector({ asset, onClose }: { asset: AssetRow; onClose: () => vo
             value={htmlDraft}
             onChange={(e) => setHtmlDraft(e.target.value)}
             rows={10}
-            className="mono w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[10px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
+            className="mono text-ios w-full resize-y rounded border border-[var(--line)] bg-[var(--surface-1)] p-2 text-[10px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
           />
           <div className="mt-1.5 flex justify-end gap-2">
             <button

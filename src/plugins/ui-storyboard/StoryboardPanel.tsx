@@ -60,7 +60,7 @@ export function StoryboardPanel() {
             onChange={(e) => setSceneName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addScene()}
             placeholder={UI_LABELS.scenes.nouvelleScene}
-            className="w-48 rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1 text-sm"
+            className="text-ios w-48 max-w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1 text-sm"
           />
           <button
             onClick={addScene}

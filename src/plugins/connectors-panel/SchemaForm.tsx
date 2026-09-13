@@ -55,7 +55,7 @@ export function SchemaForm({ schema, onChange, initial }: SchemaFormProps) {
               <select
                 value={String(values[name] ?? "")}
                 onChange={(e) => set(name, e.target.value)}
-                className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+                className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
               >
                 {prop.enum.map((opt) => (
                   <option key={String(opt)} value={String(opt)}>
@@ -75,7 +75,7 @@ export function SchemaForm({ schema, onChange, initial }: SchemaFormProps) {
                 onChange={(e) =>
                   set(name, e.target.value === "" ? undefined : Number(e.target.value))
                 }
-                className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+                className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
               />
             </Field>
           );
@@ -99,7 +99,7 @@ export function SchemaForm({ schema, onChange, initial }: SchemaFormProps) {
                 placeholder={`https://… ${UI_LABELS.connectors.ou} lilium-blob://…`}
                 value={String(values[name] ?? "")}
                 onChange={(e) => set(name, e.target.value)}
-                className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+                className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
               />
             </Field>
           );
@@ -110,7 +110,7 @@ export function SchemaForm({ schema, onChange, initial }: SchemaFormProps) {
               type="text"
               value={String(values[name] ?? "")}
               onChange={(e) => set(name, e.target.value)}
-              className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+              className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
             />
           </Field>
         );

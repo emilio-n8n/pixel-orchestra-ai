@@ -82,32 +82,32 @@ export function CharactersPanel() {
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder={UI_LABELS.personnages.nom}
-            className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
+            className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
           />
           <input
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             placeholder={UI_LABELS.personnages.description}
-            className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
+            className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
           />
           <input
             value={form.portraitIds}
             onChange={(e) => setForm((f) => ({ ...f, portraitIds: e.target.value }))}
             placeholder={UI_LABELS.personnages.portraits}
-            className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
+            className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
           />
           <div className="flex gap-2">
             <input
               value={form.voiceRef}
               onChange={(e) => setForm((f) => ({ ...f, voiceRef: e.target.value }))}
               placeholder={UI_LABELS.personnages.voix}
-              className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
+              className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
             />
             <input
               value={form.styleRef}
               onChange={(e) => setForm((f) => ({ ...f, styleRef: e.target.value }))}
               placeholder={UI_LABELS.personnages.style}
-              className="w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
+              className="text-ios w-full rounded border border-[var(--line)] bg-[var(--surface-3)] px-2 py-1.5 text-sm"
             />
           </div>
           <div className="flex justify-end gap-2">

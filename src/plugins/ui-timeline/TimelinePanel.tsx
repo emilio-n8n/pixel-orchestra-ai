@@ -796,6 +796,9 @@ export function TimelinePanel() {
   const suppressClickRef = useRef(false);
   function handleChipPointerDown(e: React.PointerEvent, clip: TimelineClip) {
     if (e.pointerType === "mouse") return;
+    // A cancelled drag sets suppressClick with no click following — a new
+    // press always starts fresh.
+    suppressClickRef.current = false;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const td = {
       clipId: clip.id,
@@ -1291,18 +1294,18 @@ export function TimelinePanel() {
           >
             <button
               onClick={() => setPlaying(!playing)}
-              className="flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
-              title={T.astuceLecture}
+              className="touch-44 flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
+              title={playing ? T.pause : T.lecture}
             >
               {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </button>
             <button
               onClick={() => {
                 setPlaying(false);
-                seekTo(0);
+                setPlayhead(0);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
-              title={T.astuceArret}
+              className="touch-44 flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/25"
+              title={T.arret}
             >
               <Square className="h-3 w-3" />
             </button>
