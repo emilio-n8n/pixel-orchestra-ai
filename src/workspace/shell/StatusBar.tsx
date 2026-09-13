@@ -24,7 +24,7 @@ export function StatusBar() {
   ).length;
 
   return (
-    <div className="relative shrink-0 border-t border-[var(--line)] bg-[var(--rail)]">
+    <div className="pb-safe relative shrink-0 border-t border-[var(--line)] bg-[var(--rail)]">
       {devMode ? (
         <div className="animate-fade-in max-h-48 overflow-auto border-b border-[var(--line)] bg-[var(--surface-1)] px-3 py-2">
           <div className="t-meta mb-1.5 flex items-center justify-between gap-2">
@@ -47,7 +47,7 @@ export function StatusBar() {
         </div>
       ) : null}
 
-      <div className="pb-safe flex h-8 items-center justify-between gap-2 px-2 text-[11px] text-[var(--text-dim)] sm:px-3">
+      <div className="flex h-8 items-center justify-between gap-2 px-2 text-[11px] text-[var(--text-dim)] sm:px-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <StatusPill tone="done">{UI_LABELS.shell.studioPret}</StatusPill>
           <span className="hidden items-center gap-1.5 sm:flex">

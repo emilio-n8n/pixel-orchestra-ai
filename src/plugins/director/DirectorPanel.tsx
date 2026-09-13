@@ -493,7 +493,8 @@ export function DirectorPanel() {
           onChange={(e) => setInput(e.target.value)}
           placeholder={UI_LABELS.director.invitePlaceholder}
           aria-label={UI_LABELS.director.invitePlaceholder}
-          className="flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
+          enterKeyHint="send"
+          className="text-ios flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
         />
         <Button type="submit" size="sm" disabled={busy || !apiKey} className="touch-44">
           {busy ? UI_LABELS.director.envoiEnCours : UI_LABELS.director.envoyer}
@@ -575,13 +576,13 @@ function AddModelForm({ onAdd }: { onAdd: (m: DirectorModel) => void }) {
           {CAP_OPTIONS.map((c) => (
             <label
               key={c.value}
-              className="flex cursor-pointer items-center gap-0.5 text-[10px] text-[var(--text-muted)]"
+              className="flex cursor-pointer items-center gap-1.5 py-2 text-[10px] text-[var(--text-muted)]"
             >
               <input
                 type="checkbox"
                 checked={caps.has(c.value)}
                 onChange={() => toggleCap(c.value)}
-                className="touch-44 h-3 w-3 accent-[var(--accent)]"
+                className="h-3 w-3 accent-[var(--accent)]"
               />
               {c.label}
             </label>

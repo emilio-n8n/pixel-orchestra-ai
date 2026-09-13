@@ -317,13 +317,16 @@
   .clip-resize {
     width: 16px;
   }
-  input,
-  select,
-  textarea {
-    font-size: 16px;
-  }
   input[type="range"] {
     min-height: 44px;
+  }
+}
+
+/* Opt-in iOS zoom guard: 16px on touch only (global would burst
+   tiny utility inputs like the silence duration field). */
+@utility text-ios {
+  @media (pointer: coarse) {
+    font-size: 16px;
   }
 }
 

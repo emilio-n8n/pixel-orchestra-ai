@@ -47,6 +47,7 @@ export function RightPanel() {
         />
         <button
           type="button"
+          autoFocus
           onClick={() => toggle("inspector")}
           title={UI_LABELS.common.fermer}
           aria-label={UI_LABELS.common.fermer}

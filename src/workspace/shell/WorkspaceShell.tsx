@@ -102,6 +102,7 @@ export function WorkspaceShell({
                 />
                 <div
                   role="dialog"
+                  aria-modal="true"
                   aria-label={UI_LABELS.shell.panneauLateral}
                   className="absolute top-0 right-0 bottom-0 z-40 flex w-[85vw] max-w-[340px] flex-col border-l border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
                 >
@@ -109,18 +110,21 @@ export function WorkspaceShell({
                 </div>
               </>
             )}
-            {!bottomCollapsed && (
+            {/* Sheet below the drawer (z-20/z-10): the inspector wins when
+                both are open — no stacked-modal ambiguity. */}
+            {!bottomCollapsed && inspectorCollapsed && (
               <>
                 <button
                   type="button"
                   aria-label={UI_LABELS.common.fermer}
                   onClick={() => toggle("bottom")}
-                  className="absolute inset-0 z-30 bg-black/50"
+                  className="absolute inset-0 z-20 bg-black/50"
                 />
                 <div
                   role="dialog"
+                  aria-modal="true"
                   aria-label={UI_LABELS.shell.panneauMontage}
-                  className="absolute inset-x-0 bottom-0 z-40 max-h-[65vh] min-h-[30vh] overflow-hidden rounded-t-2xl border-t border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
+                  className="absolute inset-x-0 bottom-0 z-30 max-h-[65vh] min-h-[30vh] overflow-hidden rounded-t-2xl border-t border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
                 >
                   <BottomDock />
                 </div>

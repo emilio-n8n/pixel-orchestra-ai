@@ -273,7 +273,7 @@ export function LibraryPanel() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={UI_LABELS.library.rechercher}
-            className={`h-8 w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] pl-8 pr-2 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-dim)] focus:border-[var(--accent)] ${FOCUS_RING}`}
+            className={`text-ios h-8 w-full rounded-lg border border-[var(--line)] bg-[var(--surface-2)] pl-8 pr-2 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-dim)] focus:border-[var(--accent)] ${FOCUS_RING}`}
           />
         </div>
       </div>
@@ -367,7 +367,7 @@ export function LibraryPanel() {
             <button
               onClick={() => void loadMore()}
               disabled={loadingMore}
-              className={`rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50 ${FOCUS_RING}`}
+              className={`touch-44 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--line-strong)] hover:text-[var(--text)] disabled:opacity-50 ${FOCUS_RING}`}
             >
               {loadingMore
                 ? UI_LABELS.library.chargement

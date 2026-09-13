@@ -102,7 +102,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           aria-expanded
           aria-controls="palette-list"
           aria-activedescendant={items[i] ? `palette-${items[i].id}` : undefined}
-          className="w-full bg-transparent px-4 py-3 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-dim)] focus-visible:bg-[var(--accent-quiet)]/40"
+          className="text-ios w-full bg-transparent px-4 py-3 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-dim)] focus-visible:bg-[var(--accent-quiet)]/40"
         />
         <div
           ref={listRef}

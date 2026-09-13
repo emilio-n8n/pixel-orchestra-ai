@@ -788,7 +788,12 @@ export function TimelinePanel() {
     startY: number;
     timer: number | null;
     armed: boolean;
+    el: HTMLElement | null;
+    pointerId: number | null;
   } | null>(null);
+  // Set on pointerup after an armed drag so the synthetic click does not
+  // toggle the selection the drag just established.
+  const suppressClickRef = useRef(false);
   function handleChipPointerDown(e: React.PointerEvent, clip: TimelineClip) {
     if (e.pointerType === "mouse") return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -799,12 +804,19 @@ export function TimelinePanel() {
       startY: e.clientY,
       timer: null as number | null,
       armed: false,
+      el: e.currentTarget as HTMLElement,
+      pointerId: e.pointerId,
     };
     td.timer = window.setTimeout(() => {
       const cur = touchDragRef.current;
       if (!cur || cur.clipId !== clip.id) return;
       cur.armed = true;
       selectClip(clip.id);
+      try {
+        cur.el?.setPointerCapture(cur.pointerId ?? 0);
+      } catch {
+        /* vertical pans may still scroll (pan-y) */
+      }
       try {
         if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(10);
       } catch {
@@ -845,6 +857,7 @@ export function TimelinePanel() {
     if (!td) return;
     if (td.timer != null) window.clearTimeout(td.timer);
     if (!td.armed || !commit) return; // plain tap → onClick select runs
+    suppressClickRef.current = true;
     const clip = clipsRef.current.find((c) => c.id === td.clipId);
     if (clip) void updateClip(clip.id, { start_ms: clip.start_ms, track: clip.track });
   }
@@ -1535,6 +1548,10 @@ export function TimelinePanel() {
                           onPointerCancel={() => endTouchDrag(true)}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (suppressClickRef.current) {
+                              suppressClickRef.current = false;
+                              return;
+                            }
                             selectClip(isSelected ? null : c.id);
                           }}
                           onKeyDown={(e) => {
