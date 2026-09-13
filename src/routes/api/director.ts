@@ -188,7 +188,7 @@ export const Route = createFileRoute("/api/director")({
             description:
               "Generate an ANIMATED HTML card (title, lower third, credits, transition) — the card ships with CSS keyframes (entrance + ambient motion) that become real video motion at export. Pass the text, vibe, colors and the motion you want in the brief.",
             inputSchema: z.object({ brief: z.string() }),
-            execute: ({ brief }) => generateHtmlCard(ctx, model, brief),
+            execute: ({ brief }) => generateHtmlCard(ctx, model, brief, { sessionId }),
           }),
           generate_subtitles: tool({
             description:

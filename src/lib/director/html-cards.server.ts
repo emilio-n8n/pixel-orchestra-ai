@@ -84,10 +84,39 @@ function wrapFullscreen(html: string): string {
   return `<div style="position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;">${cleaned}</div>`;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** True for retryable provider failures (5xx, network) — never for 4xx. */
+function isTransientProviderError(e: unknown): boolean {
+  const rec = (e ?? {}) as Record<string, unknown>;
+  if (typeof rec.statusCode === "number" && rec.statusCode >= 500) return true;
+  if (e instanceof TypeError) return true; // fetch-level network failure
+  const msg = e instanceof Error ? e.message : String(e ?? "");
+  return /fetch failed|network|timeout|ECONN|EAI_AGAIN|ENOTFOUND|\b50[234]\b/.test(msg);
+}
+
+/**
+ * One silent retry on transient provider errors: a single 500/blip must
+ * not fail the whole card generation (the Director already spent a tool
+ * call getting here).
+ */
+async function withTransientRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!isTransientProviderError(e)) throw e;
+    await sleep(500);
+    return fn();
+  }
+}
+
 export async function generateHtmlCard(
   ctx: { supabase: SupabaseClient; userId: string; projectId: string },
   model: Parameters<typeof generateText>[0]["model"],
   brief: string,
+  opts?: { sessionId?: string },
 ) {
   // Mirror the director's job/provenance recording for this generation.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,11 +140,21 @@ export async function generateHtmlCard(
   }
 
   try {
-    const { text } = await generateText({
-      model,
-      system: HTML_SYSTEM,
-      prompt: brief,
-    });
+    // OpenCode Go requires x-opencode-session on EVERY call (routing +
+    // prompt caching, 400 MissingSessionID otherwise) — the chat loop
+    // sends it, this standalone call must too.
+    const headers = {
+      "x-opencode-session": (opts?.sessionId ?? "").trim() || `lilium-${ctx.projectId}`,
+      "User-Agent": "lilium-studio-director/1.0",
+    };
+    const { text } = await withTransientRetry(() =>
+      generateText({
+        model,
+        system: HTML_SYSTEM,
+        prompt: brief,
+        headers,
+      }),
+    );
 
     const wrapped = wrapFullscreen(text);
     const bytes = new TextEncoder().encode(wrapped);
