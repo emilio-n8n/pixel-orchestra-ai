@@ -381,6 +381,7 @@ export const UI_LABELS = {
       "L’Assistant a atteint sa limite de planification. Reformulez avec une consigne plus courte et directe.",
     reponseTronquee:
       "La réponse a été tronquée (limite de longueur). Demandez la suite ou raccourcissez la consigne.",
+    outilInterrompu: "Appel d’outil interrompu au tour précédent — poursuivez sans son résultat.",
     reponseFournisseur: "Réponse du fournisseur",
     statutHttp: (status: number) => `HTTP ${status}`,
     erreurHttp: (service: string, status: number, extrait: string) =>

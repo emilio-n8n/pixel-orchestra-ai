@@ -950,3 +950,24 @@ corps — le transport AI SDK masquait tout. Pile minifiée inutile,
 bouton **Réessayer** (`regenerate()`) dans `ErrorBlock` (opt-in,
 câblé sur le chat Director).
 **Validation** : tsc 0, lint 0 erreur, 88 tests pass.
+
+---
+
+## Second message Director : démasquage + réparation historique (2026-09-14)
+
+**Symptôme prod** : 1er message OK, 2e toujours `An error occurred.`
+**Racine (vérifiée)** : le SDK masque par défaut (`onError = () =>
+"An error occurred."`, `ai/dist/index.js:7211`) et nos deux streams ne
+l'overridaient pas — toute erreur serveur devenait générique. Au 2e
+tour, l'historique rejoue les parts d'outils du tour précédent ;
+appel orphelin (sans output) → 400 provider → masqué.
+**Preuve fraîcheur prod** : chunk `B6Mg4sXZ.js` téléchargé et greppé —
+contient `send-horizontal`/`mobileView` (frais, ère markdown) mais
+0× `Réessayer`/`Connexion au studio impossible` (antérieur à
+`a76e5da`) : la prod tourne l'ancien code d'erreurs.
+**Correctif** : `formatProviderError` partagé + `onError` explicite sur
+les 2 streams ; `sanitizeUiMessages` (`src/lib/director/history.ts`,
+orphelins → `output-error` FR `outilInterrompu`) avant
+`convertToModelMessages` ; log serveur complet (corps provider +
+forme du tour, approuvé) ; 6 tests unitaires.
+**Validation** : 94 tests pass, tsc 0, lint 0 erreur.

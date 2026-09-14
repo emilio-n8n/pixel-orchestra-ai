@@ -12,6 +12,39 @@ import {
 import { z } from "zod";
 import { CATALOG, listByCapability, capLabel, type DirectorModel } from "@/lib/models/catalog";
 import { UI_LABELS, providerBodySlice } from "@/lib/ui/labels";
+import { sanitizeUiMessages } from "@/lib/director/history";
+
+/**
+ * Actionable FR provider error (HTTP status + body ≤500ch). Single
+ * source used by the catch block AND both streams' onError — the SDK
+ * defaults to masking server errors as "An error occurred.", which is
+ * why failed turns used to surface zero diagnostics.
+ */
+function formatProviderError(err: unknown): string {
+  const eRec = (err ?? {}) as Record<string, unknown>;
+  const statusCode = typeof eRec.statusCode === "number" ? ` — HTTP ${eRec.statusCode}` : "";
+  let providerBody = "";
+  const rawBody = eRec.responseBody;
+  if (typeof rawBody === "string" && rawBody.length > 0) {
+    providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${providerBodySlice(rawBody)}`;
+  } else if (rawBody != null) {
+    try {
+      providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${providerBodySlice(JSON.stringify(rawBody))}`;
+    } catch {
+      /* ignore */
+    }
+  }
+  const baseMessage = (err as Error)?.message ?? String(err);
+  return `${UI_LABELS.director.arretDirecteur} : ${baseMessage}${statusCode}${providerBody}`;
+}
+
+type UiPart = { type: string; state?: string; output?: unknown; toolCallId?: string };
+
+function isToolPart(p: unknown): p is UiPart {
+  if (typeof p !== "object" || p === null) return false;
+  const t = (p as { type?: unknown }).type;
+  return typeof t === "string" && (t.startsWith("tool-") || t === "dynamic-tool");
+}
 
 export const Route = createFileRoute("/api/director")({
   server: {
@@ -350,11 +383,16 @@ export const Route = createFileRoute("/api/director")({
         // -------------------------------------------------------------------
         const MAX_TOOL_ITERATIONS = 10;
         const startedAt = Date.now();
-        const baseConversation: unknown[] = await convertToModelMessages(body.messages);
+        const baseConversation: unknown[] = await convertToModelMessages(
+          sanitizeUiMessages(body.messages),
+        );
         const toolsCalled: string[] = [];
         let iterations = 0;
 
         const stream = createUIMessageStream({
+          // Never the SDK's masked "An error occurred." — our user gets
+          // the real provider diagnostics (authenticated private app).
+          onError: (e) => formatProviderError(e),
           execute: async ({ writer }) => {
             let conversation: unknown[] = baseConversation;
             let completed = false;
@@ -382,6 +420,7 @@ export const Route = createFileRoute("/api/director")({
                     tools: tools as never,
                     sendStart: true,
                     sendFinish: true,
+                    onError: (e: unknown) => formatProviderError(e),
                   } as never) as never,
                 );
                 await result.consumeStream();
@@ -440,24 +479,39 @@ export const Route = createFileRoute("/api/director")({
                   detail = String(err);
                 }
               } else detail = String(err);
+              // Full provider body + failing turn shape, server-side only
+              // (approved for debugging; never sent to the client).
+              const eRecFull = (err ?? {}) as Record<string, unknown>;
+              const fullBody =
+                typeof eRecFull.responseBody === "string"
+                  ? eRecFull.responseBody
+                  : (() => {
+                      try {
+                        return JSON.stringify(eRecFull.responseBody);
+                      } catch {
+                        return String(eRecFull.responseBody);
+                      }
+                    })();
+              const shape = body.messages.map((m) => {
+                const parts = Array.isArray((m as { parts?: unknown }).parts)
+                  ? ((m as { parts: unknown[] }).parts.length as number)
+                  : 0;
+                const toolStates = Array.isArray((m as { parts?: unknown }).parts)
+                  ? (m as { parts: Array<{ type?: unknown; state?: unknown }> }).parts
+                      .filter(
+                        (p) =>
+                          typeof p?.type === "string" &&
+                          (p.type.startsWith("tool-") || p.type === "dynamic-tool"),
+                      )
+                      .map((p) => String(p.state ?? "?"))
+                      .join(",") || "-"
+                  : "-";
+                return `${m.role}[${parts}](tools:${toolStates})`;
+              });
               console.error("[/api/director] manual-loop error:", detail);
-              // Actionable FR diagnostics: HTTP status + provider body ≤500ch.
-              const eRec = (err ?? {}) as Record<string, unknown>;
-              const statusCode =
-                typeof eRec.statusCode === "number" ? ` — HTTP ${eRec.statusCode}` : "";
-              let providerBody = "";
-              const rawBody = eRec.responseBody;
-              if (typeof rawBody === "string" && rawBody.length > 0) {
-                providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${providerBodySlice(rawBody)}`;
-              } else if (rawBody != null) {
-                try {
-                  providerBody = `\n${UI_LABELS.director.reponseFournisseur} : ${providerBodySlice(JSON.stringify(rawBody))}`;
-                } catch {
-                  /* ignore */
-                }
-              }
-              const baseMessage = (err as Error)?.message ?? String(err);
-              const message = `${UI_LABELS.director.arretDirecteur} : ${baseMessage}${statusCode}${providerBody}`;
+              console.error("[/api/director] provider body (full):", fullBody);
+              console.error("[/api/director] failing turn shape:", shape.join(" | "));
+              const message = formatProviderError(err);
               const errId = "err";
               writer.write({ type: "message-start", id: errId } as never);
               writer.write({ type: "text-start", id: errId } as never);
