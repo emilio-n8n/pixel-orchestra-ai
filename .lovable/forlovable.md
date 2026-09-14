@@ -910,3 +910,30 @@ silencieux sur erreur transitoire (5xx/réseau, jamais 4xx).
 **Sous-titres ❌** : pas un bug — clé Groq absente (message FR déjà
 en place : « Clé Groq non configurée (Réglages → Groq) »). À
 renseigner côté réglages Director puis relancer `generate_subtitles`.
+
+---
+
+## Chat façon Lovable : markdown + bulles + compositeur (2026-09-14)
+
+**Demande** : le chat Lovable est clean et EST le produit ; chez nous
+le markdown LLM arrivait en brut (`**Bilan**`, `- **Video**`) dans une
+petite fenêtre bordurée — horrible.
+
+### Livré (`ee2abe9`)
+
+- `react-markdown` + `remark-gfm` (seules déps ajoutées) ;
+  `src/components/ui/markdown.tsx` (nouveau) : GFM stylé aux tokens
+  (titres, listes, gras, code inline/bloc, citations, liens, tables,
+  cases à cocher) ; HTML brut jamais rendu (pas d'injection possible).
+- `DirectorPanel` : messages utilisateur en bulles accent alignées à
+  droite (max-85 %) ; réponses assistant en prose propre + étapes
+  d'outils en lignes à icônes (`toolIcon`/`toolLabel` FR, fini le `⚙`
+  brut) ; indicateur de frappe (3 points) pendant le streaming sans
+  texte ; compositeur arrondi façon Lovable (textarea autogrow 140px
+  max, Entrée = envoyer / Maj+Entrée = nouvelle ligne, bouton rond).
+- Profite au chat desktop (inspecteur) ET à l'accueil chat mobile.
+
+### Validation
+
+- `bun test` : 88 pass. `bunx tsc --noEmit` : 0. `bun run lint` :
+  0 erreur. `bun run build` : OK (bundle nitro généré).
