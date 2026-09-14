@@ -937,3 +937,16 @@ petite fenêtre bordurée — horrible.
 
 - `bun test` : 88 pass. `bunx tsc --noEmit` : 0. `bun run lint` :
   0 erreur. `bun run build` : OK (bundle nitro généré).
+
+---
+
+## Erreurs chat actionnables + Réessayer (2026-09-14, retour test réel)
+
+**Constat (transcript prod)** : `An error occurred.` sans statut ni
+corps — le transport AI SDK masquait tout. Pile minifiée inutile,
+`déploiement : inconnu` (méta absente en prod).
+**Correctif `a76e5da`** : `fetch` sur mesure dans le transport
+(`DirectorPanel`) — HTTP + extrait ≤300ch en FR, réseau explicite ;
+bouton **Réessayer** (`regenerate()`) dans `ErrorBlock` (opt-in,
+câblé sur le chat Director).
+**Validation** : tsc 0, lint 0 erreur, 88 tests pass.
