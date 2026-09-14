@@ -113,11 +113,36 @@ export function DirectorPanel() {
           const t = tokenRef.current;
           return t ? { Authorization: `Bearer ${t}` } : {};
         },
+        // Enrich transport failures: AI SDK surfaces a bare
+        // "An error occurred." — capture HTTP status + body snippet so
+        // the error card + diagnostics are actually actionable.
+        fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+          let res: Response;
+          try {
+            res = await fetch(input, init);
+          } catch (e) {
+            throw new Error(
+              `${UI_LABELS.director.erreurReseau} (${e instanceof Error ? e.message : String(e)})`,
+            );
+          }
+          if (!res.ok) {
+            let extrait = "";
+            try {
+              extrait = (await res.text()).slice(0, 300);
+            } catch {
+              /* body unreadable */
+            }
+            throw new Error(
+              `${UI_LABELS.director.erreurHttpTransport(res.status)}${extrait ? ` — ${extrait}` : ""}`,
+            );
+          }
+          return res;
+        }) as typeof fetch,
       }),
     [],
   );
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const { messages, sendMessage, regenerate, status, error, setMessages } = useChat({
     id: currentId ?? "new",
     transport,
   });
@@ -523,6 +548,7 @@ export function DirectorPanel() {
               context="director.chat"
               model={effectiveModel || undefined}
               session={currentId ?? undefined}
+              onRetry={() => regenerate()}
             />
           </div>
         ) : null}

@@ -373,6 +373,9 @@ export const UI_LABELS = {
     pointGradio: "Point Gradio",
     capaciteImage: "Image",
     erreurGenerique: "La requête à l’Assistant a échoué.",
+    erreurReseau: "Connexion au studio impossible",
+    erreurHttpTransport: (status: number) => `La requête a échoué (HTTP ${status})`,
+    reessayer: "Réessayer",
     arretDirecteur: "L’Assistant s’est interrompu",
     limiteAtteinte:
       "L’Assistant a atteint sa limite de planification. Reformulez avec une consigne plus courte et directe.",

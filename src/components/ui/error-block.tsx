@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ClipboardCopy } from "lucide-react";
+import { Check, ClipboardCopy, RotateCcw } from "lucide-react";
 import { UI_LABELS } from "@/lib/ui/labels";
 import { copyDiagnostics } from "@/lib/ui/diagnostics";
 
@@ -14,6 +14,7 @@ export function ErrorBlock({
   model,
   session,
   compact,
+  onRetry,
 }: {
   message: string;
   error: unknown;
@@ -21,6 +22,7 @@ export function ErrorBlock({
   model?: string;
   session?: string;
   compact?: boolean;
+  onRetry?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -38,15 +40,28 @@ export function ErrorBlock({
       }`}
     >
       <div className="whitespace-pre-wrap break-words">{message}</div>
-      <button
-        type="button"
-        onClick={() => void onCopy()}
-        title={UI_LABELS.diagnostics.copier}
-        className="mt-1.5 inline-flex items-center gap-1.5 rounded border border-[var(--status-err)]/40 px-2 py-1 text-[10px] font-medium uppercase tracking-widest transition-colors hover:bg-[var(--status-err)]/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-      >
-        {copied ? <Check size={11} /> : <ClipboardCopy size={11} />}
-        {copied ? UI_LABELS.diagnostics.copie : UI_LABELS.diagnostics.copier}
-      </button>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            title={UI_LABELS.director.reessayer}
+            className="inline-flex items-center gap-1.5 rounded border border-[var(--status-err)]/40 px-2 py-1 text-[10px] font-medium uppercase tracking-widest transition-colors hover:bg-[var(--status-err)]/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          >
+            <RotateCcw size={11} />
+            {UI_LABELS.director.reessayer}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => void onCopy()}
+          title={UI_LABELS.diagnostics.copier}
+          className="inline-flex items-center gap-1.5 rounded border border-[var(--status-err)]/40 px-2 py-1 text-[10px] font-medium uppercase tracking-widest transition-colors hover:bg-[var(--status-err)]/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        >
+          {copied ? <Check size={11} /> : <ClipboardCopy size={11} />}
+          {copied ? UI_LABELS.diagnostics.copie : UI_LABELS.diagnostics.copier}
+        </button>
+      </div>
     </div>
   );
 }
