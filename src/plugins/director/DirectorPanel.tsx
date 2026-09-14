@@ -12,11 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings, History, Plus, Trash2 } from "lucide-react";
+import { Settings, History, Plus, Trash2, SendHorizontal, Loader2 } from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
 import type { DirectorModel } from "@/lib/models/catalog";
-import { UI_LABELS, toolLabel } from "@/lib/ui/labels";
+import { UI_LABELS, toolLabel, toolIcon } from "@/lib/ui/labels";
 import { ErrorBlock } from "@/components/ui/error-block";
+import { Markdown } from "@/components/ui/markdown";
 
 export function DirectorPanel() {
   const pid = useLibraryProject();
@@ -55,6 +56,7 @@ export function DirectorPanel() {
   // Guards the store-sync effect during conversation/project switches,
   // so stale useChat messages never overwrite the target conversation.
   const hydratingRef = useRef(false);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const hydrateTimerRef = useRef<number | null>(null);
   function markHydrating() {
     hydratingRef.current = true;
@@ -430,7 +432,7 @@ export function DirectorPanel() {
         </div>
       )}
 
-      <div className="flex-1 space-y-3 overflow-auto p-4 text-sm">
+      <div className="flex-1 space-y-4 overflow-auto p-4 text-sm">
         {!apiKey && (
           <div className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3 text-xs text-[var(--text-muted)]">
             {UI_LABELS.director.cleRequise}
@@ -439,34 +441,80 @@ export function DirectorPanel() {
         {messages.length === 0 && apiKey && (
           <div className="text-[var(--text-muted)]">{UI_LABELS.director.exempleInvite}</div>
         )}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] p-3"
-          >
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
-              {m.role === "user" ? UI_LABELS.director.vous : UI_LABELS.director.titre}
+        {messages.map((m) => {
+          if (m.role === "user") {
+            const text = m.parts
+              .filter((p) => p.type === "text")
+              .map((p) => (p as { text: string }).text)
+              .join("");
+            return (
+              <div key={m.id} className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[var(--accent)] px-3.5 py-2 text-[13.5px] leading-relaxed text-[var(--accent-fg)]">
+                  <div className="whitespace-pre-wrap">{text}</div>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={m.id} className="min-w-0">
+              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-dim)]">
+                <span
+                  aria-hidden
+                  className="inline-block h-[14px] w-[14px] rounded-[4px]"
+                  style={{
+                    background:
+                      "conic-gradient(from 210deg, var(--accent-strong), var(--accent), var(--accent-quiet), var(--accent))",
+                  }}
+                />
+                {UI_LABELS.director.titre}
+              </div>
+              <div className="space-y-1.5">
+                {m.parts.map((p, i) => {
+                  if (p.type === "text") {
+                    if (!(p as { text?: string }).text?.trim()) return null;
+                    return <Markdown key={i} text={(p as { text: string }).text} />;
+                  }
+                  if (typeof p.type === "string" && p.type.startsWith("tool-")) {
+                    const Icon = toolIcon(p.type);
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[12px] text-[var(--text-muted)]"
+                      >
+                        <Icon size={13} className="shrink-0 text-[var(--accent-strong)]" />
+                        <span className="truncate">{toolLabel(p.type)}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
             </div>
-            {m.parts.map((p, i) => {
-              if (p.type === "text")
-                return (
-                  <div key={i} className="whitespace-pre-wrap">
-                    {p.text}
-                  </div>
-                );
-              if (typeof p.type === "string" && p.type.startsWith("tool-"))
-                return (
-                  <div
-                    key={i}
-                    className="mt-1 rounded bg-[var(--surface-3)] px-2 py-1 text-[11px] text-[var(--text-muted)]"
-                  >
-                    ⚙ {toolLabel(p.type)}
-                  </div>
-                );
-              return null;
-            })}
-          </div>
-        ))}
+          );
+        })}
+        {busy &&
+          (() => {
+            const last = messages[messages.length - 1];
+            const hasText =
+              last &&
+              last.role === "assistant" &&
+              last.parts.some((p) => p.type === "text" && (p as { text?: string }).text?.trim());
+            if (hasText) return null;
+            return (
+              <div
+                className="flex items-center gap-1.5 px-1 py-1"
+                aria-label={UI_LABELS.director.envoiEnCours}
+              >
+                {[0, 1, 2].map((d) => (
+                  <span
+                    key={d}
+                    className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--text-dim)]"
+                    style={{ animationDelay: `${d * 150}ms` }}
+                  />
+                ))}
+              </div>
+            );
+          })()}
         {error ? (
           <div className="mx-3 mb-3">
             <ErrorBlock
@@ -480,25 +528,54 @@ export function DirectorPanel() {
         ) : null}
       </div>
       <form
-        className="flex shrink-0 gap-2 border-t border-[var(--line)] p-2"
+        className="shrink-0 p-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (!input.trim() || busy || !apiKey) return;
           sendMessage({ text: input });
           setInput("");
+          requestAnimationFrame(() => {
+            composerRef.current?.style.setProperty("height", "auto");
+          });
         }}
       >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={UI_LABELS.director.invitePlaceholder}
-          aria-label={UI_LABELS.director.invitePlaceholder}
-          enterKeyHint="send"
-          className="text-ios flex-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
-        />
-        <Button type="submit" size="sm" disabled={busy || !apiKey} className="touch-44">
-          {busy ? UI_LABELS.director.envoiEnCours : UI_LABELS.director.envoyer}
-        </Button>
+        <div className="flex items-end gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-2 pl-3 transition-colors focus-within:border-[var(--accent)]">
+          <textarea
+            ref={composerRef}
+            value={input}
+            rows={1}
+            onChange={(e) => {
+              setInput(e.target.value);
+              const el = e.target;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (!input.trim() || busy || !apiKey) return;
+                sendMessage({ text: input });
+                setInput("");
+                requestAnimationFrame(() => {
+                  composerRef.current?.style.setProperty("height", "auto");
+                });
+              }
+            }}
+            placeholder={UI_LABELS.director.invitePlaceholder}
+            aria-label={UI_LABELS.director.invitePlaceholder}
+            enterKeyHint="send"
+            className="text-ios max-h-[140px] flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-[var(--text-dim)]"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || busy || !apiKey}
+            title={UI_LABELS.director.envoyer}
+            aria-label={UI_LABELS.director.envoyer}
+            className="touch-44 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] transition-all hover:bg-[var(--accent-strong)] active:scale-95 disabled:opacity-40"
+          >
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
+          </button>
+        </div>
       </form>
     </div>
   );
