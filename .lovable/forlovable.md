@@ -1024,3 +1024,36 @@ de génération orpheline facturée. Vaut pour le chat desktop et l’accueil
 chat mobile (même `DirectorPanel`).
 
 **Validation** : tsc 0, lint 0 erreur, 101 tests pass.
+
+---
+
+## preview_frame — l’Assistant voit enfin la timeline (2026-09-23)
+
+**Roadmap (retour du Director)** : priorité n°1 = l’agent montait « à
+l’aveugle » (textes/timestamps seulement). Livré : `preview_frame`.
+
+**Architecture** (contrainte Workers : aucun rendu serveur possible) :
+- **Outil client** : `preview_frame(clip_id, t_ms?, focus?)` est déclaré
+  sans `execute` → la boucle serveur s’arrête sur l’appel (sinon il
+  manquerait le résultat d’outil au tour suivant) et le navigateur le
+  fournit via `onToolCall` + `addToolOutput`, puis resoumet
+  (`sendAutomaticallyWhen` — clé = id d’appel, car le message streamé
+  accumule les étapes et garderait sinon l’état « completed »).
+- **Capture** : `captureTimelineFrame` (`ui-timeline/export.ts`) réutilise
+  le moteur d’export (mêmes origines, même rendu) : images/vidéos
+  chargées en CORS, seek de la vidéo, cartes HTML capturées via iframe
+  srcdoc + WAAPI + html2canvas (sœur mono-frame de `prerenderHtmlClip`),
+  sous-titres/dissolves/fondu noir inclus → JPEG 1280×720.
+- **Vision** : `POST /api/director` avec `kind: "preview_frame"` →
+  `deepseek-v4-flash-vision-exp` (les messages d’outil OpenAI-compatible
+  ne transportent pas d’image) → description FR renvoyée au Director
+  comme résultat d’outil. Le résultat reste **textuel** (une data URL
+  dans l’historique exploserait chaque requête suivante) ; la vignette
+  est gardée côté client (12 max) et affichée dans la ligne d’outil.
+- System prompt : § VISUAL CHECK (quand regarder) ; libellés FR
+  (`preview_frame`, erreurs) ; 6 tests `previewFrameTime`.
+
+**Validation** : tsc 0, lint 0 erreur, 107 tests pass ; protocole outil
+client vérifié de bout en bout (harness : 2 requêtes provider, 1
+resoumission, résultat d’outil reçu) ; modèle vision vérifié contre
+l’API réelle avec data URL (HTTP 200).
