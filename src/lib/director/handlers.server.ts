@@ -1063,6 +1063,74 @@ export async function setClipTransform(
 }
 
 /**
+ * Animate a clip transform over time (meta.transform.keyframes). `t_ms`
+ * is clip-local (0 = clip start); properties are interpolated linearly,
+ * omitted ones fall back to the static transform. reset/[] clears the
+ * animation and keeps the static transform.
+ */
+export async function setClipKeyframes(
+  ctx: DirectorCtx,
+  args: {
+    clip_id: string;
+    keyframes?: Array<{
+      t_ms: number;
+      scale?: number;
+      x?: number;
+      y?: number;
+      opacity?: number;
+    }>;
+    reset?: boolean;
+  },
+) {
+  return recordJob(ctx, "set_clip_keyframes", args.clip_id, async () => {
+    const { data: existing, error: getErr } = await ctx.supabase
+      .from("timeline_clips")
+      .select("id, track, start_ms, duration_ms, meta")
+      .eq("id", args.clip_id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .maybeSingle();
+    if (getErr || !existing) throw new Error(UI_LABELS.director.planIntrouvable);
+
+    const meta = (existing.meta ?? {}) as Record<string, unknown>;
+    const transform = (meta.transform ?? {}) as Record<string, unknown>;
+    const wanted = args.reset ? [] : (args.keyframes ?? []);
+    if (wanted.length === 0) {
+      delete transform.keyframes;
+    } else {
+      const num = (v: number, min: number, max: number) => {
+        if (!Number.isFinite(v) || v < min || v > max) {
+          throw new Error(UI_LABELS.director.transformHorsBornes(min, max));
+        }
+        return v;
+      };
+      transform.keyframes = wanted
+        .map((k) => {
+          const kf: Record<string, number> = { t_ms: Math.round(num(k.t_ms, 0, 86_400_000)) };
+          if (k.scale != null) kf.scale = num(k.scale, 0.05, 4);
+          if (k.x != null) kf.x = num(k.x, -1, 2);
+          if (k.y != null) kf.y = num(k.y, -1, 2);
+          if (k.opacity != null) kf.opacity = num(k.opacity, 0, 1);
+          return kf;
+        })
+        .sort((a, b) => a.t_ms - b.t_ms)
+        .slice(0, 50);
+    }
+    meta.transform = transform;
+
+    const { data, error } = await ctx.supabase
+      .from("timeline_clips")
+      .update({ meta })
+      .eq("id", args.clip_id)
+      .eq("owner_id", ctx.userId)
+      .select("id, track, start_ms, duration_ms, asset_id, meta")
+      .single();
+    if (error) throw new Error(error.message);
+    return { ...data, keyframes: transform.keyframes ?? null };
+  });
+}
+
+/**
  * Swap the asset of an existing clip in place (keeps its position). If the
  * new asset is audio with a known real duration, the clip is resized to it.
  */

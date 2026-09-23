@@ -31,6 +31,8 @@ import {
   volAt,
   isHttpUrl,
   formatTimeMs as fmt,
+  clipTransformAt,
+  hasKeyframes,
   renderTimelineFrame,
   topmostActiveVideoClip,
   VIDEO_TRACKS,
@@ -356,6 +358,25 @@ export function TimelinePanel() {
   }, [activeHtmlClip]);
 
   // Overlay ≡ canvas parity: the card iframe exactly covers the drawn
+  // Animated transform of the live HTML card overlay: same values as the
+  // canvas renderer (clipTransformAt) so the preview matches the export.
+  const applyOverlayTransform = useCallback((card: TimelineClip | null, ms: number) => {
+    const iframeEl = htmlOverlayRef.current;
+    if (!iframeEl) return;
+    if (!card) {
+      iframeEl.style.transform = "";
+      iframeEl.style.opacity = "";
+      return;
+    }
+    const t = clipTransformAt(card, ms - card.start_ms);
+    iframeEl.style.transformOrigin = "50% 50%";
+    iframeEl.style.transform =
+      t.scale === 1 && t.x === 0.5 && t.y === 0.5
+        ? ""
+        : `translate(${((t.x - 0.5) * 100).toFixed(2)}%, ${((t.y - 0.5) * 100).toFixed(2)}%) scale(${t.scale.toFixed(4)})`;
+    iframeEl.style.opacity = t.opacity < 1 ? t.opacity.toFixed(3) : "";
+  }, []);
+
   // canvas rect (the same box the file encodes), never the whole
   // container — otherwise preview and file frame the card differently.
   useEffect(() => {
@@ -370,6 +391,7 @@ export function TimelinePanel() {
       iframeEl.style.height = `${c.height}px`;
       iframeEl.style.left = `${c.left - w.left}px`;
       iframeEl.style.top = `${c.top - w.top}px`;
+      applyOverlayTransform(activeHtmlClip, playheadRef.current);
     }
     sync();
     window.addEventListener("resize", sync);
@@ -378,7 +400,7 @@ export function TimelinePanel() {
       window.removeEventListener("resize", sync);
       window.clearInterval(timer);
     };
-  }, [activeHtmlClip]);
+  }, [activeHtmlClip, applyOverlayTransform]);
 
   // --------------- draw (preview ≡ export, single source) ---------------
   // Preview and file share renderTimelineFrame + volAt + subtitleLayout
@@ -1088,6 +1110,7 @@ export function TimelinePanel() {
       mirrorPlayheadUi(p);
       // Card activation on the exact frame (no 100 ms mirror lag).
       const htmlActive = topmostActiveVideoClip(clipsRef.current, p, "html");
+      applyOverlayTransform(htmlActive, p);
       if ((htmlActive?.id ?? null) !== activeHtmlIdRef.current) {
         activeHtmlIdRef.current = htmlActive?.id ?? null;
         setActiveHtmlClip(htmlActive);
@@ -1100,7 +1123,7 @@ export function TimelinePanel() {
       rafRef.current = null;
       stopAudios();
     };
-  }, [playing, paintPlayhead, mirrorPlayheadUi, stopAudios]);
+  }, [playing, paintPlayhead, mirrorPlayheadUi, stopAudios, applyOverlayTransform]);
 
   // --------------- video-file picture sources (preview) ---------------
   useEffect(() => {
@@ -1606,6 +1629,15 @@ export function TimelinePanel() {
                             style={{ touchAction: "none" }}
                             className="clip-resize absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-[var(--accent)]/50"
                           />
+                          {hasKeyframes(c) ? (
+                            <span
+                              title={T.animation}
+                              aria-label={T.animation}
+                              className="absolute right-1 top-1 rounded bg-[var(--accent)]/85 px-1 text-[8px] font-bold leading-3 text-[var(--accent-fg)]"
+                            >
+                              ◆
+                            </span>
+                          ) : null}
                           {hasFadeIn ? (
                             <div
                               className="absolute inset-y-0 left-0 w-[3px] bg-[var(--accent)]/80"

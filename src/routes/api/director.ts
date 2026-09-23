@@ -215,6 +215,8 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           'HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. "fade-in + slide-up title with a slow gradient shift and pulsing glow"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles.' +
           "\n\n" +
+          "KEYFRAMES (set_clip_keyframes): animate a clip transform over its own time — t_ms is CLIP-LOCAL (0 = clip start), properties interpolate linearly and omitted ones keep the static transform. Zoom-in = [{t_ms:0,scale:1},{t_ms:2000,scale:1.15}]; slide-in from the left = [{t_ms:0,x:0.2},{t_ms:800,x:0.5}]; fade-in = [{t_ms:0,opacity:0},{t_ms:600,opacity:1}]. Combine with set_clip_transform for a static base (e.g. PiP scale 0.35 then a slow zoom to 0.4)." +
+          "\n\n" +
           'TRACKS & OVERLAYS: video tracks are Video (base), Video 2 and Video 3 (overlays, composited on top in that order). Use Video 2/Video 3 for B-roll, picture-in-picture and split-screen: add_to_timeline with track "Video 2", then set_clip_transform to place it (PiP top-right = scale 0.35, x 0.8, y 0.2). Never let two clips overlap on the SAME track (the anti-overlap system shifts them) — overlapping across tracks is normal and intended.' +
           "\n\n" +
           'VISUAL CHECK (preview_frame): you can look at an actual frame of the timeline. Call preview_frame with a clip_id (optionally t_ms — ABSOLUTE timeline ms — and focus, e.g. "is the title text cut off?") and you get back a vision-model description of what is really on screen: framing, on-screen text, colors, overlaps, glitches. Use it after generating or placing a title card / image, before declaring a visual result done, or whenever the user doubts what the frame looks like.' +
@@ -398,6 +400,27 @@ export const Route = createFileRoute("/api/director")({
               reset: z.boolean().optional(),
             }),
             execute: (args) => H.setClipTransform(ctx, args),
+          }),
+          set_clip_keyframes: tool({
+            description:
+              "Animate a clip's transform over time: keyframes [{t_ms, scale?, x?, y?, opacity?}] where t_ms is CLIP-LOCAL time in ms (0 = clip start). Values are interpolated linearly between keyframes; omitted properties keep the clip's static transform (set_clip_transform). Use for zoom-in/out (ken burns: scale 1 → 1.15), slide-ins (x 0.2 → 0.5), fade-ins (opacity 0 → 1), punch-ins, animated PiP. Pass reset:true (or an empty array) to remove the animation.",
+            inputSchema: z.object({
+              clip_id: z.string(),
+              keyframes: z
+                .array(
+                  z.object({
+                    t_ms: z.number().int().min(0),
+                    scale: z.number().min(0.05).max(4).optional(),
+                    x: z.number().min(-1).max(2).optional(),
+                    y: z.number().min(-1).max(2).optional(),
+                    opacity: z.number().min(0).max(1).optional(),
+                  }),
+                )
+                .max(50)
+                .optional(),
+              reset: z.boolean().optional(),
+            }),
+            execute: (args) => H.setClipKeyframes(ctx, args),
           }),
           replace_clip_asset: tool({
             description:

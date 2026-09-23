@@ -83,6 +83,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_models: "Sélection du moteur créatif",
   preview_frame: "Frame vérifiée à l'œil",
   set_clip_transform: "Transform appliqué",
+  set_clip_keyframes: "Animation posée",
 };
 
 export function toolLabel(rawType: string): string {
@@ -115,6 +116,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   list_models: Sparkles,
   preview_frame: Eye,
   set_clip_transform: Move,
+  set_clip_keyframes: Sparkles,
 };
 
 export function toolIcon(rawType: string): LucideIcon {
@@ -514,6 +516,7 @@ export const UI_LABELS = {
     fonduEntree: (ms: number) => `Fondu d’entrée ${ms} ms`,
     fonduSortie: (ms: number) => `Fondu de sortie ${ms} ms`,
     appercuCarte: "Aperçu de la carte",
+    animation: "Transform animé (keyframes)",
   },
   shell: {
     aucunEspace: "Aucun espace",

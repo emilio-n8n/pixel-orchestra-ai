@@ -404,6 +404,89 @@ export function transformRect(
 }
 
 /**
+ * One animation step of a clip transform. `t_ms` is CLIP-LOCAL time
+ * (0 = clip start) so moving the clip keeps the animation relative.
+ * Omitted properties fall back to the clip's static transform.
+ */
+export interface ClipKeyframe {
+  t_ms: number;
+  scale?: number;
+  x?: number;
+  y?: number;
+  opacity?: number;
+}
+
+const KEYFRAME_LIMIT = 50;
+
+/**
+ * Validated, sorted keyframes from `meta.transform.keyframes`
+ * (written by set_clip_keyframes). Malformed entries are dropped —
+ * a broken keyframe list never breaks the preview or the export.
+ */
+export function clipKeyframes(clip: TimelineClip): ClipKeyframe[] {
+  const raw = (clip.meta?.transform as Record<string, unknown> | undefined)?.keyframes;
+  if (!Array.isArray(raw)) return [];
+  const out: ClipKeyframe[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.t_ms !== "number" || !Number.isFinite(e.t_ms)) continue;
+    const kf: ClipKeyframe = { t_ms: Math.max(0, Math.round(e.t_ms)) };
+    if (typeof e.scale === "number" && Number.isFinite(e.scale)) {
+      kf.scale = clampNum(e.scale, 1, 0.05, 4);
+    }
+    if (typeof e.x === "number" && Number.isFinite(e.x)) kf.x = clampNum(e.x, 0.5, -1, 2);
+    if (typeof e.y === "number" && Number.isFinite(e.y)) kf.y = clampNum(e.y, 0.5, -1, 2);
+    if (typeof e.opacity === "number" && Number.isFinite(e.opacity)) {
+      kf.opacity = clampNum(e.opacity, 1, 0, 1);
+    }
+    out.push(kf);
+  }
+  return out.sort((a, b) => a.t_ms - b.t_ms).slice(0, KEYFRAME_LIMIT);
+}
+
+export function hasKeyframes(clip: TimelineClip): boolean {
+  return clipKeyframes(clip).length > 0;
+}
+
+/**
+ * Transform of a clip at a CLIP-LOCAL time: static values, animated by
+ * the keyframes (linear interpolation, per property, clamped at both
+ * ends). Single source for preview, export, preview_frame and tests.
+ */
+export function clipTransformAt(clip: TimelineClip, offsetMs: number): ClipTransform {
+  const base = clipTransform(clip);
+  const kfs = clipKeyframes(clip);
+  if (kfs.length === 0) return base;
+  const at = (k: ClipKeyframe): ClipTransform => ({
+    scale: k.scale ?? base.scale,
+    x: k.x ?? base.x,
+    y: k.y ?? base.y,
+    opacity: k.opacity ?? base.opacity,
+  });
+  if (offsetMs <= kfs[0].t_ms) return at(kfs[0]);
+  const last = kfs[kfs.length - 1];
+  if (offsetMs >= last.t_ms) return at(last);
+  for (let i = 1; i < kfs.length; i++) {
+    const b = kfs[i];
+    if (offsetMs > b.t_ms) continue;
+    const a = kfs[i - 1];
+    const span = b.t_ms - a.t_ms;
+    if (span <= 0) return at(b);
+    const f = (offsetMs - a.t_ms) / span;
+    const va = at(a);
+    const vb = at(b);
+    return {
+      scale: va.scale + (vb.scale - va.scale) * f,
+      x: va.x + (vb.x - va.x) * f,
+      y: va.y + (vb.y - va.y) * f,
+      opacity: va.opacity + (vb.opacity - va.opacity) * f,
+    };
+  }
+  return at(last);
+}
+
+/**
  * Topmost active clip on the video tracks at `ms` (Video 3 > Video 2 >
  * Video) — the one whose overlay/iframe is visible. `kind` optionally
  * filters on the asset kind (e.g. "html" cards).
@@ -454,7 +537,8 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
   // Video / image / video-file / HTML clips — dissolves happen WITHIN a
   // track; tracks composite bottom → top (Video, then Video 2/3 overlays).
   const drawV = (c: TimelineClip, alpha: number) => {
-    const transform = clipTransform(c);
+    // Animated transform: keyframes are clip-local, the draw time is absolute.
+    const transform = clipTransformAt(c, ms - c.start_ms);
     ctx.save();
     const a = clamp01(alpha) * transform.opacity;
     if (a < 1) ctx.globalAlpha = a;
@@ -699,7 +783,13 @@ export async function captureTimelineFrame(
     const htmlClip = topmostActiveVideoClip(clips, ms, "html");
     if (htmlClip) {
       const card = await captureHtmlCardFrame(htmlClip, ms - htmlClip.start_ms);
-      ctx.drawImage(card, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+      // Same transform as the canvas renderer (static + keyframes).
+      const t = clipTransformAt(htmlClip, ms - htmlClip.start_ms);
+      const r = transformRect(t, EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_WIDTH, EXPORT_HEIGHT);
+      ctx.save();
+      if (t.opacity < 1) ctx.globalAlpha = t.opacity;
+      ctx.drawImage(card, r.x, r.y, r.w, r.h);
+      ctx.restore();
     }
     const out = document.createElement("canvas");
     out.width = 1280;

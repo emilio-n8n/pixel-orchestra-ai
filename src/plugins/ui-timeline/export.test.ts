@@ -11,12 +11,15 @@ import { computeDuckingCurve } from "@/lib/director/ducking";
 import { exportErrorMessage, exportFileName, exportPhaseLabel } from "@/lib/ui/labels";
 import {
   blackFadeAlpha,
+  clipKeyframes,
   clipLabel,
   clipTransform,
+  clipTransformAt,
   dissolveMix,
   envelopeForClip,
   ExportError,
   formatTimeMs,
+  hasKeyframes,
   htmlFrameCount,
   htmlFrameIndex,
   htmlFrameMs,
@@ -691,5 +694,122 @@ describe("topmostActiveVideoClip — overlay priority", () => {
   it("filters on the asset kind", () => {
     const clips = [at("base", "Video", 0, 5000, "html"), at("over", "Video 2", 0, 5000, "image")];
     expect(topmostActiveVideoClip(clips, 1000, "html")?.id).toBe("base");
+  });
+});
+
+describe("clipKeyframes — validated meta.transform.keyframes", () => {
+  it("returns nothing without keyframes", () => {
+    expect(clipKeyframes(clip())).toEqual([]);
+    expect(hasKeyframes(clip())).toBe(false);
+  });
+  it("drops malformed entries and sorts by time", () => {
+    const c = clip({
+      meta: {
+        transform: {
+          keyframes: [{ t_ms: 2000, scale: 2 }, "nope", { scale: 3 }, { t_ms: 0, scale: 1 }, null],
+        },
+      },
+    });
+    expect(clipKeyframes(c)).toEqual([
+      { t_ms: 0, scale: 1 },
+      { t_ms: 2000, scale: 2 },
+    ]);
+    expect(hasKeyframes(c)).toBe(true);
+  });
+  it("clamps values and negative times", () => {
+    const c = clip({ meta: { transform: { keyframes: [{ t_ms: -50, scale: 99, opacity: -1 }] } } });
+    expect(clipKeyframes(c)).toEqual([{ t_ms: 0, scale: 4, opacity: 0 }]);
+  });
+  it("caps the list at 50 keyframes", () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({ t_ms: i * 100 }));
+    const c = clip({ meta: { transform: { keyframes: many } } });
+    expect(clipKeyframes(c).length).toBe(50);
+  });
+});
+
+describe("clipTransformAt — linear interpolation", () => {
+  const animated = (keyframes: unknown[], transform: Record<string, unknown> = {}) =>
+    clip({ meta: { transform: { ...transform, keyframes } } });
+
+  it("falls back to the static transform without keyframes", () => {
+    const c = clip({ meta: { transform: { scale: 0.35 } } });
+    expect(clipTransformAt(c, 1234)).toEqual({ scale: 0.35, x: 0.5, y: 0.5, opacity: 1 });
+  });
+  it("interpolates scale between two keyframes", () => {
+    const c = animated([
+      { t_ms: 0, scale: 1 },
+      { t_ms: 2000, scale: 2 },
+    ]);
+    expect(clipTransformAt(c, 0).scale).toBe(1);
+    expect(clipTransformAt(c, 1000).scale).toBeCloseTo(1.5);
+    expect(clipTransformAt(c, 2000).scale).toBe(2);
+  });
+  it("clamps outside the keyframe range", () => {
+    const c = animated([
+      { t_ms: 500, opacity: 0.2 },
+      { t_ms: 1500, opacity: 0.8 },
+    ]);
+    expect(clipTransformAt(c, 0).opacity).toBe(0.2);
+    expect(clipTransformAt(c, 99999).opacity).toBe(0.8);
+  });
+  it("keeps omitted properties on the static base", () => {
+    const c = animated(
+      [
+        { t_ms: 0, scale: 1 },
+        { t_ms: 1000, scale: 2 },
+      ],
+      { x: 0.8, y: 0.2, opacity: 0.5 },
+    );
+    const t = clipTransformAt(c, 500);
+    expect(t.scale).toBeCloseTo(1.5);
+    expect(t.x).toBe(0.8);
+    expect(t.y).toBe(0.2);
+    expect(t.opacity).toBe(0.5);
+  });
+  it("handles duplicate timestamps without dividing by zero", () => {
+    const c = animated([
+      { t_ms: 0, opacity: 0 },
+      { t_ms: 0, opacity: 1 },
+      { t_ms: 1000, opacity: 0 },
+    ]);
+    expect(Number.isFinite(clipTransformAt(c, 0).opacity)).toBe(true);
+    expect(clipTransformAt(c, 1000).opacity).toBe(0);
+  });
+  it("interpolates position (slide-in)", () => {
+    const c = animated([
+      { t_ms: 0, x: 0.2 },
+      { t_ms: 800, x: 0.5 },
+    ]);
+    expect(clipTransformAt(c, 400).x).toBeCloseTo(0.35);
+  });
+});
+
+describe("renderTimelineFrame — animated transform", () => {
+  it("draws the clip with the interpolated keyframe scale", () => {
+    const c = imgClip({
+      id: "zoom",
+      start_ms: 1000,
+      duration_ms: 3000,
+      meta: {
+        transform: {
+          keyframes: [
+            { t_ms: 0, scale: 1 },
+            { t_ms: 2000, scale: 2 },
+          ],
+        },
+      },
+    });
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [c],
+      ms: 2000, // 1000ms into the clip → scale 1.5
+      getImage: () => ({ complete: true, naturalWidth: 1920, naturalHeight: 1080 }) as never,
+    });
+    const draw = ctx.calls.find((x) => x.op === "drawImage");
+    expect(draw).toBeDefined();
+    expect(draw!.args[3]).toBeCloseTo(2880);
   });
 });
