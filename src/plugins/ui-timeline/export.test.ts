@@ -21,6 +21,7 @@ import {
   htmlFrameMs,
   isHttpUrl,
   pickExportMime,
+  previewFrameTime,
   progressFraction,
   renderTimelineFrame,
   subtitleLayout,
@@ -541,5 +542,27 @@ describe("renderTimelineFrame — shared preview/file renderer", () => {
       videoFrameMap: new Map([["vv", { readyState: 0, videoWidth: 0, videoHeight: 0 } as never]]),
     });
     expect(ctx2.calls.filter((x) => x.op === "drawImage").length).toBe(0);
+  });
+});
+
+describe("previewFrameTime — Director preview_frame capture time", () => {
+  const c = { start_ms: 1000, duration_ms: 4000 };
+  it("keeps an explicit time inside the clip", () => {
+    expect(previewFrameTime(c, 2500)).toBe(2500);
+  });
+  it("clamps before the clip to its start", () => {
+    expect(previewFrameTime(c, 0)).toBe(1000);
+  });
+  it("clamps after the clip to its last ms", () => {
+    expect(previewFrameTime(c, 99999)).toBe(4999);
+  });
+  it("defaults to the middle of the clip", () => {
+    expect(previewFrameTime(c)).toBe(3000);
+  });
+  it("ignores a non-finite time", () => {
+    expect(previewFrameTime(c, Number.NaN)).toBe(3000);
+  });
+  it("survives a zero-duration clip", () => {
+    expect(previewFrameTime({ start_ms: 500, duration_ms: 0 })).toBe(500);
   });
 });

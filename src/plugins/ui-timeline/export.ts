@@ -321,6 +321,7 @@ export type ExportErrorCode =
   | "fetch-failed"
   | "decode-failed"
   | "prerender-failed"
+  | "capture-failed"
   | "recorder-unsupported"
   | "cancelled"
   | "unexpected";
@@ -456,6 +457,177 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
       layout.lines.forEach((line, i) => {
         ctx.fillText(line, layout.textPos.x, layout.textPos.y + i * layout.lineHeight);
       });
+    }
+  }
+}
+
+/* ---------------- single-frame capture (Director preview_frame) ---------------- */
+
+/**
+ * Frame time to capture for a clip: explicit absolute timeline ms clamped
+ * inside the clip, otherwise its middle (most representative frame).
+ */
+export function previewFrameTime(
+  clip: Pick<TimelineClip, "start_ms" | "duration_ms">,
+  tMs?: number,
+): number {
+  const end = clip.start_ms + Math.max(0, clip.duration_ms);
+  const wanted =
+    typeof tMs === "number" && Number.isFinite(tMs) ? tMs : clip.start_ms + clip.duration_ms / 2;
+  return Math.min(Math.max(wanted, clip.start_ms), Math.max(clip.start_ms, end - 1));
+}
+
+function loadImageCors(url: string, label: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new ExportError("capture-failed", label));
+    img.src = url;
+  });
+}
+
+function seekVideoTo(url: string, seconds: number, label: string): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.crossOrigin = "anonymous";
+    v.muted = true;
+    v.preload = "auto";
+    v.onerror = () => reject(new ExportError("capture-failed", label));
+    v.onloadedmetadata = () => {
+      const last = Math.max(0, (Number.isFinite(v.duration) ? v.duration : 0) - 0.04);
+      v.onseeked = () => resolve(v);
+      v.currentTime = Math.min(Math.max(0, seconds), last);
+    };
+    v.src = url;
+  });
+}
+
+/**
+ * One frame of an HTML card: offscreen iframe, warm srcdoc reload, WAAPI
+ * seek to the shared schedule — the single-frame sibling of
+ * prerenderHtmlClip (same origins, so the image matches the file).
+ */
+async function captureHtmlCardFrame(
+  clip: TimelineClip,
+  offsetMs: number,
+): Promise<HTMLCanvasElement> {
+  const label = clipLabel(clip);
+  const url = clip.assets?.url;
+  if (!isHttpUrl(url)) throw new ExportError("relative-url", `carte ${label}`);
+  let html: string;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`http ${res.status}`);
+    html = await res.text();
+  } catch {
+    throw new ExportError("fetch-failed", `carte ${label}`);
+  }
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = `position:absolute;left:-9999px;width:${EXPORT_WIDTH}px;height:${EXPORT_HEIGHT}px;border:none`;
+  document.body.appendChild(iframe);
+  try {
+    await loadSrcdoc(iframe, html);
+    await loadSrcdoc(iframe, html);
+    const doc = iframe.contentDocument;
+    const body = doc?.body;
+    if (!body) throw new ExportError("prerender-failed", `carte ${label}`);
+    try {
+      const fontsReady = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
+      if (fontsReady) await Promise.race([fontsReady, sleep(2000)]);
+    } catch {
+      /* fonts best-effort */
+    }
+    const t = htmlFrameIndex(offsetMs, clip.duration_ms) * htmlFrameMs(clip.duration_ms);
+    try {
+      for (const a of doc.getAnimations()) {
+        try {
+          a.pause();
+          a.currentTime = t;
+        } catch {
+          /* animation ignores seeks */
+        }
+      }
+    } catch {
+      /* WAAPI unavailable */
+    }
+    await new Promise((r) => requestAnimationFrame(r));
+    const { default: html2canvas } = await import("html2canvas");
+    return await html2canvas(body, {
+      width: EXPORT_WIDTH,
+      height: EXPORT_HEIGHT,
+      scale: 1,
+      useCORS: true,
+    });
+  } catch (e) {
+    if (e instanceof ExportError) throw e;
+    throw new ExportError("prerender-failed", `carte ${label}`);
+  } finally {
+    iframe.remove();
+  }
+}
+
+/**
+ * Capture ONE timeline frame as a JPEG data URL (1280×720) for the
+ * Director's `preview_frame` tool. Images/videos load with CORS so the
+ * canvas stays readable; an active HTML card is captured on top.
+ */
+export async function captureTimelineFrame(
+  clips: TimelineClip[],
+  clip: TimelineClip,
+  ms: number,
+): Promise<string> {
+  const canvas = makeExportCanvas();
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new ExportError("capture-failed", clipLabel(clip));
+
+  const images = new Map<string, HTMLImageElement>();
+  const videos = new Map<string, HTMLVideoElement>();
+  const created: HTMLVideoElement[] = [];
+  try {
+    const active = clips.filter(
+      (c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms,
+    );
+    for (const c of active) {
+      const url = c.assets?.url;
+      if (!isHttpUrl(url)) continue;
+      if (c.assets?.kind === "image") {
+        images.set(url, await loadImageCors(url, clipLabel(c)));
+      } else if (c.assets?.kind === "video") {
+        const v = await seekVideoTo(url, (ms - c.start_ms) / 1000, clipLabel(c));
+        videos.set(c.id, v);
+        created.push(v);
+      }
+    }
+    renderTimelineFrame({
+      ctx,
+      width: EXPORT_WIDTH,
+      height: EXPORT_HEIGHT,
+      clips,
+      ms,
+      getImage: (u) => images.get(u),
+      videoFrameMap: videos,
+    });
+    const htmlClip = active.find((c) => c.assets?.kind === "html" && isHttpUrl(c.assets.url));
+    if (htmlClip) {
+      const card = await captureHtmlCardFrame(htmlClip, ms - htmlClip.start_ms);
+      ctx.drawImage(card, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+    }
+    const out = document.createElement("canvas");
+    out.width = 1280;
+    out.height = 720;
+    const octx = out.getContext("2d");
+    if (!octx) throw new ExportError("capture-failed", clipLabel(clip));
+    octx.drawImage(canvas, 0, 0, out.width, out.height);
+    return out.toDataURL("image/jpeg", 0.82);
+  } finally {
+    for (const v of created) {
+      try {
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        /* already released */
+      }
     }
   }
 }

@@ -3,6 +3,7 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  generateText,
   streamText,
   stepCountIs,
   toUIMessageStream,
@@ -47,6 +48,18 @@ function isToolPart(p: unknown): p is UiPart {
 }
 
 /**
+ * Vision model used by `preview_frame`. The browser renders the frame (no
+ * server-side renderer on Workers) and posts it here as a data URL; this
+ * model turns it into text the Director can read back in the tool result
+ * (OpenAI-compatible tool messages cannot carry images).
+ */
+const VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
+const VISION_SYSTEM =
+  "Tu regardes une frame 1280×720 d'une timeline vidéo, capturée à un instant précis. " +
+  "Décris en français, en 3 à 6 phrases maximum, ce que tu vois réellement : cadrage, sujet, texte affiché (recopie-le tel quel), couleurs dominantes, chevauchements ou éléments manquants, et tout défaut visible (texte coupé, image noire, sous-titre illisible…). " +
+  "Sois factuel et précis ; ne suppose rien au-delà de l'image.";
+
+/**
  * Append a notice as a text part of the streamed message. Only protocol
  * chunks are written: `message-start`/`message-end` do not exist in the
  * UI message protocol and make the client reject the whole stream
@@ -67,6 +80,7 @@ export const Route = createFileRoute("/api/director")({
         if (!token) return new Response("Non autorisé", { status: 401 });
 
         const body = (await request.json()) as {
+          kind?: "preview_frame";
           messages: UIMessage[];
           projectId: string;
           apiKey: string;
@@ -76,6 +90,8 @@ export const Route = createFileRoute("/api/director")({
           cloudflareApiKey?: string;
           groqApiKey?: string;
           sessionId?: string;
+          imageDataUrl?: string;
+          focus?: string;
         };
         if (!body?.projectId) return new Response("projectId requis", { status: 400 });
         if (!body?.apiKey) return new Response("apiKey requise", { status: 400 });
@@ -130,6 +146,46 @@ export const Route = createFileRoute("/api/director")({
         const provider = createOpenCodeGoProvider(apiKey);
         const model = provider(modelId);
 
+        // -----------------------------------------------------------------
+        // preview_frame: the browser posts a captured frame (data URL) and
+        // gets back a vision description. Separate from the chat turn — no
+        // messages, no tools, just the image.
+        // -----------------------------------------------------------------
+        if (body.kind === "preview_frame") {
+          const image = (body.imageDataUrl ?? "").trim();
+          const isImage = /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(image);
+          if (!isImage || image.length > 4_000_000) {
+            return new Response(UI_LABELS.director.frameImageInvalide, { status: 400 });
+          }
+          const focus = (body.focus ?? "").trim().slice(0, 300);
+          try {
+            const { text } = await generateText({
+              model: provider(VISION_MODEL_ID),
+              system: VISION_SYSTEM,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: focus ? `Consigne de vérification : ${focus}` : "Décris cette frame.",
+                    },
+                    { type: "image", image },
+                  ],
+                },
+              ],
+              headers: {
+                "x-opencode-session": `preview-${sessionId}`,
+                "User-Agent": "lilium-studio-director/1.0",
+              },
+            });
+            return Response.json({ description: text.trim() });
+          } catch (err) {
+            console.error("[/api/director] preview_frame vision failed:", err);
+            return new Response(UI_LABELS.director.frameVision, { status: 502 });
+          }
+        }
+
         const { generateHtmlCard } = await import("@/lib/director/html-cards.server");
 
         // Tell the Director which image models exist so it can pick one.
@@ -155,6 +211,8 @@ export const Route = createFileRoute("/api/director")({
           "AUDIO OVERLAP: Never let two audio clips overlap on the same track. generate_voice returns the real duration_ms of the audio file in its metadata — trust it, never estimate or guess the duration. add_to_timeline uses that real duration automatically for overlap detection (it never underestimates), so do NOT pass duration_ms for audio clips unless you intentionally want a longer clip. Pay attention to the _warning field returned by add_to_timeline: if present, the clip was shifted or its duration was adjusted. Use separate tracks for different audio types: Audio=voiceover, Music=background, SFX=effects. If you need silence, remove the existing clip first with remove_from_timeline, then re-add." +
           "\n\n" +
           'HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. "fade-in + slide-up title with a slow gradient shift and pulsing glow"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles.' +
+          "\n\n" +
+          'VISUAL CHECK (preview_frame): you can look at an actual frame of the timeline. Call preview_frame with a clip_id (optionally t_ms — ABSOLUTE timeline ms — and focus, e.g. "is the title text cut off?") and you get back a vision-model description of what is really on screen: framing, on-screen text, colors, overlaps, glitches. Use it after generating or placing a title card / image, before declaring a visual result done, or whenever the user doubts what the frame looks like.' +
           "\n\n" +
           'TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear (pass ripple:true to close the gap — later clips on the track slide left). Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to "start the music at Xs with a fade-in", use update_timeline_clip with start_ms + fade_in_ms on the music clip.' +
           "\n\n" +
@@ -380,6 +438,17 @@ export const Route = createFileRoute("/api/director")({
               }));
             },
           }),
+          preview_frame: tool({
+            description:
+              "Look at an actual frame of the timeline (visual check: framing, on-screen text, colors, overlaps, glitches). The frame is rendered in the user's browser and described by a vision model, returned as text. Pass the clip_id, optionally t_ms (ABSOLUTE timeline time in ms — default: middle of the clip) and focus (what you want to verify, e.g. 'is the title text cut off?').",
+            inputSchema: z.object({
+              clip_id: z.string(),
+              t_ms: z.number().int().min(0).optional(),
+              focus: z.string().optional(),
+            }),
+            // No execute: fulfilled by the browser (client tool). The loop
+            // stops on this call and the client resubmits with the result.
+          }),
         };
 
         // -------------------------------------------------------------------
@@ -450,12 +519,24 @@ export const Route = createFileRoute("/api/director")({
                 const finishReason = await result.finishReason;
                 const stepToolCalls = await result.toolCalls;
                 for (const tc of stepToolCalls ?? []) toolsCalled.push(tc.toolName);
+                // Client tools (no server execute — e.g. preview_frame) are
+                // fulfilled by the browser: stop the loop here and let the
+                // client capture + resubmit with the tool result, otherwise
+                // the next iteration would be missing that tool result.
+                const hasClientTool = (stepToolCalls ?? []).some((tc) => {
+                  const def = (tools as Record<string, { execute?: unknown }>)[tc.toolName];
+                  return typeof def?.execute !== "function";
+                });
                 const responseMessages = await result.responseMessages;
                 if (responseMessages?.length) {
                   conversation = [...conversation, ...(responseMessages as unknown[])];
                 }
 
-                if (finishReason === "tool-calls" && (stepToolCalls?.length ?? 0) > 0) {
+                if (
+                  finishReason === "tool-calls" &&
+                  (stepToolCalls?.length ?? 0) > 0 &&
+                  !hasClientTool
+                ) {
                   continue;
                 }
                 if (finishReason === "length") {

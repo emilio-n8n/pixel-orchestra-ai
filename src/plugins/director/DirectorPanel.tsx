@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Settings, History, Plus, Trash2, SendHorizontal, Square } from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
+import { previewFrameThumbnail } from "./preview-frame";
 import type { DirectorModel } from "@/lib/models/catalog";
 import { UI_LABELS, toolLabel, toolIcon } from "@/lib/ui/labels";
 import { ErrorBlock } from "@/components/ui/error-block";
@@ -142,10 +143,72 @@ export function DirectorPanel() {
     [],
   );
 
-  const { messages, sendMessage, regenerate, stop, status, error, setMessages } = useChat({
-    id: currentId ?? "new",
-    transport,
-  });
+  // Tool calls fulfilled by the browser (preview_frame), waiting for their
+  // one resubmit. The streamed assistant message accumulates every step of
+  // a turn, so its completed tool parts stay in `messages` — resubmitting
+  // must be keyed on the fulfilled call id, not on the part state alone.
+  const fulfilledClientTools = useRef<Set<string>>(new Set());
+
+  const { messages, sendMessage, regenerate, stop, addToolOutput, status, error, setMessages } =
+    useChat({
+      id: currentId ?? "new",
+      transport,
+      // preview_frame has no server execute: the browser renders the frame,
+      // gets a vision description, then hands the result back and resubmits.
+      onToolCall: ({ toolCall }) => {
+        if (toolCall.toolName !== "preview_frame") return;
+        const { toolCallId } = toolCall;
+        void (async () => {
+          try {
+            const { runPreviewFrame } = await import("./preview-frame");
+            const input = (toolCall.input ?? {}) as {
+              clip_id?: string;
+              t_ms?: number;
+              focus?: string;
+            };
+            const output = await runPreviewFrame({
+              toolCallId,
+              clipId: String(input.clip_id ?? ""),
+              tMs: typeof input.t_ms === "number" ? input.t_ms : undefined,
+              focus: typeof input.focus === "string" ? input.focus : undefined,
+              projectId: bodyRef.current.projectId ?? "",
+              apiKey: bodyRef.current.apiKey,
+              sessionId: bodyRef.current.sessionId,
+              token: tokenRef.current,
+            });
+            fulfilledClientTools.current.add(toolCallId);
+            addToolOutput({ tool: "preview_frame", toolCallId, output });
+          } catch (e) {
+            fulfilledClientTools.current.add(toolCallId);
+            addToolOutput({
+              tool: "preview_frame",
+              toolCallId,
+              state: "output-error",
+              errorText: e instanceof Error ? e.message : String(e),
+            });
+          }
+        })();
+      },
+      // Resubmit only once a browser tool got its result — server tools
+      // already carry theirs inside the same stream.
+      sendAutomaticallyWhen: ({ messages: msgs }) => {
+        const last = msgs[msgs.length - 1];
+        if (!last || last.role !== "assistant") return false;
+        for (const p of last.parts) {
+          const part = p as { type?: string; state?: string; toolCallId?: string };
+          if (
+            part.type === "tool-preview_frame" &&
+            part.toolCallId &&
+            fulfilledClientTools.current.has(part.toolCallId) &&
+            (part.state === "output-available" || part.state === "output-error")
+          ) {
+            fulfilledClientTools.current.delete(part.toolCallId);
+            return true;
+          }
+        }
+        return false;
+      },
+    });
 
   const busy = status === "streaming" || status === "submitted";
 
@@ -501,12 +564,24 @@ export function DirectorPanel() {
                   }
                   if (typeof p.type === "string" && p.type.startsWith("tool-")) {
                     const Icon = toolIcon(p.type);
+                    const thumb =
+                      p.type === "tool-preview_frame"
+                        ? previewFrameThumbnail((p as { toolCallId?: string }).toolCallId)
+                        : undefined;
                     return (
                       <div
                         key={i}
                         className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[12px] text-[var(--text-muted)]"
                       >
-                        <Icon size={13} className="shrink-0 text-[var(--accent-strong)]" />
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="h-8 w-14 shrink-0 rounded-[4px] border border-[var(--line)] object-cover"
+                          />
+                        ) : (
+                          <Icon size={13} className="shrink-0 text-[var(--accent-strong)]" />
+                        )}
                         <span className="truncate">{toolLabel(p.type)}</span>
                       </div>
                     );

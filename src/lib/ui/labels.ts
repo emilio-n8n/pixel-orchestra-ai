@@ -8,6 +8,7 @@
 import {
   Boxes,
   Clapperboard,
+  Eye,
   Film,
   Image as ImageIcon,
   LayoutGrid,
@@ -79,6 +80,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_timeline: "Lecture de la timeline",
   list_assets: "Consultation de la médiathèque",
   list_models: "Sélection du moteur créatif",
+  preview_frame: "Frame vérifiée à l'œil",
 };
 
 export function toolLabel(rawType: string): string {
@@ -109,6 +111,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   list_timeline: Clapperboard,
   list_assets: Library,
   list_models: Sparkles,
+  preview_frame: Eye,
 };
 
 export function toolIcon(rawType: string): LucideIcon {
@@ -206,6 +209,8 @@ export function exportErrorMessage(code: string, detail?: string): string {
       return `Audio illisible${what} — régénérez le fichier audio puis relancez l'export.`;
     case "prerender-failed":
       return `Pré-rendu impossible${what} — vérifiez le contenu de la carte puis relancez l'export.`;
+    case "capture-failed":
+      return `Capture d'image impossible${what} — vérifiez que le média est chargé, puis réessayez.`;
     case "recorder-unsupported":
       return "Export impossible — ce navigateur ne supporte pas l'enregistrement vidéo, réessayez avec Chrome.";
     default:
@@ -408,6 +413,9 @@ export const UI_LABELS = {
     mediaSansUrl: "Média sans URL signée — régénérez la voix ou réimportez le fichier",
     transcriptionVide: "Transcription vide — l’audio est peut-être silencieux ou illisible",
     planIntrouvable: "Plan introuvable — vérifiez l’identifiant du clip",
+    frameChargement: "Impossible de lire la timeline — réessayez",
+    frameVision: "Analyse visuelle impossible — réessayez",
+    frameImageInvalide: "Image de vérification invalide ou trop lourde",
     planAIntrouvable: "Plan A introuvable — vérifiez son identifiant",
     planBIntrouvable: "Plan B introuvable — vérifiez son identifiant",
     transitionMemePiste: "La transition exige deux plans sur la même piste",
