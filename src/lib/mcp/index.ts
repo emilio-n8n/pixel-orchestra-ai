@@ -11,6 +11,10 @@ import applyDuckingTool from "./tools/apply_ducking";
 import setClipTransitionsTool from "./tools/set_clip_transitions";
 import setClipTransformTool from "./tools/set_clip_transform";
 import setClipKeyframesTool from "./tools/set_clip_keyframes";
+import trimClipTool from "./tools/trim_clip";
+import addMarkerTool from "./tools/add_marker";
+import listMarkersTool from "./tools/list_markers";
+import removeMarkerTool from "./tools/remove_marker";
 import listTimelineTool from "./tools/list_timeline";
 import listAssetsTool from "./tools/list_assets";
 
@@ -21,7 +25,7 @@ export default defineMcp({
   title: "Lilium Studio",
   version: "0.1.0",
   instructions:
-    "Lilium Studio: generate images, voices (single or A/B takes), and HTML title cards, place them on a project's timeline, and edit it (silence clips, editable subtitles, automatic ducking, crossfade transitions, clip transforms (static or keyframed: scale/position/opacity for PiP and overlays), ripple delete). Every tool takes a project_id — obtain it from the URL after /p/ in the Lilium workspace.",
+    "Lilium Studio: generate images, voices (single or A/B takes), and HTML title cards, place them on a project's timeline, and edit it (silence clips, editable subtitles, automatic ducking, crossfade transitions, clip transforms (static or keyframed), frame-accurate trims, markers/YouTube chapters, ripple delete). Every tool takes a project_id — obtain it from the URL after /p/ in the Lilium workspace.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",
@@ -39,6 +43,10 @@ export default defineMcp({
     setClipTransitionsTool,
     setClipTransformTool,
     setClipKeyframesTool,
+    trimClipTool,
+    addMarkerTool,
+    listMarkersTool,
+    removeMarkerTool,
     listTimelineTool,
     listAssetsTool,
   ],

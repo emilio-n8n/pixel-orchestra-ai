@@ -45,8 +45,16 @@ import { EXPORT_LABELS, exportErrorMessage, type ExportPhase } from "@/lib/ui/la
 export const EXPORT_WIDTH = 1920;
 export const EXPORT_HEIGHT = 1080;
 export const EXPORT_FPS = 30;
-/** Timeline step per encoded frame (≈33.33ms). */
-export const FRAME_MS = 1000 / EXPORT_FPS;
+/** Timeline step per encoded frame (≈33.33ms) — shared with the server tools. */
+import { FRAME_MS } from "@/lib/timeline/frames";
+export {
+  FRAME_MS,
+  msToFrames,
+  framesToMs,
+  snapToFrame,
+  snapToNearest,
+  formatChapterTime,
+} from "@/lib/timeline/frames";
 /**
  * Audio graphs start 150ms after the recorder: lets the canvas
  * captureStream attach so the head of the file is never chopped.

@@ -32,6 +32,7 @@ import {
   isHttpUrl,
   formatTimeMs as fmt,
   clipTransformAt,
+  formatChapterTime,
   hasKeyframes,
   renderTimelineFrame,
   topmostActiveVideoClip,
@@ -66,6 +67,8 @@ function gainToDb(gain: number): string {
 export function TimelinePanel() {
   const pid = useLibraryProject();
   const [clips, setClips] = useState<TimelineClip[]>([]);
+  /** Timeline markers / YouTube chapters (Director add_marker). */
+  const [markers, setMarkers] = useState<Array<{ id: string; t_ms: number; label: string }>>([]);
   const [playing, setPlaying] = useState(false);
   const [playhead, setPlayhead] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -128,6 +131,20 @@ export function TimelinePanel() {
   const online = useOnlineStatus();
   const loadAttempt = useRef(0);
   const loadTimer = useRef<number | null>(null);
+  const loadMarkers = useCallback(async () => {
+    if (!pid) return;
+    try {
+      const { data, error } = await supabase
+        .from("project_markers")
+        .select("id, t_ms, label")
+        .eq("project_id", pid)
+        .order("t_ms", { ascending: true });
+      if (error) throw error;
+      setMarkers((data ?? []) as Array<{ id: string; t_ms: number; label: string }>);
+    } catch {
+      /* markers are decorative — the timeline works without them */
+    }
+  }, [pid]);
   const loadClips = useCallback(async () => {
     if (!pid) return;
     if (loadTimer.current != null) {
@@ -165,10 +182,11 @@ export function TimelinePanel() {
 
   useEffect(() => {
     void loadClips();
+    void loadMarkers();
     return () => {
       if (loadTimer.current != null) window.clearTimeout(loadTimer.current);
     };
-  }, [loadClips]);
+  }, [loadClips, loadMarkers]);
 
   // Auto-flush when the network comes back (storm stays silent meanwhile):
   // reload server truth, then replay queued offline writes last-write-wins.
@@ -222,8 +240,21 @@ export function TimelinePanel() {
           "postgres_changes" as never,
           { event: "*", schema: "public", table: "assets", filter: `project_id=eq.${pid}` },
           signal,
+        )
+        .on(
+          "postgres_changes" as never,
+          {
+            event: "*",
+            schema: "public",
+            table: "project_markers",
+            filter: `project_id=eq.${pid}`,
+          },
+          signal,
         ),
-    onEvent: () => void loadClips(),
+    onEvent: () => {
+      void loadClips();
+      void loadMarkers();
+    },
   });
   const connState = online ? conn : "offline";
 
@@ -1530,6 +1561,21 @@ export function TimelinePanel() {
             style={{ minWidth: totalMs * PX_PER_MS }}
             ref={trackAreaRef}
           >
+            {/* Markers / chapitres YouTube (lecture seule côté UI) */}
+            {markers.map((m) => (
+              <div
+                key={m.id}
+                className="pointer-events-none absolute inset-y-0 z-10 w-px bg-[var(--accent-strong)]/70"
+                style={{ left: m.t_ms * PX_PER_MS }}
+              >
+                <span
+                  title={`${formatChapterTime(m.t_ms)} — ${m.label}`}
+                  className="absolute left-0 top-0 max-w-[120px] truncate rounded-br bg-[var(--accent-strong)]/85 px-1 text-[9px] leading-4 text-[var(--accent-fg)]"
+                >
+                  {formatChapterTime(m.t_ms)} {m.label}
+                </span>
+              </div>
+            ))}
             <div className="space-y-1">
               {TRACKS.map((t) => {
                 const rowClips = clips.filter((c) => c.track === t);

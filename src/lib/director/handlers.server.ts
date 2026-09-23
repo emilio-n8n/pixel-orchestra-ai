@@ -1,5 +1,12 @@
 // Server-only Director tool handlers. Shared by /api/director (AI SDK tools)
 // and the MCP server. Every handler takes an authenticated Supabase client
+import {
+  FRAME_MS,
+  formatChapterTime,
+  framesToMs,
+  snapToFrame,
+  snapToNearest,
+} from "@/lib/timeline/frames";
 // bound to a specific user and their project id.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -953,6 +960,8 @@ export async function updateTimelineClip(
     track?: string;
     fade_in_ms?: number;
     fade_out_ms?: number;
+    /** Shift every later clip on the same track by the same delta. */
+    ripple?: boolean;
   },
 ) {
   const { data: existing, error: getErr } = await ctx.supabase
@@ -1002,7 +1011,221 @@ export async function updateTimelineClip(
       break;
     }
   }
-  return { ...data, _warning: overlapWarning };
+  const shifted = args.ripple
+    ? await rippleShift(ctx, {
+        track: (args.track ?? existing.track) as string,
+        fromMs: existing.start_ms + existing.duration_ms,
+        deltaMs: (args.start_ms ?? existing.start_ms) - existing.start_ms,
+        excludeId: args.clip_id,
+      })
+    : 0;
+  return { ...data, _warning: overlapWarning, shifted_clips: shifted || undefined };
+}
+
+/**
+ * Shift every clip starting at/after `fromMs` on a track by `deltaMs`.
+ * Ripple edits (trim/move/delete) use this to close or open gaps.
+ */
+async function rippleShift(
+  ctx: DirectorCtx,
+  opts: { track: string; fromMs: number; deltaMs: number; excludeId?: string },
+): Promise<number> {
+  if (!opts.deltaMs) return 0;
+  const { data: later } = await ctx.supabase
+    .from("timeline_clips")
+    .select("id, start_ms")
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .eq("track", opts.track)
+    .gte("start_ms", opts.fromMs)
+    .neq("id", opts.excludeId ?? "")
+    .order("start_ms", { ascending: true });
+  let shifted = 0;
+  for (const clip of later ?? []) {
+    const start = Math.max(0, (clip.start_ms ?? 0) + opts.deltaMs);
+    const { error } = await ctx.supabase
+      .from("timeline_clips")
+      .update({ start_ms: start })
+      .eq("id", clip.id)
+      .eq("owner_id", ctx.userId);
+    if (error) throw new Error(error.message);
+    shifted++;
+  }
+  return shifted;
+}
+
+const MIN_CLIP_MS = 100;
+const SNAP_TOLERANCE_MS = 100;
+
+/**
+ * Frame-accurate trim of a clip edge. `edge:"out"` moves the tail,
+ * `edge:"in"` moves the head (the tail stays). A positive delta trims,
+ * a negative one extends (never below 0 / MIN_CLIP_MS). `snap` (default
+ * true) magnetises the moving edge to nearby clip edges or 0; `ripple`
+ * closes the gap by shifting every later clip on the track.
+ */
+export async function trimClip(
+  ctx: DirectorCtx,
+  args: {
+    clip_id: string;
+    edge?: "in" | "out";
+    delta_ms?: number;
+    delta_frames?: number;
+    ripple?: boolean;
+    snap?: boolean;
+  },
+) {
+  return recordJob(ctx, "trim_clip", args.clip_id, async () => {
+    const { data: existing, error: getErr } = await ctx.supabase
+      .from("timeline_clips")
+      .select("id, track, start_ms, duration_ms, meta")
+      .eq("id", args.clip_id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .maybeSingle();
+    if (getErr || !existing) throw new Error(UI_LABELS.director.planIntrouvable);
+
+    const edge = args.edge ?? "out";
+    const requested =
+      args.delta_frames != null
+        ? framesToMs(args.delta_frames)
+        : snapToFrame(args.delta_ms ?? FRAME_MS);
+    if (requested === 0) throw new Error(UI_LABELS.director.trimNul);
+
+    const oldStart = existing.start_ms ?? 0;
+    const oldDuration = existing.duration_ms ?? 3000;
+    const oldEnd = oldStart + oldDuration;
+    let start = oldStart;
+    let duration = oldDuration;
+    let clamped = false;
+
+    if (edge === "out") {
+      duration = Math.max(MIN_CLIP_MS, oldDuration - requested);
+      if (duration !== oldDuration - requested) clamped = true;
+    } else {
+      duration = Math.max(MIN_CLIP_MS, oldDuration - requested);
+      if (duration !== oldDuration - requested) clamped = true;
+      // Without ripple the tail stays put; with ripple the clip is pulled
+      // left (the removed head closes up).
+      if (!args.ripple) {
+        start = Math.max(0, oldStart + requested);
+        if (start !== oldStart + requested) clamped = true;
+      }
+    }
+
+    const patch: Record<string, unknown> = { start_ms: start, duration_ms: duration };
+    if (args.snap !== false) {
+      const { data: others } = await ctx.supabase
+        .from("timeline_clips")
+        .select("start_ms, duration_ms")
+        .eq("owner_id", ctx.userId)
+        .eq("project_id", ctx.projectId)
+        .eq("track", existing.track)
+        .neq("id", args.clip_id);
+      const targets = [0];
+      for (const o of others ?? []) {
+        targets.push(o.start_ms ?? 0, (o.start_ms ?? 0) + (o.duration_ms ?? 3000));
+      }
+      if (edge === "out") {
+        const snappedEnd = snapToNearest(start + duration, targets, SNAP_TOLERANCE_MS);
+        duration = Math.max(MIN_CLIP_MS, snappedEnd - start);
+      } else {
+        const end = start + duration;
+        start = Math.max(
+          0,
+          Math.min(snapToNearest(start, targets, SNAP_TOLERANCE_MS), end - MIN_CLIP_MS),
+        );
+      }
+      patch.start_ms = start;
+      patch.duration_ms = duration;
+    }
+
+    const { data, error } = await ctx.supabase
+      .from("timeline_clips")
+      .update(patch)
+      .eq("id", args.clip_id)
+      .eq("owner_id", ctx.userId)
+      .select("id, track, start_ms, duration_ms, asset_id, meta")
+      .single();
+    if (error) throw new Error(error.message);
+
+    // Ripple: later clips shift by the amount the tail moved.
+    // Always keyed on the ORIGINAL end so an extension also pushes them
+    // right (a trimmed tail would otherwise hide clips in between).
+    const tailDelta = start + duration - oldEnd;
+    const shifted = args.ripple
+      ? await rippleShift(ctx, {
+          track: existing.track as string,
+          fromMs: oldEnd,
+          deltaMs: tailDelta,
+          excludeId: args.clip_id,
+        })
+      : 0;
+
+    return {
+      ...data,
+      _warning: clamped ? UI_LABELS.director.trimBorne : null,
+      shifted_clips: shifted || undefined,
+    };
+  });
+}
+
+/* ---------------- markers / YouTube chapters ---------------- */
+
+export interface ProjectMarker {
+  id: string;
+  t_ms: number;
+  label: string;
+}
+
+export async function addMarker(ctx: DirectorCtx, args: { t_ms: number; label?: string }) {
+  return recordJob(ctx, "add_marker", args.label ?? "", async () => {
+    const t = Math.max(0, Math.round(args.t_ms));
+    const label = (args.label ?? "").trim().slice(0, 120) || `Marqueur ${formatChapterTime(t)}`;
+    const { data, error } = await ctx.supabase
+      .from("project_markers")
+      .insert({ owner_id: ctx.userId, project_id: ctx.projectId, t_ms: t, label })
+      .select("id, t_ms, label")
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  });
+}
+
+export async function removeMarker(ctx: DirectorCtx, markerId: string) {
+  const { error } = await ctx.supabase
+    .from("project_markers")
+    .delete()
+    .eq("id", markerId)
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId);
+  if (error) throw new Error(error.message);
+  return { id: markerId, removed: true };
+}
+
+/**
+ * List markers ordered by time, plus the ready-to-paste YouTube chapter
+ * text (first chapter at 0:00, YouTube needs ≥3 chapters ≥10s apart).
+ */
+export async function listMarkers(ctx: DirectorCtx) {
+  const { data, error } = await ctx.supabase
+    .from("project_markers")
+    .select("id, t_ms, label")
+    .eq("owner_id", ctx.userId)
+    .eq("project_id", ctx.projectId)
+    .order("t_ms", { ascending: true });
+  if (error) throw new Error(error.message);
+  const markers = (data ?? []) as ProjectMarker[];
+  return { markers, chapters: chaptersText(markers) };
+}
+
+/** YouTube chapter block: "0:00 Intro" … (empty when no markers). */
+export function chaptersText(markers: ProjectMarker[]): string {
+  if (markers.length === 0) return "";
+  const sorted = [...markers].sort((a, b) => a.t_ms - b.t_ms);
+  const lines = sorted.map((m) => `${formatChapterTime(m.t_ms)} ${m.label}`.trim());
+  if (!lines[0].startsWith("0:00")) lines.unshift("0:00 Intro");
+  return lines.join("\n");
 }
 
 /**

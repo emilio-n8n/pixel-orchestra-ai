@@ -215,6 +215,10 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           'HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. "fade-in + slide-up title with a slow gradient shift and pulsing glow"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles.' +
           "\n\n" +
+          'TRIM & RIPPLE: trim_clip works at frame level (30 fps) — edge "in"/"out", delta_frames (positive = cut, negative = extend), snap (magnetic to clip edges) and ripple (shift every later clip to close the gap). update_timeline_clip also takes ripple:true to move a clip together with everything after it. Prefer frame-accurate deltas over eyeballed ms, and check the returned _warning/shifted_clips.' +
+          "\n\n" +
+          "MARKERS & CHAPTERS: add_marker(t_ms, label) drops a YouTube chapter marker on the timeline; list_markers returns the markers plus the chapter text ready to paste in the description (first chapter at 0:00). Add one marker at each section start when the user asks for chapters or a structured video." +
+          "\n\n" +
           "KEYFRAMES (set_clip_keyframes): animate a clip transform over its own time — t_ms is CLIP-LOCAL (0 = clip start), properties interpolate linearly and omitted ones keep the static transform. Zoom-in = [{t_ms:0,scale:1},{t_ms:2000,scale:1.15}]; slide-in from the left = [{t_ms:0,x:0.2},{t_ms:800,x:0.5}]; fade-in = [{t_ms:0,opacity:0},{t_ms:600,opacity:1}]. Combine with set_clip_transform for a static base (e.g. PiP scale 0.35 then a slow zoom to 0.4)." +
           "\n\n" +
           'TRACKS & OVERLAYS: video tracks are Video (base), Video 2 and Video 3 (overlays, composited on top in that order). Use Video 2/Video 3 for B-roll, picture-in-picture and split-screen: add_to_timeline with track "Video 2", then set_clip_transform to place it (PiP top-right = scale 0.35, x 0.8, y 0.2). Never let two clips overlap on the SAME track (the anti-overlap system shifts them) — overlapping across tracks is normal and intended.' +
@@ -385,6 +389,12 @@ export const Route = createFileRoute("/api/director")({
               track: TRACK_ENUM.optional(),
               fade_in_ms: z.number().int().min(0).optional(),
               fade_out_ms: z.number().int().min(0).optional(),
+              ripple: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Also shift every later clip on the same track by the same delta (moves the gap with the clip).",
+                ),
             }),
             execute: (args) => H.updateTimelineClip(ctx, args),
           }),
@@ -421,6 +431,39 @@ export const Route = createFileRoute("/api/director")({
               reset: z.boolean().optional(),
             }),
             execute: (args) => H.setClipKeyframes(ctx, args),
+          }),
+          trim_clip: tool({
+            description:
+              "Frame-accurate trim of ONE edge of a clip. edge:'out' (default) moves the tail, edge:'in' moves the head (the tail stays). Positive delta trims, negative extends (never below 100 ms). delta_frames is in 30 fps frames (1 frame ≈ 33 ms); delta_ms is snapped to the frame grid. snap (default true) magnetises the moving edge to the nearest clip edge or 0 (within 100 ms). ripple:true closes the gap by shifting every later clip on the track. Returns the clip and the number of shifted clips.",
+            inputSchema: z.object({
+              clip_id: z.string(),
+              edge: z.enum(["in", "out"]).optional(),
+              delta_ms: z.number().optional(),
+              delta_frames: z.number().int().optional(),
+              ripple: z.boolean().optional(),
+              snap: z.boolean().optional(),
+            }),
+            execute: (args) => H.trimClip(ctx, args),
+          }),
+          add_marker: tool({
+            description:
+              "Add a timeline marker / YouTube chapter at t_ms (absolute timeline time). Give a short label (the chapter title). list_markers returns the ready-to-paste chapter list.",
+            inputSchema: z.object({
+              t_ms: z.number().int().min(0),
+              label: z.string().optional(),
+            }),
+            execute: (args) => H.addMarker(ctx, args),
+          }),
+          list_markers: tool({
+            description:
+              "List the timeline markers ordered by time, plus the YouTube chapter text ready to paste (first chapter at 0:00).",
+            inputSchema: z.object({}),
+            execute: () => H.listMarkers(ctx),
+          }),
+          remove_marker: tool({
+            description: "Remove a marker by its id (see list_markers).",
+            inputSchema: z.object({ marker_id: z.string() }),
+            execute: ({ marker_id }) => H.removeMarker(ctx, marker_id),
           }),
           replace_clip_asset: tool({
             description:

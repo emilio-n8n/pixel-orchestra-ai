@@ -6,6 +6,7 @@
  * single place that translates them into the words a creator sees.
  */
 import {
+  Bookmark,
   Boxes,
   Clapperboard,
   Eye,
@@ -18,6 +19,7 @@ import {
   Music,
   Plug,
   Sparkles,
+  Trash2,
   Type as TypeIcon,
   Users,
   Waves,
@@ -84,6 +86,10 @@ const TOOL_LABELS: Record<string, string> = {
   preview_frame: "Frame vérifiée à l'œil",
   set_clip_transform: "Transform appliqué",
   set_clip_keyframes: "Animation posée",
+  trim_clip: "Trim au frame",
+  add_marker: "Marqueur ajouté",
+  list_markers: "Chapitres lus",
+  remove_marker: "Marqueur retiré",
 };
 
 export function toolLabel(rawType: string): string {
@@ -117,6 +123,10 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   preview_frame: Eye,
   set_clip_transform: Move,
   set_clip_keyframes: Sparkles,
+  trim_clip: Clapperboard,
+  add_marker: Bookmark,
+  list_markers: ListVideo,
+  remove_marker: Trash2,
 };
 
 export function toolIcon(rawType: string): LucideIcon {
@@ -420,6 +430,8 @@ export const UI_LABELS = {
     mediaSansUrl: "Média sans URL signée — régénérez la voix ou réimportez le fichier",
     transcriptionVide: "Transcription vide — l’audio est peut-être silencieux ou illisible",
     planIntrouvable: "Plan introuvable — vérifiez l’identifiant du clip",
+    trimNul: "Trim de zéro image — indiquez au moins 1 image (delta_frames) ou une durée",
+    trimBorne: "Trim borné : le plan ne peut pas descendre sous 100 ms",
     transformHorsBornes: (min: number, max: number) =>
       `Valeur hors bornes — utilisez un nombre entre ${min} et ${max}`,
     frameChargement: "Impossible de lire la timeline — réessayez",
