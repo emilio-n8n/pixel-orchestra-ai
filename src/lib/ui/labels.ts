@@ -364,6 +364,7 @@ export const UI_LABELS = {
       "Demandez à l’Assistant de construire une scène. Exemple : « Crée une ouverture en 3 plans : coucher de soleil sur les montagnes, un cavalier solitaire, un carton titre “LILIUM”. Ajoute une narration. »",
     invitePlaceholder: "Dirigez l’IA…",
     envoyer: "Envoyer",
+    arreter: "Arrêter l’Assistant",
     envoiEnCours: "…",
     vous: "Vous",
     cleApiPlaceholder: "Clé API (p. ex. zen-go-…)",

@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings, History, Plus, Trash2, SendHorizontal, Loader2 } from "lucide-react";
+import { Settings, History, Plus, Trash2, SendHorizontal, Square } from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
 import type { DirectorModel } from "@/lib/models/catalog";
 import { UI_LABELS, toolLabel, toolIcon } from "@/lib/ui/labels";
@@ -142,7 +142,7 @@ export function DirectorPanel() {
     [],
   );
 
-  const { messages, sendMessage, regenerate, status, error, setMessages } = useChat({
+  const { messages, sendMessage, regenerate, stop, status, error, setMessages } = useChat({
     id: currentId ?? "new",
     transport,
   });
@@ -593,13 +593,14 @@ export function DirectorPanel() {
             className="text-ios max-h-[140px] flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-[var(--text-dim)]"
           />
           <button
-            type="submit"
-            disabled={!input.trim() || busy || !apiKey}
-            title={UI_LABELS.director.envoyer}
-            aria-label={UI_LABELS.director.envoyer}
+            type={busy ? "button" : "submit"}
+            onClick={busy ? () => stop() : undefined}
+            disabled={!busy && (!input.trim() || !apiKey)}
+            title={busy ? UI_LABELS.director.arreter : UI_LABELS.director.envoyer}
+            aria-label={busy ? UI_LABELS.director.arreter : UI_LABELS.director.envoyer}
             className="touch-44 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] transition-all hover:bg-[var(--accent-strong)] active:scale-95 disabled:opacity-40"
           >
-            {busy ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
+            {busy ? <Square size={14} className="fill-current" /> : <SendHorizontal size={16} />}
           </button>
         </div>
       </form>

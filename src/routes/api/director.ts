@@ -425,6 +425,9 @@ export const Route = createFileRoute("/api/director")({
                   messages: conversation as never,
                   tools: tools as never,
                   stopWhen: stepCountIs(1),
+                  // The client's Stop button aborts the request: forward it so
+                  // the provider calls stop too (no orphaned generations).
+                  abortSignal: request.signal,
                   headers: {
                     "x-opencode-session": sessionId,
                     "User-Agent": "lilium-studio-director/1.0",
