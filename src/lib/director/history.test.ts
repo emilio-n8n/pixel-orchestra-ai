@@ -48,10 +48,10 @@ describe("sanitizeUiMessages", () => {
     const out = sanitizeUiMessages([msg({ parts: [part] as never })]);
     expect(JSON.stringify(out[0].parts[0])).toBe(JSON.stringify(part));
   });
-  it("keeps input-available calls that already carry output", () => {
+  it("rewrites non-terminal states even when a stray output is present", () => {
     const part = toolPart({ state: "input-available", output: { id: "a1" } });
     const out = sanitizeUiMessages([msg({ parts: [part] as never })]);
-    expect((out[0].parts[0] as { state: string }).state).toBe("input-available");
+    expect((out[0].parts[0] as { state: string }).state).toBe("output-error");
   });
   it("ignores user messages and text-only assistant messages", () => {
     const user = msg({ id: "u", role: "user", parts: [{ type: "text", text: "hi" }] });
@@ -67,5 +67,88 @@ describe("sanitizeUiMessages", () => {
     const out = sanitizeUiMessages(mixed);
     expect((out[1].parts[0] as { state: string }).state).toBe("output-error");
     expect((out[1].parts[1] as { type: string }).type).toBe("text");
+  });
+  it("gives a rewritten orphan a JSON-object input (deepseek rejects missing arguments)", () => {
+    const out = sanitizeUiMessages([
+      msg({
+        parts: [
+          { type: "tool-generate_image", toolCallId: "call_1", state: "input-streaming" },
+        ] as never,
+      }),
+    ]);
+    const p = out[0].parts[0] as { state: string; input: unknown };
+    expect(p.state).toBe("output-error");
+    expect(p.input).toEqual({});
+  });
+  it("parses a raw (unparsed) input string back into an object", () => {
+    const out = sanitizeUiMessages([
+      msg({
+        parts: [
+          {
+            type: "tool-generate_image",
+            toolCallId: "call_1",
+            state: "input-available",
+            rawInput: '{"prompt":"x"}',
+          },
+        ] as never,
+      }),
+    ]);
+    const p = out[0].parts[0] as { input: unknown };
+    expect(p.input).toEqual({ prompt: "x" });
+  });
+  it("repairs an output-error part that lost its input", () => {
+    const out = sanitizeUiMessages([
+      msg({
+        parts: [
+          {
+            type: "tool-list_timeline",
+            toolCallId: "call_1",
+            state: "output-error",
+            errorText: "x",
+          },
+        ] as never,
+      }),
+    ]);
+    expect((out[0].parts[0] as { input: unknown }).input).toEqual({});
+  });
+  it("normalizes a string input on a terminal part", () => {
+    const out = sanitizeUiMessages([
+      msg({
+        parts: [
+          {
+            type: "tool-list_timeline",
+            toolCallId: "call_1",
+            state: "output-error",
+            input: '{"track":"Video"}',
+            errorText: "x",
+          },
+        ] as never,
+      }),
+    ]);
+    expect((out[0].parts[0] as { input: unknown }).input).toEqual({ track: "Video" });
+  });
+  it("repairs output-available without an output field", () => {
+    const out = sanitizeUiMessages([
+      msg({ parts: [toolPart({ state: "output-available", output: undefined })] as never }),
+    ]);
+    const p = out[0].parts[0] as { output: unknown; input: unknown };
+    expect(p.output).toBeNull();
+    expect(p.input).toEqual({ prompt: "x" });
+  });
+  it("rewrites tool parts with an unknown state", () => {
+    const out = sanitizeUiMessages([msg({ parts: [toolPart({ state: undefined })] as never })]);
+    expect((out[0].parts[0] as { state: string }).state).toBe("output-error");
+  });
+  it("drops parts the SDK cannot convert (source-url) but keeps the rest", () => {
+    const out = sanitizeUiMessages([
+      msg({
+        parts: [
+          { type: "source-url", sourceId: "s1", url: "https://x" },
+          { type: "text", text: "done" },
+        ] as never,
+      }),
+    ]);
+    expect(out[0].parts).toHaveLength(1);
+    expect((out[0].parts[0] as { type: string }).type).toBe("text");
   });
 });
