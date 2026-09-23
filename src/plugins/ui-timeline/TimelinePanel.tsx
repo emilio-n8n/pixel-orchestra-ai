@@ -32,6 +32,8 @@ import {
   isHttpUrl,
   formatTimeMs as fmt,
   renderTimelineFrame,
+  topmostActiveVideoClip,
+  VIDEO_TRACKS,
   runExport,
   pickExportMime,
   progressFraction,
@@ -50,7 +52,7 @@ import {
 } from "@/lib/ui/labels";
 import { EmptyState } from "@/components/ui/empty-state";
 
-const TRACKS = ["Video", "Audio", "Music", "SFX", "Subtitles"] as const;
+const TRACKS = [...VIDEO_TRACKS, "Audio", "Music", "SFX", "Subtitles"] as const;
 const AUDIO_TRACKS = new Set(["Audio", "Music", "SFX"]);
 const PX_PER_MS = 0.08;
 
@@ -319,12 +321,7 @@ export function TimelinePanel() {
   const activeHtmlIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!playing && !exporting) return;
-    const active = clipsRef.current.find(
-      (c) =>
-        c.assets?.kind === "html" &&
-        playhead >= c.start_ms &&
-        playhead < c.start_ms + c.duration_ms,
-    );
+    const active = topmostActiveVideoClip(clipsRef.current, playhead, "html");
     if ((active?.id ?? null) !== activeHtmlIdRef.current) {
       activeHtmlIdRef.current = active?.id ?? null;
       setActiveHtmlClip(active ?? null);
@@ -1090,10 +1087,7 @@ export function TimelinePanel() {
       paintPlayhead(p);
       mirrorPlayheadUi(p);
       // Card activation on the exact frame (no 100 ms mirror lag).
-      const htmlActive =
-        clipsRef.current.find(
-          (c) => c.assets?.kind === "html" && p >= c.start_ms && p < c.start_ms + c.duration_ms,
-        ) ?? null;
+      const htmlActive = topmostActiveVideoClip(clipsRef.current, p, "html");
       if ((htmlActive?.id ?? null) !== activeHtmlIdRef.current) {
         activeHtmlIdRef.current = htmlActive?.id ?? null;
         setActiveHtmlClip(htmlActive);
@@ -1113,7 +1107,11 @@ export function TimelinePanel() {
     const map = videoElsRef.current;
     const live = new Set<string>();
     for (const c of clips) {
-      if (c.track !== "Video" || c.assets?.kind !== "video") continue;
+      if (
+        !VIDEO_TRACKS.includes(c.track as (typeof VIDEO_TRACKS)[number]) ||
+        c.assets?.kind !== "video"
+      )
+        continue;
       const url = c.assets.url;
       if (!isHttpUrl(url)) continue;
       live.add(c.id);

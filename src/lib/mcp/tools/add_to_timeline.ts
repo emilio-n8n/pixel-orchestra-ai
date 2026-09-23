@@ -10,7 +10,7 @@ export default defineTool({
   inputSchema: {
     project_id: z.string(),
     asset_id: z.string(),
-    track: z.enum(["Video", "Audio", "Music", "SFX", "Subtitles"]),
+    track: z.enum(["Video", "Video 2", "Video 3", "Audio", "Music", "SFX", "Subtitles"]),
     start_ms: z.number().int().optional(),
     duration_ms: z.number().int().optional(),
   },

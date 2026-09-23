@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   Library,
   ListVideo,
+  Move,
   Music,
   Plug,
   Sparkles,
@@ -81,6 +82,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_assets: "Consultation de la médiathèque",
   list_models: "Sélection du moteur créatif",
   preview_frame: "Frame vérifiée à l'œil",
+  set_clip_transform: "Transform appliqué",
 };
 
 export function toolLabel(rawType: string): string {
@@ -112,6 +114,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   list_assets: Library,
   list_models: Sparkles,
   preview_frame: Eye,
+  set_clip_transform: Move,
 };
 
 export function toolIcon(rawType: string): LucideIcon {
@@ -137,7 +140,9 @@ export function kindLabel(kind: string): string {
 }
 
 export const TRACK_LABELS: Record<string, string> = {
-  Video: "Vidéo",
+  Video: "Vidéo 1",
+  "Video 2": "Vidéo 2",
+  "Video 3": "Vidéo 3",
   Audio: "Audio",
   Music: "Musique",
   SFX: "Effets",
@@ -413,6 +418,8 @@ export const UI_LABELS = {
     mediaSansUrl: "Média sans URL signée — régénérez la voix ou réimportez le fichier",
     transcriptionVide: "Transcription vide — l’audio est peut-être silencieux ou illisible",
     planIntrouvable: "Plan introuvable — vérifiez l’identifiant du clip",
+    transformHorsBornes: (min: number, max: number) =>
+      `Valeur hors bornes — utilisez un nombre entre ${min} et ${max}`,
     frameChargement: "Impossible de lire la timeline — réessayez",
     frameVision: "Analyse visuelle impossible — réessayez",
     frameImageInvalide: "Image de vérification invalide ou trop lourde",

@@ -12,6 +12,7 @@ import { exportErrorMessage, exportFileName, exportPhaseLabel } from "@/lib/ui/l
 import {
   blackFadeAlpha,
   clipLabel,
+  clipTransform,
   dissolveMix,
   envelopeForClip,
   ExportError,
@@ -26,6 +27,8 @@ import {
   renderTimelineFrame,
   subtitleLayout,
   throwIfCancelled,
+  topmostActiveVideoClip,
+  transformRect,
   volAt,
   AUDIO_LEAD_S,
   ENVELOPE_STEP_MS,
@@ -403,10 +406,10 @@ describe("progressFraction — exact phase weights", () => {
 function mockCtx() {
   const calls: Array<{ op: string; args: unknown[] }> = [];
   const fills: string[] = [];
+  const alphas: number[] = [];
   const ctx = {
     calls,
     fills,
-    globalAlpha: 1,
     font: "",
     textAlign: "",
     textBaseline: "",
@@ -429,6 +432,15 @@ function mockCtx() {
       return { width: t.length * 10 };
     },
   };
+  Object.defineProperty(ctx, "globalAlpha", {
+    set(v: number) {
+      alphas.push(v);
+      calls.push({ op: "globalAlpha", args: [v] });
+    },
+    get() {
+      return alphas[alphas.length - 1] ?? 1;
+    },
+  });
   Object.defineProperty(ctx, "fillStyle", {
     set(v: string) {
       fills.push(v);
@@ -564,5 +576,120 @@ describe("previewFrameTime — Director preview_frame capture time", () => {
   });
   it("survives a zero-duration clip", () => {
     expect(previewFrameTime({ start_ms: 500, duration_ms: 0 })).toBe(500);
+  });
+});
+
+describe("clipTransform — static clip transform (meta.transform)", () => {
+  it("defaults to untouched (fit, centered, opaque)", () => {
+    expect(clipTransform(clip())).toEqual({ scale: 1, x: 0.5, y: 0.5, opacity: 1 });
+  });
+  it("reads meta.transform values", () => {
+    const c = clip({ meta: { transform: { scale: 0.35, x: 0.8, y: 0.2, opacity: 0.6 } } });
+    expect(clipTransform(c)).toEqual({ scale: 0.35, x: 0.8, y: 0.2, opacity: 0.6 });
+  });
+  it("clamps out-of-range and non-finite values", () => {
+    const c = clip({ meta: { transform: { scale: 99, x: -5, y: Number.NaN, opacity: -1 } } });
+    const t = clipTransform(c);
+    expect(t.scale).toBe(4);
+    expect(t.x).toBe(-1);
+    expect(t.y).toBe(0.5);
+    expect(t.opacity).toBe(0);
+  });
+});
+
+describe("transformRect — fit then scale around the frame center", () => {
+  it("centers a fitted 16:9 source on a 1920×1080 frame", () => {
+    const r = transformRect({ scale: 1, x: 0.5, y: 0.5, opacity: 1 }, 1920, 1080, 1920, 1080);
+    expect(r).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
+  });
+  it("scales a PiP around the requested center", () => {
+    const r = transformRect({ scale: 0.35, x: 0.8, y: 0.2, opacity: 1 }, 1920, 1080, 1920, 1080);
+    expect(r.w).toBeCloseTo(672);
+    expect(r.h).toBeCloseTo(378);
+    expect(r.x).toBeCloseTo(1536 - 336);
+    expect(r.y).toBeCloseTo(216 - 189);
+  });
+  it("letterboxes a portrait source before scaling", () => {
+    const r = transformRect({ scale: 1, x: 0.5, y: 0.5, opacity: 1 }, 1920, 1080, 1080, 1920);
+    expect(r.w).toBeCloseTo(607.5);
+    expect(r.h).toBeCloseTo(1080);
+    expect(r.x).toBeCloseTo((1920 - 607.5) / 2);
+    expect(r.y).toBeCloseTo(0);
+  });
+});
+
+describe("renderTimelineFrame — multi-track compositing", () => {
+  it("draws the base track first, then the overlay (Video 2) on top", () => {
+    const base = imgClip({ id: "base", track: "Video", start_ms: 0, duration_ms: 3000 });
+    const pip = imgClip({
+      id: "pip",
+      track: "Video 2",
+      start_ms: 0,
+      duration_ms: 3000,
+      meta: { transform: { scale: 0.35, x: 0.8, y: 0.2, opacity: 1 } },
+    });
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [pip, base],
+      ms: 1000,
+      getImage: () => ({ complete: true, naturalWidth: 1920, naturalHeight: 1080 }) as never,
+    });
+    const draws = ctx.calls.filter((c) => c.op === "drawImage");
+    expect(draws.length).toBe(2);
+    // base = full frame, overlay = PiP rect
+    expect(draws[0].args[1]).toBe(0);
+    expect(draws[0].args[3]).toBe(1920);
+    expect(draws[1].args[3]).toBeCloseTo(672);
+    expect(draws[1].args[1]).toBeCloseTo(1536 - 336);
+  });
+  it("applies clip opacity to the overlay", () => {
+    const base = imgClip({ id: "base", track: "Video", start_ms: 0, duration_ms: 3000 });
+    const pip = imgClip({
+      id: "pip",
+      track: "Video 2",
+      start_ms: 0,
+      duration_ms: 3000,
+      meta: { transform: { opacity: 0.5 } },
+    });
+    const ctx = mockCtx();
+    renderTimelineFrame({
+      ctx: ctx as unknown as CanvasRenderingContext2D,
+      width: 1920,
+      height: 1080,
+      clips: [base, pip],
+      ms: 1000,
+      getImage: () => ({ complete: true, naturalWidth: 1920, naturalHeight: 1080 }) as never,
+    });
+    const alphas = ctx.calls.filter((c) => c.op === "globalAlpha").map((c) => c.args[0]);
+    expect(alphas).toContain(0.5);
+  });
+});
+
+describe("topmostActiveVideoClip — overlay priority", () => {
+  const at = (id: string, track: string, start: number, dur: number, kind = "image") =>
+    imgClip({
+      id,
+      track,
+      start_ms: start,
+      duration_ms: dur,
+      assets: { kind, url: `https://cdn.example/${id}.png`, prompt: null },
+    });
+  it("prefers the topmost track when several clips overlap", () => {
+    const clips = [at("base", "Video", 0, 5000), at("over", "Video 2", 0, 5000)];
+    expect(topmostActiveVideoClip(clips, 1000)?.id).toBe("over");
+  });
+  it("falls back to the base track outside the overlay range", () => {
+    const clips = [at("base", "Video", 0, 5000), at("over", "Video 2", 1000, 1000)];
+    expect(topmostActiveVideoClip(clips, 3000)?.id).toBe("base");
+  });
+  it("returns null when nothing is active", () => {
+    expect(topmostActiveVideoClip([at("base", "Video", 0, 1000)], 5000)).toBeNull();
+  });
+  it("filters on the asset kind", () => {
+    const clips = [at("base", "Video", 0, 5000, "html"), at("over", "Video 2", 0, 5000, "image")];
+    expect(topmostActiveVideoClip(clips, 1000, "html")?.id).toBe("base");
   });
 });

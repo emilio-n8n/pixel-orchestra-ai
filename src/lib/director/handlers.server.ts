@@ -1006,6 +1006,63 @@ export async function updateTimelineClip(
 }
 
 /**
+ * Static transform of a clip (meta.transform): scale + normalized center
+ * position (0.5,0.5 = centered) + opacity. Used for PiP, split-screen and
+ * B-roll on the overlay video tracks; the preview and the export read the
+ * same meta (clipTransform in ui-timeline/export.ts).
+ */
+export async function setClipTransform(
+  ctx: DirectorCtx,
+  args: {
+    clip_id: string;
+    scale?: number;
+    x?: number;
+    y?: number;
+    opacity?: number;
+    reset?: boolean;
+  },
+) {
+  return recordJob(ctx, "set_clip_transform", args.clip_id, async () => {
+    const { data: existing, error: getErr } = await ctx.supabase
+      .from("timeline_clips")
+      .select("id, track, start_ms, duration_ms, meta")
+      .eq("id", args.clip_id)
+      .eq("owner_id", ctx.userId)
+      .eq("project_id", ctx.projectId)
+      .maybeSingle();
+    if (getErr || !existing) throw new Error(UI_LABELS.director.planIntrouvable);
+
+    const meta = (existing.meta ?? {}) as Record<string, unknown>;
+    if (args.reset) {
+      delete meta.transform;
+    } else {
+      const prev = (meta.transform ?? {}) as Record<string, unknown>;
+      const next: Record<string, number> = {};
+      const num = (v: unknown, fallback: number, min: number, max: number) => {
+        if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+        if (v < min || v > max) throw new Error(UI_LABELS.director.transformHorsBornes(min, max));
+        return v;
+      };
+      next.scale = num(args.scale, typeof prev.scale === "number" ? prev.scale : 1, 0.05, 4);
+      next.x = num(args.x, typeof prev.x === "number" ? prev.x : 0.5, -1, 2);
+      next.y = num(args.y, typeof prev.y === "number" ? prev.y : 0.5, -1, 2);
+      next.opacity = num(args.opacity, typeof prev.opacity === "number" ? prev.opacity : 1, 0, 1);
+      meta.transform = next;
+    }
+
+    const { data, error } = await ctx.supabase
+      .from("timeline_clips")
+      .update({ meta })
+      .eq("id", args.clip_id)
+      .eq("owner_id", ctx.userId)
+      .select("id, track, start_ms, duration_ms, asset_id, meta")
+      .single();
+    if (error) throw new Error(error.message);
+    return { ...data, transform: args.reset ? null : meta.transform };
+  });
+}
+
+/**
  * Swap the asset of an existing clip in place (keeps its position). If the
  * new asset is audio with a known real duration, the clip is resized to it.
  */

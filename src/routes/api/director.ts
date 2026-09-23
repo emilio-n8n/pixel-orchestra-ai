@@ -53,6 +53,9 @@ function isToolPart(p: unknown): p is UiPart {
  * model turns it into text the Director can read back in the tool result
  * (OpenAI-compatible tool messages cannot carry images).
  */
+/** Timeline tracks the Director can place clips on (Video 2/3 = overlays). */
+const TRACK_ENUM = z.enum(["Video", "Video 2", "Video 3", "Audio", "Music", "SFX", "Subtitles"]);
+
 const VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
 const VISION_SYSTEM =
   "Tu regardes une frame 1280×720 d'une timeline vidéo, capturée à un instant précis. " +
@@ -212,6 +215,8 @@ export const Route = createFileRoute("/api/director")({
           "\n\n" +
           'HTML CARDS (generate_html_card): for titles, intros, outros, scene transitions, lower thirds and any typographic/graphic overlay, ALWAYS prefer an ANIMATED HTML card over a static image — the timeline renders the card frame-by-frame, so its CSS animations (entrance + ambient motion) become real video motion. Describe the motion explicitly in the brief (e.g. "fade-in + slide-up title with a slow gradient shift and pulsing glow"). The card generator produces the keyframes itself; give it the text, the vibe, the colors and the motion you want. Only use generate_image for actual imagery (scenes, subjects, backgrounds) — not for text titles.' +
           "\n\n" +
+          'TRACKS & OVERLAYS: video tracks are Video (base), Video 2 and Video 3 (overlays, composited on top in that order). Use Video 2/Video 3 for B-roll, picture-in-picture and split-screen: add_to_timeline with track "Video 2", then set_clip_transform to place it (PiP top-right = scale 0.35, x 0.8, y 0.2). Never let two clips overlap on the SAME track (the anti-overlap system shifts them) — overlapping across tracks is normal and intended.' +
+          "\n\n" +
           'VISUAL CHECK (preview_frame): you can look at an actual frame of the timeline. Call preview_frame with a clip_id (optionally t_ms — ABSOLUTE timeline ms — and focus, e.g. "is the title text cut off?") and you get back a vision-model description of what is really on screen: framing, on-screen text, colors, overlaps, glitches. Use it after generating or placing a title card / image, before declaring a visual result done, or whenever the user doubts what the frame looks like.' +
           "\n\n" +
           'TIMELINE EDITING: to move or resize an existing clip use update_timeline_clip (start_ms to shift it, duration_ms to resize, track to move it, fade_in_ms/fade_out_ms for volume fades) — never remove+re-add for a simple edit. To swap an asset inside an existing clip use replace_clip_asset (e.g. a regenerated voiceover: generate_voice first, then replace_clip_asset) — it keeps the clip position and resizes to the real duration. Only remove_from_timeline when a clip must disappear (pass ripple:true to close the gap — later clips on the track slide left). Subtitles (generate_subtitles) must match the voice duration exactly; do not resize subtitle clips manually. When the user asks to "start the music at Xs with a fade-in", use update_timeline_clip with start_ms + fade_in_ms on the music clip.' +
@@ -304,7 +309,7 @@ export const Route = createFileRoute("/api/director")({
               "Place an existing asset on a timeline track. For audio assets, the real duration_ms from the asset metadata is used automatically for overlap detection (never underestimated); pass duration_ms only if you intentionally want a longer clip. If the clip would overlap existing clips on the same track, it is automatically shifted. Check the _warning field in the result — if present, the clip was moved or its duration was adjusted. Audio clips (Audio, Music, SFX) should never overlap on the same track.",
             inputSchema: z.object({
               asset_id: z.string(),
-              track: z.enum(["Video", "Audio", "Music", "SFX", "Subtitles"]),
+              track: TRACK_ENUM,
               start_ms: z.number().int().optional(),
               duration_ms: z.number().int().optional(),
             }),
@@ -375,11 +380,24 @@ export const Route = createFileRoute("/api/director")({
               clip_id: z.string(),
               start_ms: z.number().int().optional(),
               duration_ms: z.number().int().optional(),
-              track: z.enum(["Video", "Audio", "Music", "SFX", "Subtitles"]).optional(),
+              track: TRACK_ENUM.optional(),
               fade_in_ms: z.number().int().min(0).optional(),
               fade_out_ms: z.number().int().min(0).optional(),
             }),
             execute: (args) => H.updateTimelineClip(ctx, args),
+          }),
+          set_clip_transform: tool({
+            description:
+              "Static transform of a clip: scale (1 = fit the frame, 0.35 = picture-in-picture, 2 = punch-in), x/y (normalized CENTER position, 0.5/0.5 = centered, 0.8/0.2 = top-right), opacity (0..1, 0 hides it). Use it for PiP, split-screen and B-roll overlays on Video 2 / Video 3. Pass reset:true to clear the transform. Preview and export both apply it.",
+            inputSchema: z.object({
+              clip_id: z.string(),
+              scale: z.number().min(0.05).max(4).optional(),
+              x: z.number().min(-1).max(2).optional(),
+              y: z.number().min(-1).max(2).optional(),
+              opacity: z.number().min(0).max(1).optional(),
+              reset: z.boolean().optional(),
+            }),
+            execute: (args) => H.setClipTransform(ctx, args),
           }),
           replace_clip_asset: tool({
             description:

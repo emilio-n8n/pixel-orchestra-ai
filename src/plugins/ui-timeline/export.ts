@@ -59,7 +59,15 @@ export const AUDIO_BITS_PER_SECOND = 128_000;
 /** Gain envelope resolution — matches the ducking curve step (25ms). */
 export const ENVELOPE_STEP_MS = 25;
 
-const TRACKS_REQUIRING_URL = new Set(["Video", "Audio", "Music", "SFX"]);
+const AUDIO_TRACK_NAMES = ["Audio", "Music", "SFX"];
+/**
+ * Video tracks, bottom → top. "Video" is the base track (existing data),
+ * "Video 2/3" are overlay tracks (B-roll, PiP, split-screen) — they are
+ * composited in this order, each with its own dissolves.
+ */
+export const VIDEO_TRACKS = ["Video", "Video 2", "Video 3"] as const;
+
+const TRACKS_REQUIRING_URL = new Set([...VIDEO_TRACKS, ...AUDIO_TRACK_NAMES]);
 
 const MIME_CANDIDATES = [
   "video/mp4;codecs=avc1,mp4a",
@@ -351,6 +359,74 @@ function makeExportCanvas(): HTMLCanvasElement {
   return canvas;
 }
 
+export interface ClipTransform {
+  /** 1 = fit the frame; 0.35 = PiP; 2 = punch-in. */
+  scale: number;
+  /** Normalized CENTER position on the frame (0.5, 0.5 = centered). */
+  x: number;
+  y: number;
+  opacity: number;
+}
+
+const clampNum = (v: unknown, fallback: number, min: number, max: number): number =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(Math.max(v, min), max) : fallback;
+
+/**
+ * Static transform of a clip, stored in `meta.transform`
+ * ({scale, x, y, opacity}) by set_clip_transform. Defaults = untouched.
+ */
+export function clipTransform(clip: TimelineClip): ClipTransform {
+  const t = (clip.meta?.transform ?? {}) as Record<string, unknown>;
+  return {
+    scale: clampNum(t.scale, 1, 0.05, 4),
+    x: clampNum(t.x, 0.5, -1, 2),
+    y: clampNum(t.y, 0.5, -1, 2),
+    opacity: clampNum(t.opacity, 1, 0, 1),
+  };
+}
+
+/**
+ * Destination rect of a source (iw×ih) inside the frame: fit, then apply
+ * the clip transform (scale around the frame center + normalized center
+ * position). Single source for preview, export and tests.
+ */
+export function transformRect(
+  transform: ClipTransform,
+  width: number,
+  height: number,
+  iw: number,
+  ih: number,
+): { x: number; y: number; w: number; h: number } {
+  const fit = Math.min(width / iw, height / ih);
+  const w = iw * fit * transform.scale;
+  const h = ih * fit * transform.scale;
+  return { x: transform.x * width - w / 2, y: transform.y * height - h / 2, w, h };
+}
+
+/**
+ * Topmost active clip on the video tracks at `ms` (Video 3 > Video 2 >
+ * Video) — the one whose overlay/iframe is visible. `kind` optionally
+ * filters on the asset kind (e.g. "html" cards).
+ */
+export function topmostActiveVideoClip(
+  clips: TimelineClip[],
+  ms: number,
+  kind?: string,
+): TimelineClip | null {
+  for (let i = VIDEO_TRACKS.length - 1; i >= 0; i--) {
+    const track = VIDEO_TRACKS[i];
+    const found = clips.find(
+      (c) =>
+        c.track === track &&
+        (!kind || c.assets?.kind === kind) &&
+        ms >= c.start_ms &&
+        ms < c.start_ms + c.duration_ms,
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
 /* ---------------- canvas renderer (preview + file share it) ---------------- */
 
 export interface RenderFrameOpts {
@@ -375,33 +451,24 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, width, height);
 
-  // Video / image / video-file / HTML clips — dissolve while two overlap.
-  const activeVideos = clips
-    .filter((c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms)
-    .sort((a, b) => a.start_ms - b.start_ms);
-
+  // Video / image / video-file / HTML clips — dissolves happen WITHIN a
+  // track; tracks composite bottom → top (Video, then Video 2/3 overlays).
   const drawV = (c: TimelineClip, alpha: number) => {
+    const transform = clipTransform(c);
     ctx.save();
-    if (alpha < 1) ctx.globalAlpha = clamp01(alpha);
+    const a = clamp01(alpha) * transform.opacity;
+    if (a < 1) ctx.globalAlpha = a;
     if (c.assets?.kind === "image" && c.assets.url) {
       const img = getImage(c.assets.url);
       if (img && img.complete && img.naturalWidth) {
-        const iw = img.naturalWidth;
-        const ih = img.naturalHeight;
-        const scale = Math.min(width / iw, height / ih);
-        const w = iw * scale;
-        const h = ih * scale;
-        ctx.drawImage(img, (width - w) / 2, (height - h) / 2, w, h);
+        const r = transformRect(transform, width, height, img.naturalWidth, img.naturalHeight);
+        ctx.drawImage(img, r.x, r.y, r.w, r.h);
       }
     } else if (c.assets?.kind === "video" && videoFrameMap) {
       const ve = videoFrameMap.get(c.id);
       if (ve && ve.readyState >= 2 && ve.videoWidth > 0) {
-        const vw = ve.videoWidth;
-        const vh = ve.videoHeight;
-        const scale = Math.min(width / vw, height / vh);
-        const w = vw * scale;
-        const h = vh * scale;
-        ctx.drawImage(ve, (width - w) / 2, (height - h) / 2, w, h);
+        const r = transformRect(transform, width, height, ve.videoWidth, ve.videoHeight);
+        ctx.drawImage(ve, r.x, r.y, r.w, r.h);
       }
     } else if (c.assets?.kind === "html" && htmlVideoMap) {
       const vidUrl = htmlVideoMap.get(c.id);
@@ -414,22 +481,40 @@ export function renderTimelineFrame(opts: RenderFrameOpts): void {
           ve.muted = true;
           htmlVideoEls.set(c.id, ve);
         }
-        if (ve.readyState >= 2) ctx.drawImage(ve, 0, 0, width, height);
+        if (ve.readyState >= 2) {
+          const r = transformRect(transform, width, height, width, height);
+          ctx.drawImage(ve, r.x, r.y, r.w, r.h);
+        }
       }
     }
     ctx.restore();
   };
 
-  if (activeVideos.length >= 2) {
-    const a = activeVideos[activeVideos.length - 2];
-    const b = activeVideos[activeVideos.length - 1];
-    const { alphaA, alphaB } = dissolveMix(ms, a.start_ms, a.duration_ms, b.start_ms);
-    drawV(a, alphaA);
-    drawV(b, alphaB);
-  } else if (activeVideos.length === 1) {
-    const c = activeVideos[0];
-    drawV(c, 1);
-    const blackAlpha = blackFadeAlpha(ms, c);
+  const activeOn = (track: string) =>
+    clips
+      .filter((c) => c.track === track && ms >= c.start_ms && ms < c.start_ms + c.duration_ms)
+      .sort((a, b) => a.start_ms - b.start_ms);
+
+  let baseFadeClip: TimelineClip | undefined;
+  for (const track of VIDEO_TRACKS) {
+    const activeVideos = activeOn(track);
+    if (activeVideos.length === 0) continue;
+    if (activeVideos.length >= 2) {
+      const a = activeVideos[activeVideos.length - 2];
+      const b = activeVideos[activeVideos.length - 1];
+      const { alphaA, alphaB } = dissolveMix(ms, a.start_ms, a.duration_ms, b.start_ms);
+      drawV(a, alphaA);
+      drawV(b, alphaB);
+    } else {
+      const c = activeVideos[0];
+      drawV(c, 1);
+      if (track === "Video") baseFadeClip = c;
+    }
+  }
+
+  // Fade to/from black on the base track veils the whole composite.
+  if (baseFadeClip) {
+    const blackAlpha = blackFadeAlpha(ms, baseFadeClip);
     if (blackAlpha > 0) {
       ctx.fillStyle = `rgba(0,0,0,${blackAlpha})`;
       ctx.fillRect(0, 0, width, height);
@@ -586,7 +671,10 @@ export async function captureTimelineFrame(
   const created: HTMLVideoElement[] = [];
   try {
     const active = clips.filter(
-      (c) => c.track === "Video" && ms >= c.start_ms && ms < c.start_ms + c.duration_ms,
+      (c) =>
+        (VIDEO_TRACKS as readonly string[]).includes(c.track) &&
+        ms >= c.start_ms &&
+        ms < c.start_ms + c.duration_ms,
     );
     for (const c of active) {
       const url = c.assets?.url;
@@ -608,7 +696,7 @@ export async function captureTimelineFrame(
       getImage: (u) => images.get(u),
       videoFrameMap: videos,
     });
-    const htmlClip = active.find((c) => c.assets?.kind === "html" && isHttpUrl(c.assets.url));
+    const htmlClip = topmostActiveVideoClip(clips, ms, "html");
     if (htmlClip) {
       const card = await captureHtmlCardFrame(htmlClip, ms - htmlClip.start_ms);
       ctx.drawImage(card, 0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
@@ -1240,7 +1328,8 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
     // releases them via cleanup() below.
     mediaReady.videos.forEach((ve, id) => videoEls.set(id, ve));
     for (const c of clips) {
-      if (c.track !== "Video" || c.assets?.kind !== "video") continue;
+      if (!(VIDEO_TRACKS as readonly string[]).includes(c.track) || c.assets?.kind !== "video")
+        continue;
       const url = c.assets.url;
       if (!isHttpUrl(url)) continue;
       // Reuse the probed element (already loaded) when available.
@@ -1300,10 +1389,7 @@ export async function runExport(opts: RunExportOpts): Promise<RunExportResult> {
         const p = Math.min(totalMs, performance.now() - startedAt);
         // Restart card videos at clip activation — mirrors the preview
         // iframe srcdoc reload at the same point.
-        const active =
-          clips.find(
-            (c) => c.assets?.kind === "html" && p >= c.start_ms && p < c.start_ms + c.duration_ms,
-          ) ?? null;
+        const active = topmostActiveVideoClip(clips, p, "html");
         const activeId = active ? active.id : null;
         if (activeId !== activeHtmlId) {
           const prev = activeHtmlId ? htmlVideoEls.get(activeHtmlId) : undefined;
