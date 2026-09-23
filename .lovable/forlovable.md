@@ -971,3 +971,39 @@ orphelins → `output-error` FR `outilInterrompu`) avant
 `convertToModelMessages` ; log serveur complet (corps provider +
 forme du tour, approuvé) ; 6 tests unitaires.
 **Validation** : 94 tests pass, tsc 0, lint 0 erreur.
+
+---
+
+## 2e message Director : vraie racine — tool_call sans `arguments` (2026-09-23)
+
+**Symptôme** : dans une conversation, le 1er message passe, chaque
+message suivant échoue — obligé d'ouvrir une nouvelle conversation.
+
+**Racine (reproduite contre l'API réelle)** : le 1er tour peut laisser
+un appel d'outil orphelin (part `input-streaming`/`input-available`
+sans output). `sanitizeUiMessages` le réécrivait bien en `output-error`
+mais **sans `input`** → au 2e tour, `convertToModelMessages` émet un
+`tool-call` avec `input: undefined` → l'API OpenAI-compatible
+sérialise le `tool_call` **sans `arguments`**. Le gateway (Console Go)
+tolère ce payload pour kimi, mais **deepseek-v4-flash le rejette** :
+`400 Assistant tool call function.arguments must be a JSON object.`
+D'où l'échec systématique du 2e message avec le modèle du test réel.
+
+**Bug secondaire (reproduit aussi)** : les avis de fin de tour
+(`limite`, `tronquee`) écrivaient des chunks inexistants
+(`message-start`/`message-end`) → le client rejette tout le flux
+(`Type validation failed`) → erreur brute au lieu de l'avis.
+
+**Correctif** : `sanitizeUiMessages` garantit un `input` objet JSON
+(`{}` par défaut, `rawInput` sinon) pour tout tool part non terminal,
+répare `output-available` sans `output` (`null`), et supprime les parts
+non convertibles (`source-*`…) qui faisaient échouer
+`convertToModelMessages` avant le stream ; avis de fin de tour écrits
+en `text-start/delta/end` valides (`writeNotice`) ; conversion de
+l'historique encapsulée → 422 FR actionnable au lieu d'un 500 HTML.
+
+**Validation** : `bun test` 100 pass (12 sur l'assainisseur, dont le cas
+deepseek), tsc 0, lint 0 erreur ; vérification réelle contre
+`opencode.ai/zen/go/v1` : orphelin sans input → `input: {}` →
+deepseek-v4-flash et kimi-k2.7-code répondent 200 (avant : 400
+deepseek).
