@@ -1057,3 +1057,38 @@ l’aveugle » (textes/timestamps seulement). Livré : `preview_frame`.
 client vérifié de bout en bout (harness : 2 requêtes provider, 1
 resoumission, résultat d’outil reçu) ; modèle vision vérifié contre
 l’API réelle avec data URL (HTTP 200).
+
+---
+
+## Pistes vidéo multiples + transform de clip (2026-09-23)
+
+**Roadmap (retour du Director)** : P0 n°2 = pas de B-roll / PiP /
+split-screen (une seule piste Video) et aucun transform.
+
+**Livré**
+- **Pistes** : `VIDEO_TRACKS = ["Video", "Video 2", "Video 3"]`
+  (`ui-timeline/export.ts`, source unique). « Video » reste la piste de
+  base (données existantes), Video 2/3 sont des surcouches composées
+  par-dessus. Libellés FR « Vidéo 1/2/3 » ; les lignes de la timeline
+  apparaissent automatiquement (TRACKS dérivé de VIDEO_TRACKS).
+- **Compositeur** : `renderTimelineFrame` dessine chaque piste vidéo
+  dans l’ordre (dissolves *dans* une piste, comme avant) ; le fondu au
+  noir de la piste de base voile tout le composite ; sous-titres
+  toujours au-dessus. `topmostActiveVideoClip` (Video 3 > 2 > 1) pilote
+  l’overlay iframe HTML du preview et l’activation des cartes à
+  l’export.
+- **Transform statique** : `meta.transform = {scale, x, y, opacity}`
+  (x/y = centre normalisé, 0.5/0.5 = centré), lu par `clipTransform` et
+  appliqué par `transformRect` — preview, export et capture
+  `preview_frame` partagent le même code. Outil Director
+  `set_clip_transform` (+ MCP) avec bornes FR (`transformHorsBornes`),
+  `reset:true` pour effacer.
+- **Outils** : `add_to_timeline` / `update_timeline_clip` acceptent
+  Video 2/3 (enum partagé `TRACK_ENUM`, MCP aligné) ; system prompt
+  § TRACKS & OVERLAYS (B-roll, PiP = scale 0.35, x 0.8, y 0.2).
+- **Tests** : +12 (clipTransform, transformRect, composition multi-pistes
+  avec ordre de dessin et opacité, priorité d’overlay, `previewFrameTime`).
+
+**Validation** : `bun test` 119 pass, tsc 0, lint 0 erreur. Pas de test
+visuel navigateur dans ce sandbox : à vérifier d’un coup d’œil sur une
+PiP (Video 2 + set_clip_transform).
