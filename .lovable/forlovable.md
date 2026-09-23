@@ -1092,3 +1092,34 @@ split-screen (une seule piste Video) et aucun transform.
 **Validation** : `bun test` 119 pass, tsc 0, lint 0 erreur. Pas de test
 visuel navigateur dans ce sandbox : à vérifier d’un coup d’œil sur une
 PiP (Video 2 + set_clip_transform).
+
+---
+
+## Keyframes : transforms animés par clip (2026-09-23)
+
+**Roadmap (retour du Director)** : P0 n°3 — pas d’animation sur les
+clips (tout statique sauf les cartes HTML).
+
+**Modèle** : `meta.transform.keyframes = [{t_ms, scale?, x?, y?,
+opacity?}]`, `t_ms` **local au clip** (0 = début) — déplacer le clip
+garde l’animation relative. Propriétés omises → valeur statique du
+transform ; interpolation linéaire, bornée aux extrémités.
+
+**Rendu** : `clipKeyframes` (validation/tri/plafond 50, entrées
+cassées ignorées) + `clipTransformAt` (source unique) ; le compositeur
+`renderTimelineFrame` et la capture `preview_frame` dessinent la valeur
+interpolée → **preview, export et vision partagent le même calcul**.
+L’overlay iframe des cartes HTML reçoit le même transform en CSS
+(translate % + scale + opacity, mis à jour à chaque tick) : parité
+preview/export conservée pour les cartes animées.
+
+**Outils** : `set_clip_keyframes` (Director + MCP) — bornes FR,
+`reset:true`/`[]` pour retirer l’animation sans toucher au transform
+statique ; system prompt § KEYFRAMES (zoom ken burns, slide-in,
+fade-in, PiP animé). Badge ◆ sur les clips animés dans la timeline.
+
+**Tests** : +11 (validation des keyframes, interpolation, bornes,
+propriétés omises, timestamps dupliqués, rendu animé au bon temps).
+
+**Validation** : `bun test` 130 pass, tsc 0, lint 0 erreur. Pas de test
+visuel navigateur : à vérifier à l’œil sur un zoom-in 1 → 1.15.
