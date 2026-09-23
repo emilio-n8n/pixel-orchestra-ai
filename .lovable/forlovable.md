@@ -1123,3 +1123,36 @@ propriétés omises, timestamps dupliqués, rendu animé au bon temps).
 
 **Validation** : `bun test` 130 pass, tsc 0, lint 0 erreur. Pas de test
 visuel navigateur : à vérifier à l’œil sur un zoom-in 1 → 1.15.
+
+---
+
+## Trim au frame, ripple et marqueurs/chapitres (2026-09-23)
+
+**Roadmap (retour du Director)** : P0 n°4 — « on ne peut que changer
+start/duration en valeurs — pas de micro-trim au frame, pas de snap »,
+pas de ripple gauche/droite, pas de marqueurs/chapitres YouTube.
+
+**Livré**
+- **Grille de frames partagée** : `src/lib/timeline/frames.ts` (30 fps)
+  — `msToFrames/framesToMs/snapToFrame/snapToNearest/formatChapterTime`,
+  sans DOM ni store : importable par le moteur d’export (navigateur) ET
+  par les outils serveur (le bundle Worker ne tire pas le moteur).
+- **`trim_clip`** (Director + MCP) : trim d’un bord au frame,
+  `edge:"in"/"out"`, `delta_frames` (positif = couper, négatif =
+  étendre), `delta_ms` aligné sur la grille, `snap` magnétique aux bords
+  de plans/0 (±100 ms), `ripple` qui referme le trou (les plans suivants
+  glissent). Bornes : 100 ms mini, jamais avant 0 ; `_warning` FR si
+  borné, `shifted_clips` sinon.
+- **Ripple gauche/droite** : `update_timeline_clip` accepte
+  `ripple:true` (déplacer un plan emmène tout ce qui suit).
+- **Marqueurs / chapitres YouTube** : table `project_markers`
+  (migration `20260923150000_project_markers.sql`, RLS + realtime) ;
+  outils `add_marker`, `list_markers` (renvoie les marqueurs + le texte
+  de chapitres prêt à coller, 1er chapitre à 0:00), `remove_marker` ;
+  affichage des marqueurs sur la timeline (drapeau + libellé, temps
+  réel). System prompt § TRIM & RIPPLE et § MARKERS & CHAPTERS.
+- **Tests** : +9 sur la grille/le snap/les chapitres (139 au total).
+
+**Validation** : `bun test` 139 pass, tsc 0, lint 0 erreur. La migration
+`project_markers` doit être appliquée par Lovable au prochain publish
+(sinon `add_marker` renvoie l’erreur Supabase en FR).
