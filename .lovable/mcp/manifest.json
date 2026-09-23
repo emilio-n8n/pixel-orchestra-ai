@@ -172,6 +172,8 @@
               "type": "string",
               "enum": [
                 "Video",
+                "Video 2",
+                "Video 3",
                 "Audio",
                 "Music",
                 "SFX",
@@ -402,6 +404,244 @@
             "clip_a_id",
             "clip_b_id",
             "ms"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "set_clip_transform",
+        "title": "Transform a clip",
+        "description": "Static transform of a clip: scale, normalized center position (0.5,0.5 = centered) and opacity. Use for PiP / split-screen / B-roll overlays. reset:true clears it.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "clip_id": {
+              "type": "string"
+            },
+            "scale": {
+              "type": "number",
+              "minimum": 0.05,
+              "maximum": 4
+            },
+            "x": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 2
+            },
+            "y": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 2
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "reset": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "project_id",
+            "clip_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "set_clip_keyframes",
+        "title": "Animate a clip transform",
+        "description": "Animate a clip transform (scale / normalized center position / opacity) over its own time. t_ms is CLIP-LOCAL (0 = clip start); omitted properties keep the static transform. reset:true removes the animation.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "clip_id": {
+              "type": "string"
+            },
+            "keyframes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "t_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "scale": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 4
+                  },
+                  "x": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 2
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 2
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "t_ms"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 50
+            },
+            "reset": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "project_id",
+            "clip_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "trim_clip",
+        "title": "Trim a clip edge (frame-accurate)",
+        "description": "Frame-accurate trim of one clip edge (30 fps). edge:'out' moves the tail, edge:'in' moves the head. snap magnetises to nearby clip edges, ripple shifts later clips to close the gap.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "clip_id": {
+              "type": "string"
+            },
+            "edge": {
+              "type": "string",
+              "enum": [
+                "in",
+                "out"
+              ]
+            },
+            "delta_ms": {
+              "type": "number"
+            },
+            "delta_frames": {
+              "type": "integer"
+            },
+            "ripple": {
+              "type": "boolean"
+            },
+            "snap": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "project_id",
+            "clip_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "add_marker",
+        "title": "Add a timeline marker / chapter",
+        "description": "Add a marker (YouTube chapter) at t_ms with a short label. list_markers returns the ready-to-paste chapter text.",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "t_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "project_id",
+            "t_ms"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_markers",
+        "title": "List markers and YouTube chapters",
+        "description": "List timeline markers ordered by time, plus the chapter text ready to paste in a YouTube description.",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "project_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "remove_marker",
+        "title": "Remove a marker",
+        "description": "Remove a timeline marker by its id (see list_markers).",
+        "annotations": {
+          "readOnlyHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string"
+            },
+            "marker_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "project_id",
+            "marker_id"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"
