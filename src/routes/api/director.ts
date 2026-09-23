@@ -46,6 +46,18 @@ function isToolPart(p: unknown): p is UiPart {
   return typeof t === "string" && (t.startsWith("tool-") || t === "dynamic-tool");
 }
 
+/**
+ * Append a notice as a text part of the streamed message. Only protocol
+ * chunks are written: `message-start`/`message-end` do not exist in the
+ * UI message protocol and make the client reject the whole stream
+ * ("Type validation failed") — i.e. the turn shows a raw error.
+ */
+function writeNotice(writer: { write: (chunk: never) => void }, id: string, text: string): void {
+  writer.write({ type: "text-start", id } as never);
+  writer.write({ type: "text-delta", id, delta: text } as never);
+  writer.write({ type: "text-end", id } as never);
+}
+
 export const Route = createFileRoute("/api/director")({
   server: {
     handlers: {
@@ -383,9 +395,17 @@ export const Route = createFileRoute("/api/director")({
         // -------------------------------------------------------------------
         const MAX_TOOL_ITERATIONS = 10;
         const startedAt = Date.now();
-        const baseConversation: unknown[] = await convertToModelMessages(
-          sanitizeUiMessages(body.messages),
-        );
+        let baseConversation: unknown[];
+        try {
+          baseConversation = await convertToModelMessages(
+            sanitizeUiMessages(Array.isArray(body.messages) ? body.messages : []),
+          );
+        } catch (err) {
+          // A history the SDK cannot rebuild must not surface as an opaque
+          // 500 (HTML error page): fail clean with an actionable FR message.
+          console.error("[/api/director] history conversion failed:", err);
+          return new Response(UI_LABELS.director.historiqueIllisible, { status: 422 });
+        }
         const toolsCalled: string[] = [];
         let iterations = 0;
 
@@ -436,16 +456,7 @@ export const Route = createFileRoute("/api/director")({
                   continue;
                 }
                 if (finishReason === "length") {
-                  const truncId = "tronquee";
-                  writer.write({ type: "message-start", id: truncId } as never);
-                  writer.write({ type: "text-start", id: truncId } as never);
-                  writer.write({
-                    type: "text-delta",
-                    id: truncId,
-                    delta: UI_LABELS.director.reponseTronquee,
-                  } as never);
-                  writer.write({ type: "text-end", id: truncId } as never);
-                  writer.write({ type: "message-end", id: truncId } as never);
+                  writeNotice(writer, "tronquee", UI_LABELS.director.reponseTronquee);
                 }
                 completed = true;
                 break;
@@ -461,13 +472,7 @@ export const Route = createFileRoute("/api/director")({
               );
 
               if (!completed) {
-                const limitId = "limite";
-                const limitText = UI_LABELS.director.limiteAtteinte;
-                writer.write({ type: "message-start", id: limitId } as never);
-                writer.write({ type: "text-start", id: limitId } as never);
-                writer.write({ type: "text-delta", id: limitId, delta: limitText } as never);
-                writer.write({ type: "text-end", id: limitId } as never);
-                writer.write({ type: "message-end", id: limitId } as never);
+                writeNotice(writer, "limite", UI_LABELS.director.limiteAtteinte);
               }
             } catch (err) {
               let detail: string;

@@ -382,6 +382,8 @@ export const UI_LABELS = {
     reponseTronquee:
       "La réponse a été tronquée (limite de longueur). Demandez la suite ou raccourcissez la consigne.",
     outilInterrompu: "Appel d’outil interrompu au tour précédent — poursuivez sans son résultat.",
+    historiqueIllisible:
+      "Historique de conversation illisible — ouvrez une nouvelle conversation et relancez votre demande.",
     reponseFournisseur: "Réponse du fournisseur",
     statutHttp: (status: number) => `HTTP ${status}`,
     erreurHttp: (service: string, status: number, extrait: string) =>
