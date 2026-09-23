@@ -130,6 +130,33 @@ export type Database = {
         }
         Relationships: []
       }
+      project_markers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          owner_id: string
+          project_id: string
+          t_ms: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string
+          owner_id: string
+          project_id: string
+          t_ms?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          owner_id?: string
+          project_id?: string
+          t_ms?: number
+        }
+        Relationships: []
+      }
       timeline_clips: {
         Row: {
           asset_id: string | null
