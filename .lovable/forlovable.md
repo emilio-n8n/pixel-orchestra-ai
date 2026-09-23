@@ -1007,3 +1007,20 @@ deepseek), tsc 0, lint 0 erreur ; vérification réelle contre
 `opencode.ai/zen/go/v1` : orphelin sans input → `input: {}` →
 deepseek-v4-flash et kimi-k2.7-code répondent 200 (avant : 400
 deepseek).
+
+---
+
+## Bouton Stop de l’Assistant (2026-09-23)
+
+**Demande** : pouvoir stopper l’agent en cours de tour.
+
+**Livré** : le bouton d’envoi du compositeur devient un bouton **Stop**
+(carré, libellé FR `arreter`) tant que le tour est en cours
+(`status === "streaming" | "submitted"`) ; clic → `stop()` de `useChat`
+annule la requête, l’état repasse en `ready` et le texte déjà reçu est
+conservé. Le serveur relaie l’annulation au provider
+(`abortSignal: request.signal` sur chaque `streamText` du loop) : plus
+de génération orpheline facturée. Vaut pour le chat desktop et l’accueil
+chat mobile (même `DirectorPanel`).
+
+**Validation** : tsc 0, lint 0 erreur, 101 tests pass.
