@@ -28,6 +28,18 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 const PAGE_SIZE = 50;
 const KIND_FILTERS = ["all", "image", "video", "audio", "html", "doc", "pending"] as const;
+/** dataTransfer type carrying the asset id for a timeline drop. */
+const ASSET_DRAG_TYPE = "application/x-lilium-asset";
+/** dataTransfer type carrying { name, mime, durationMs }. */
+const ASSET_PAYLOAD_TYPE = "application/x-lilium-asset-payload";
+
+/**
+ * Fallback clip length when the asset carries no measured duration. Stills get
+ * a short 4 s beat; video and audio get 8 s, which is long enough to trim.
+ */
+function defaultDurationMs(kind: string): number {
+  return kind === "image" ? 4000 : 8000;
+}
 const FOCUS_RING =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
 
@@ -104,8 +116,12 @@ export function LibraryPanel() {
       if (!projectId) return;
       setBusy(true);
       setError(null);
+      // A dropped folder arrives as a flat FileList (webkitRelativePath is
+      // preserved), so "drop a whole folder" needs no extra plumbing — the
+      // per-file MIME sort below does the categorising.
+      const list = Array.from(files);
       try {
-        for (const f of Array.from(files)) {
+        for (const f of list) {
           const buf = new Uint8Array(await f.arrayBuffer());
           const res = (await importAsset({
             data: {
@@ -118,6 +134,9 @@ export function LibraryPanel() {
           if (res.deduped) kernel.notify?.(UI_LABELS.library.doublonIgnore, "info");
         }
         await fetchPage(0, false);
+        if (list.length > 1) {
+          kernel.notify?.(UI_LABELS.library.dossierDepose(list.length), "success");
+        }
       } catch (importError) {
         setError(importError);
       } finally {
@@ -414,6 +433,23 @@ function AssetCard({
       role="button"
       tabIndex={0}
       onClick={onOpen}
+      // Drag to the timeline: the lane reads this payload and inserts a clip
+      // at the drop position. A plain text/plain payload would be ambiguous
+      // with the internal clip-to-clip drag.
+      draggable={!isPending}
+      onDragStart={(e) => {
+        if (isPending) return;
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData(ASSET_DRAG_TYPE, asset.id);
+        e.dataTransfer.setData(
+          ASSET_PAYLOAD_TYPE,
+          JSON.stringify({
+            name: asset.name,
+            mime: asset.mime ?? "application/octet-stream",
+            durationMs: durationMs ?? defaultDurationMs(asset.kind),
+          }),
+        );
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();

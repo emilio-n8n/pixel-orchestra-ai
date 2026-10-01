@@ -12,9 +12,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Settings, History, Plus, Trash2, SendHorizontal, Square } from "lucide-react";
+import {
+  Settings,
+  History,
+  Plus,
+  Trash2,
+  SendHorizontal,
+  Square,
+  Paperclip,
+  Mic,
+  Check,
+  Loader2,
+  X,
+} from "lucide-react";
 import { useDirectorStore, OPENCODE_GO_MODELS } from "./store";
 import { previewFrameThumbnail } from "./preview-frame";
+import { actionsOf, type AgentAction } from "./checklist";
+import { usePromptAttachments } from "./usePromptAttachments";
+import { useSpeechDictation } from "./useSpeechDictation";
+import { useProjectTimeline } from "@/plugins/ui-timeline/ProjectTimelineProvider";
 import type { DirectorModel } from "@/lib/models/catalog";
 import { UI_LABELS, toolLabel, toolIcon } from "@/lib/ui/labels";
 import { ErrorBlock } from "@/components/ui/error-block";
@@ -543,9 +559,10 @@ export function DirectorPanel() {
               </div>
             );
           }
+          const actions = actionsOf(m);
           return (
             <div key={m.id} className="min-w-0">
-              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-dim)]">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-dim)]">
                 <span
                   aria-hidden
                   className="inline-block h-[14px] w-[14px] rounded-[4px]"
@@ -556,6 +573,7 @@ export function DirectorPanel() {
                 />
                 {UI_LABELS.director.titre}
               </div>
+              {actions.length > 0 ? <ActionChecklist actions={actions} /> : null}
               <div className="space-y-1.5">
                 {m.parts.map((p, i) => {
                   if (p.type === "text") {
@@ -563,27 +581,38 @@ export function DirectorPanel() {
                     return <Markdown key={i} text={(p as { text: string }).text} />;
                   }
                   if (typeof p.type === "string" && p.type.startsWith("tool-")) {
+                    // The checklist above already carries the human phrasing;
+                    // this row is the compact trace of which tool ran.
                     const Icon = toolIcon(p.type);
                     const thumb =
                       p.type === "tool-preview_frame"
                         ? previewFrameThumbnail((p as { toolCallId?: string }).toolCallId)
                         : undefined;
                     return (
-                      <div
+                      <details
                         key={i}
-                        className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 text-[12px] text-[var(--text-muted)]"
+                        className="group rounded-lg border border-[var(--line)] bg-[var(--surface-2)]"
                       >
-                        {thumb ? (
-                          <img
-                            src={thumb}
-                            alt=""
-                            className="h-8 w-14 shrink-0 rounded-[4px] border border-[var(--line)] object-cover"
-                          />
-                        ) : (
-                          <Icon size={13} className="shrink-0 text-[var(--accent-strong)]" />
-                        )}
-                        <span className="truncate">{toolLabel(p.type)}</span>
-                      </div>
+                        <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-[var(--text-muted)]">
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="h-8 w-14 shrink-0 rounded-[4px] border border-[var(--line)] object-cover"
+                            />
+                          ) : (
+                            <Icon size={13} className="shrink-0 text-[var(--accent-strong)]" />
+                          )}
+                          <span className="truncate">{toolLabel(p.type)}</span>
+                        </summary>
+                        <pre className="mono max-h-40 overflow-auto border-t border-[var(--line)] px-2.5 py-1.5 text-[10px] text-[var(--text-dim)]">
+                          {JSON.stringify(
+                            (p as { input?: unknown; output?: unknown }).input ?? {},
+                            null,
+                            2,
+                          )}
+                        </pre>
+                      </details>
                     );
                   }
                   return null;
@@ -628,58 +657,267 @@ export function DirectorPanel() {
           </div>
         ) : null}
       </div>
-      <form
-        className="shrink-0 p-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!input.trim() || busy || !apiKey) return;
+      <PromptBar
+        input={input}
+        setInput={setInput}
+        busy={busy}
+        canSend={!!apiKey}
+        onSend={() => {
           sendMessage({ text: input });
           setInput("");
           requestAnimationFrame(() => {
             composerRef.current?.style.setProperty("height", "auto");
           });
         }}
-      >
-        <div className="flex items-end gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-2 pl-3 transition-colors focus-within:border-[var(--accent)]">
-          <textarea
-            ref={composerRef}
-            value={input}
-            rows={1}
-            onChange={(e) => {
-              setInput(e.target.value);
-              const el = e.target;
-              el.style.height = "auto";
-              el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                if (!input.trim() || busy || !apiKey) return;
-                sendMessage({ text: input });
-                setInput("");
-                requestAnimationFrame(() => {
-                  composerRef.current?.style.setProperty("height", "auto");
-                });
-              }
-            }}
-            placeholder={UI_LABELS.director.invitePlaceholder}
-            aria-label={UI_LABELS.director.invitePlaceholder}
-            enterKeyHint="send"
-            className="text-ios max-h-[140px] flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-[var(--text-dim)]"
-          />
-          <button
-            type={busy ? "button" : "submit"}
-            onClick={busy ? () => stop() : undefined}
-            disabled={!busy && (!input.trim() || !apiKey)}
-            title={busy ? UI_LABELS.director.arreter : UI_LABELS.director.envoyer}
-            aria-label={busy ? UI_LABELS.director.arreter : UI_LABELS.director.envoyer}
-            className="touch-44 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] transition-all hover:bg-[var(--accent-strong)] active:scale-95 disabled:opacity-40"
-          >
-            {busy ? <Square size={14} className="fill-current" /> : <SendHorizontal size={16} />}
-          </button>
-        </div>
-      </form>
+        onStop={() => stop()}
+      />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Checklist of concrete actions (spec D.2)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Replaces the raw tool log with what the user actually asked for: a
+ * checkmarked list of the edits that landed, with clickable preview cards
+ * for anything visual. Purely presentational — `actionsOf` derives every
+ * line from the tool input.
+ */
+function ActionChecklist({ actions }: { actions: AgentAction[] }) {
+  const { seek, selectClip } = useProjectTimeline();
+
+  return (
+    <ul
+      aria-label={UI_LABELS.library.actionsExecutees}
+      className="mb-2 space-y-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-1.5"
+    >
+      {actions.map((a) => (
+        <li key={a.id} className="flex items-center gap-1.5 px-1 py-0.5 text-[12px]">
+          <span className="shrink-0" aria-hidden>
+            {a.status === "done" ? (
+              <Check size={12} className="text-[var(--status-ok)]" />
+            ) : a.status === "failed" ? (
+              <X size={12} className="text-[var(--status-err)]" />
+            ) : (
+              <Loader2 size={12} className="animate-spin text-[var(--text-dim)]" />
+            )}
+          </span>
+          <span
+            className={
+              a.status === "running"
+                ? "text-[var(--text-dim)]"
+                : a.status === "failed"
+                  ? "text-[var(--status-err)]"
+                  : "text-[var(--text-muted)]"
+            }
+          >
+            {a.label}
+          </span>
+          {a.jump ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (a.jump?.clipId) selectClip(a.jump.clipId);
+                if (a.jump?.tMs != null) seek(a.jump.tMs);
+              }}
+              className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] text-[var(--text-dim)] transition-colors hover:bg-[var(--surface-4)] hover:text-[var(--accent-strong)]"
+            >
+              {UI_LABELS.library.actionAsset}
+            </button>
+          ) : null}
+        </li>
+      ))}
+      {actions.some((a) => a.thumbnail) ? (
+        <li className="flex flex-wrap gap-1.5 px-1 pt-1">
+          {actions
+            .filter((a) => a.thumbnail)
+            .map((a) => (
+              <button
+                key={`${a.id}-thumb`}
+                type="button"
+                onClick={() => {
+                  if (a.jump?.clipId) selectClip(a.jump.clipId);
+                  if (a.jump?.tMs != null) seek(a.jump.tMs);
+                }}
+                title={a.label}
+                aria-label={a.label}
+                className="h-10 w-[68px] shrink-0 overflow-hidden rounded-md border border-[var(--line)] transition-transform hover:scale-[1.04]"
+              >
+                <img src={a.thumbnail} alt="" className="h-full w-full object-cover" />
+              </button>
+            ))}
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Prompt bar (spec D.3)                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Composer with the paperclip (upload rushes straight into the project) and
+ * the microphone (Web Speech dictation). Enter sends, Shift+Enter newlines.
+ */
+function PromptBar({
+  input,
+  setInput,
+  busy,
+  canSend,
+  onSend,
+  onStop,
+}: {
+  input: string;
+  // Functional form keeps the dictation callback from capturing a stale value.
+  setInput: React.Dispatch<React.SetStateAction<string>>;
+  busy: boolean;
+  canSend: boolean;
+  onSend: () => void;
+  onStop: () => void;
+}) {
+  const L = UI_LABELS.library;
+  // The attachment list lives in the panel (one project = one prompt bar), so
+  // it is passed down rather than owned by the hook.
+  const attachments = usePromptAttachments();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const speech = useSpeechDictation((text) => {
+    // Append to whatever the user already typed; never clobber it.
+    setInput((prev) => (prev ? `${prev} ${text}` : text));
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+    });
+  });
+
+  const submit = () => {
+    if (!input.trim() || busy || !canSend) return;
+    onSend();
+    attachments.clear();
+    if (speech.listening) speech.stop();
+  };
+
+  return (
+    <form
+      className="shrink-0 p-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      {attachments.attachments.length > 0 ? (
+        <ul className="mb-1.5 flex flex-wrap gap-1">
+          {attachments.attachments.map((a) => (
+            <li
+              key={a.id}
+              className="flex items-center gap-1 rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-1.5 py-0.5 text-[10.5px] text-[var(--text-muted)]"
+            >
+              <span className="max-w-[140px] truncate">{a.name}</span>
+              <button
+                type="button"
+                onClick={() => attachments.remove(a.id)}
+                title={UI_LABELS.common.fermer}
+                aria-label={`${UI_LABELS.common.fermer} — ${a.name}`}
+                className="text-[var(--text-dim)] hover:text-[var(--status-err)]"
+              >
+                <X size={10} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="flex items-end gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1.5 pl-1 transition-colors focus-within:border-[var(--accent)]">
+        <button
+          type="button"
+          onClick={attachments.pick}
+          disabled={attachments.busy}
+          title={L.attacherFichier}
+          aria-label={L.attacherFichier}
+          className="touch-44 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-dim)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text)] disabled:opacity-40"
+        >
+          {attachments.busy ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Paperclip size={15} />
+          )}
+        </button>
+        <input
+          ref={attachments.inputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) void attachments.onFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+
+        <textarea
+          ref={textareaRef}
+          value={input}
+          rows={1}
+          onChange={(e) => {
+            setInput(e.target.value);
+            const el = e.target;
+            el.style.height = "auto";
+            el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={L.invitePlaceholder}
+          aria-label={L.invitePlaceholder}
+          enterKeyHint="send"
+          className="text-ios max-h-[140px] flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-[var(--text-dim)]"
+        />
+
+        <button
+          type="button"
+          onClick={speech.toggle}
+          disabled={!speech.supported}
+          title={speech.supported ? L.dicteeVocale : L.dicteeIndispo}
+          aria-label={speech.supported ? L.dicteeVocale : L.dicteeIndispo}
+          aria-pressed={speech.listening}
+          className={`touch-44 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-35 ${
+            speech.listening
+              ? "bg-[var(--status-err)]/20 text-[var(--status-err)]"
+              : "text-[var(--text-dim)] hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
+          }`}
+        >
+          <Mic size={15} />
+        </button>
+
+        <button
+          type={busy ? "button" : "submit"}
+          onClick={busy ? onStop : undefined}
+          disabled={!busy && (!input.trim() || !canSend)}
+          title={busy ? UI_LABELS.director.arreter : UI_LABELS.director.envoyer}
+          aria-label={busy ? UI_LABELS.director.arreter : UI_LABELS.director.envoyer}
+          className="touch-44 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] transition-all hover:bg-[var(--accent-strong)] active:scale-95 disabled:opacity-40"
+        >
+          {busy ? <Square size={13} className="fill-current" /> : <SendHorizontal size={15} />}
+        </button>
+      </div>
+
+      {speech.listening && speech.interim ? (
+        <p className="mt-1 truncate px-2 text-[10.5px] italic text-[var(--text-dim)]">
+          {L.dicteeActive} {speech.interim}
+        </p>
+      ) : null}
+      {attachments.error || speech.error ? (
+        <p role="alert" className="mt-1 px-2 text-[10.5px] text-[var(--status-err)]">
+          {attachments.error ?? speech.error}
+        </p>
+      ) : null}
+    </form>
   );
 }
 
