@@ -39,8 +39,21 @@ export function WorkspaceShell({
   workspaceId?: string;
   projectId?: string;
 }) {
-  const layout = usePanelStore((s) => s.layout);
   const setLayout = usePanelStore((s) => s.setLayout);
+  // `defaultSize` must be an INITIAL value, never live state. react-resizable-
+  // panels recomputes a group's layout whenever any panel's `defaultSize`
+  // changes, and re-notifies `onResize` from that recompute. Feeding
+  // `defaultSize` the same store that `onResize` writes to is therefore a
+  // cycle — resize → store → new defaultSize → recompute → onResize → … —
+  // which React aborts as "Maximum update depth exceeded" (#185). It is
+  // invisible with round default percentages and bites as soon as the group
+  // has real pixels, where RRP reports fractional sizes.
+  //
+  // Restoration is already covered twice over: `autoSaveId` persists the group
+  // per session, and the panels store persists across sessions. So the store
+  // is snapshotted once here and never fed back in; onResize still keeps it
+  // fresh for the next mount.
+  const [initialLayout] = useState(() => usePanelStore.getState().layout);
   const mobile = useIsMobile();
   const mobileView = usePanelStore((s) => s.mobileView);
   const setMobileView = usePanelStore((s) => s.setMobileView);
@@ -97,10 +110,10 @@ export function WorkspaceShell({
           ) : (
             <div className="flex min-h-0 flex-1">
               <PanelGroup direction="vertical" className="flex-1" autoSaveId="lilium.v2.v">
-                <Panel defaultSize={100 - layout.bottom} minSize={25}>
+                <Panel defaultSize={100 - initialLayout.bottom} minSize={25}>
                   <PanelGroup direction="horizontal" autoSaveId="lilium.v2.h">
                     <Panel
-                      defaultSize={layout.agent}
+                      defaultSize={initialLayout.agent}
                       minSize={18}
                       maxSize={45}
                       onResize={(size) => setLayout({ agent: size })}
@@ -112,7 +125,7 @@ export function WorkspaceShell({
                     </Panel>
                     <ResizeH />
                     <Panel
-                      defaultSize={layout.assets}
+                      defaultSize={initialLayout.assets}
                       minSize={16}
                       maxSize={45}
                       onResize={(size) => setLayout({ assets: size })}
@@ -123,7 +136,7 @@ export function WorkspaceShell({
                       </Zone>
                     </Panel>
                     <ResizeH />
-                    <Panel defaultSize={layout.player} minSize={30} className="min-w-0">
+                    <Panel defaultSize={initialLayout.player} minSize={30} className="min-w-0">
                       <Zone label={UI_LABELS.shell.moniteurColonne}>
                         <PlayerMonitor />
                       </Zone>
@@ -132,7 +145,7 @@ export function WorkspaceShell({
                 </Panel>
                 <ResizeV />
                 <Panel
-                  defaultSize={layout.bottom}
+                  defaultSize={initialLayout.bottom}
                   minSize={15}
                   maxSize={75}
                   onResize={(size) => setLayout({ bottom: size })}
