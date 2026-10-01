@@ -1,17 +1,18 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  Bell,
-  ChevronRight,
-  Download,
-  Keyboard,
-  Search,
-  Settings,
-  Undo2,
-  Redo2,
-} from "lucide-react";
-import { useWorkspaceStore } from "@/stores/workspace";
-import { usePanelStore } from "@/stores/panels";
-import { UI_LABELS, moduleMeta } from "@/lib/ui/labels";
+/**
+ * Header — 48 px (spec A.1).
+ *
+ * Left: the compact project picker with an inline-editable title.
+ * Right: the primary Export action (dark, rounded, render icon) and a discreet
+ * sync indicator. No module tabs: the studio is a single screen, so the
+ * header only carries identity, global actions and status.
+ */
+
+import { Link } from "@tanstack/react-router";
+import { Download, Keyboard, Search, Settings } from "lucide-react";
+import { useKernel } from "@/kernel/react";
+import { useProjectTimeline } from "@/plugins/ui-timeline/ProjectTimelineProvider";
+import { ProjectPicker } from "@/workspace/studio/ProjectPicker";
+import { UI_LABELS } from "@/lib/ui/labels";
 
 const FOCUS =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
@@ -27,18 +28,13 @@ export function TopBar({
   onOpenCommand: () => void;
   onOpenShortcuts: () => void;
 }) {
-  const ws = useWorkspaceStore((s) => (workspaceId ? s.getWorkspace(workspaceId) : undefined));
-  const project = useWorkspaceStore((s) => (projectId ? s.getProject(projectId) : undefined));
-  const active = usePanelStore((s) => s.activeModule);
-  const setActive = usePanelStore((s) => s.setActiveModule);
-  const navigate = useNavigate();
-
   return (
     <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--rail)] px-2 sm:px-3">
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 sm:gap-1">
+      <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
         <Link
           to="/"
-          className={`flex h-8 shrink-0 items-center gap-2 rounded-lg px-2 text-[13px] font-semibold tracking-tight text-[var(--text)] transition-colors hover:bg-[var(--surface-2)] ${FOCUS}`}
+          aria-label="Lilium"
+          className={`flex h-8 shrink-0 items-center rounded-lg px-1.5 transition-colors hover:bg-[var(--surface-2)] ${FOCUS}`}
         >
           <span
             aria-hidden
@@ -48,80 +44,20 @@ export function TopBar({
                 "conic-gradient(from 210deg, var(--accent-strong), var(--accent), var(--accent-quiet), var(--accent))",
             }}
           />
-          <span className="hidden sm:inline">Lilium</span>
         </Link>
-        <Crumb />
-        {ws ? (
-          <button
-            onClick={() => navigate({ to: "/w/$wsId", params: { wsId: ws.id } })}
-            className={`max-w-[110px] truncate rounded-lg px-2 py-1 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] sm:max-w-[160px] ${FOCUS}`}
-          >
-            {ws.name}
-          </button>
-        ) : (
-          <span className="px-2 py-1 text-[12.5px] text-[var(--text-dim)]">
-            {UI_LABELS.shell.aucunEspace}
-          </span>
-        )}
-        {project ? (
-          <>
-            <Crumb />
-            <span className="max-w-[140px] truncate rounded-lg px-2 py-1 text-[12.5px] font-medium text-[var(--text)] sm:max-w-[220px]">
-              {project.name}
-            </span>
-          </>
-        ) : null}
+        <ProjectPicker workspaceId={workspaceId} projectId={projectId} />
       </div>
 
-      <nav
-        aria-label={UI_LABELS.shell.navigationModules}
-        className="hidden items-center gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5 md:flex"
-      >
-        <SegmentTab
-          label={moduleMeta("timeline").label}
-          active={active === "timeline"}
-          onClick={() => setActive("timeline")}
-        />
-        <SegmentTab
-          label={moduleMeta("library").label}
-          active={active === "library"}
-          onClick={() => setActive("library")}
-        />
-        <SegmentTab
-          label={moduleMeta("jobs").label}
-          active={active === "jobs"}
-          onClick={() => setActive("jobs")}
-        />
-      </nav>
-
-      <div className="flex flex-1 items-center justify-end gap-0.5 sm:gap-1">
-        <button
-          className={`ghost-btn hidden h-8 w-8 opacity-50 sm:flex`}
-          title={UI_LABELS.shell.annulerAction}
-          disabled
-          aria-disabled
-        >
-          <Undo2 size={14} />
-        </button>
-        <button
-          className={`ghost-btn hidden h-8 w-8 opacity-50 sm:flex`}
-          title={UI_LABELS.shell.retablirAction}
-          disabled
-          aria-disabled
-        >
-          <Redo2 size={14} />
-        </button>
-        <span className="mx-1 hidden h-4 w-px bg-[var(--line)] sm:block" />
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <SyncIndicator />
         <button
           onClick={onOpenCommand}
           title={`${UI_LABELS.shell.rechercher} (⌘K)`}
-          className={`flex h-8 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2.5 text-[12px] text-[var(--text-dim)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] ${FOCUS}`}
+          aria-label={UI_LABELS.shell.rechercher}
+          className={`flex h-8 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-2 text-[12px] text-[var(--text-dim)] transition-colors hover:border-[var(--line-strong)] hover:text-[var(--text)] ${FOCUS}`}
         >
           <Search size={13} />
           <span className="hidden lg:inline">{UI_LABELS.shell.rechercher}</span>
-          <kbd className="hidden rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--text-dim)] sm:inline">
-            ⌘K
-          </kbd>
         </button>
         <button
           onClick={onOpenShortcuts}
@@ -131,13 +67,6 @@ export function TopBar({
         >
           <Keyboard size={14} />
         </button>
-        <button
-          className={`ghost-btn hidden h-8 w-8 sm:flex ${FOCUS}`}
-          title={UI_LABELS.shell.notifications}
-          aria-label={UI_LABELS.shell.notifications}
-        >
-          <Bell size={14} />
-        </button>
         <Link
           to="/settings"
           className={`ghost-btn h-8 w-8 ${FOCUS}`}
@@ -146,43 +75,61 @@ export function TopBar({
         >
           <Settings size={14} />
         </Link>
-        <button
-          onClick={() => setActive("timeline")}
-          className={`ml-1 flex h-8 items-center gap-1.5 rounded-lg bg-[var(--accent)] px-2.5 text-[12px] font-medium text-[var(--accent-fg)] transition-all duration-150 ease-out hover:bg-[var(--accent-strong)] active:scale-[0.98] sm:px-3 ${FOCUS}`}
-          title={UI_LABELS.shell.aideExporter}
-        >
-          <Download size={13} />
-          <span className="hidden sm:inline">{UI_LABELS.shell.exporter}</span>
-        </button>
+        <ExportButton />
       </div>
     </header>
   );
 }
 
-function Crumb() {
-  return <ChevronRight size={13} className="shrink-0 text-[var(--text-dim)] opacity-60" />;
-}
-
-function SegmentTab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+/**
+ * Primary action. Dark rather than accent-coloured so it reads as the one
+ * committed action in the header rather than another control.
+ */
+function ExportButton() {
+  const { clips, loadError } = useProjectTimeline();
+  const disabled = clips.length === 0 || !!loadError;
   return (
     <button
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={`h-7 rounded-[7px] px-3 text-[12px] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)] ${
-        active
-          ? "bg-[var(--surface-4)] text-[var(--text)]"
-          : "text-[var(--text-dim)] hover:text-[var(--text-muted)]"
+      type="button"
+      disabled={disabled}
+      title={UI_LABELS.timeline.exportVideo}
+      aria-label={UI_LABELS.shell.exporter}
+      className={`ml-1 flex h-8 items-center gap-1.5 rounded-lg bg-[var(--surface-4)] px-2.5 text-[12px] font-medium text-[var(--text)] transition-colors hover:bg-[var(--text)] hover:text-[var(--surface-0)] active:scale-[0.98] disabled:opacity-40 sm:px-3 ${FOCUS}`}
+    >
+      <Download size={13} />
+      <span className="hidden sm:inline">{UI_LABELS.shell.exporter}</span>
+    </button>
+  );
+}
+
+/**
+ * Discreet sync state, derived from the realtime connection. Silent when
+ * everything is healthy — the pill only appears when something needs the
+ * user's attention.
+ */
+function SyncIndicator() {
+  const { conn } = useProjectTimeline();
+  const { host } = useKernel();
+
+  if (conn === "live") return null;
+  const offline = conn === "offline";
+  return (
+    <span
+      role="status"
+      title={offline ? UI_LABELS.shell.syncErreur : UI_LABELS.shell.syncSync}
+      className={`mono mr-1 hidden items-center gap-1 rounded-full border px-2 py-0.5 text-[9.5px] sm:inline-flex ${
+        offline
+          ? "border-[var(--status-err)]/40 text-[var(--status-err)]"
+          : "border-[var(--status-warn)]/40 text-[var(--status-warn)]"
       }`}
     >
-      {label}
-    </button>
+      <span
+        className={`inline-block h-1 w-1 rounded-full ${
+          offline ? "bg-[var(--status-err)]" : "bg-[var(--status-warn)] animate-pulse"
+        }`}
+      />
+      {offline ? UI_LABELS.shell.syncErreur : UI_LABELS.shell.syncSync}
+      <span className="text-[var(--text-dim)]">· {host.count()}</span>
+    </span>
   );
 }

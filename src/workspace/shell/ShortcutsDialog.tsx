@@ -1,13 +1,22 @@
 import { X } from "lucide-react";
 import { UI_LABELS } from "@/lib/ui/labels";
 
+const T = UI_LABELS.timeline;
+
 const ROWS: Array<{ keys: string; action: string }> = [
   { keys: "⌘K / Ctrl+K", action: UI_LABELS.raccourcis.palette },
-  { keys: "Espace", action: UI_LABELS.raccourcis.lecture },
-  { keys: "Suppr", action: UI_LABELS.raccourcis.supprimer },
-  { keys: "⇧ Suppr", action: UI_LABELS.raccourcis.compacter },
-  { keys: "Échap", action: UI_LABELS.raccourcis.fermer },
   { keys: "?", action: UI_LABELS.raccourcis.aide },
+  { keys: "V", action: T.outilSelecteur },
+  { keys: "C", action: T.outilCiseaux },
+  { keys: "Suppr / ⌫", action: T.outilSupprimer },
+  { keys: "⇧ Suppr", action: UI_LABELS.raccourcis.compacter },
+  { keys: "← / →", action: UI_LABELS.raccourcis.nudge },
+  { keys: "⇧ ← / →", action: UI_LABELS.raccourcis.nudgeRapide },
+  { keys: "Espace", action: UI_LABELS.raccourcis.lecture },
+  { keys: "⌘Z / ⇧⌘Z", action: `${T.undo} · ${T.redo}` },
+  { keys: "⌘− / ⌘+", action: `${T.zoomArriere} · ${T.zoomAvant}` },
+  { keys: "Entrée", action: UI_LABELS.raccourcis.envoyerInvite },
+  { keys: "Échap", action: UI_LABELS.raccourcis.fermer },
 ];
 
 export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {

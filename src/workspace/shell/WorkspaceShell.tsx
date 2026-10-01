@@ -1,18 +1,36 @@
+/**
+ * Workspace shell — the single-screen 4-zone studio (spec A).
+ *
+ *   ┌──────────────────────── header (48 px) ────────────────────────┐
+ *   │  Agent │ Assets │        Player 16:9                           │  ← top
+ *   ├────────────────────────────────────────────────────────────────┤
+ *   │                  NLE timeline (full width)                      │  ← bottom
+ *   └────────────────────────────────────────────────────────────────┘
+ *
+ * No tab navigation: the four zones are always mounted, so the agent, the
+ * asset library, the monitor and the timeline stay in sync. Every divider is
+ * a `react-resizable-panels` handle, and the panel sizes persist per user.
+ *
+ * The whole tree sits inside one ProjectTimelineProvider — that shared state
+ * is what makes the zones a single tool rather than four independent widgets.
+ */
+
 import { useEffect, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { usePanelStore } from "@/stores/panels";
-import { UI_LABELS } from "@/lib/ui/labels";
 import { useIsMobile } from "@/lib/ui/useIsMobile";
-import { MessageCircle } from "lucide-react";
-import { MobileChatView } from "./MobileChatView";
+import { UI_LABELS } from "@/lib/ui/labels";
+import { ProjectTimelineProvider } from "@/plugins/ui-timeline/ProjectTimelineProvider";
 import { TopBar } from "./TopBar";
-import { Sidebar } from "./Sidebar";
-import { RightPanel } from "./RightPanel";
-import { BottomDock } from "./BottomDock";
 import { StatusBar } from "./StatusBar";
-import { CenterView } from "./CenterView";
 import { CommandPalette } from "./CommandPalette";
 import { ShortcutsDialog } from "./ShortcutsDialog";
+import { MobileChatView } from "./MobileChatView";
+import { AgentColumn } from "@/workspace/studio/AgentColumn";
+import { AssetsColumn } from "@/workspace/studio/AssetsColumn";
+import { PlayerMonitor } from "@/workspace/studio/PlayerMonitor";
+import { TimelinePanel } from "@/workspace/studio/TimelinePanel";
+import { MessageCircle } from "lucide-react";
 
 export function WorkspaceShell({
   workspaceId,
@@ -23,35 +41,18 @@ export function WorkspaceShell({
 }) {
   const layout = usePanelStore((s) => s.layout);
   const setLayout = usePanelStore((s) => s.setLayout);
-  const inspectorCollapsed = usePanelStore((s) => s.inspectorCollapsed);
-  const bottomCollapsed = usePanelStore((s) => s.bottomCollapsed);
-  const toggle = usePanelStore((s) => s.toggle);
   const mobile = useIsMobile();
   const mobileView = usePanelStore((s) => s.mobileView);
   const setMobileView = usePanelStore((s) => s.setMobileView);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  // Mobile first run: overlay drawers replace side panels, so start
-  // with everything collapsed and let toggles open them on demand.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!window.matchMedia("(max-width: 767px)").matches) return;
-    usePanelStore.setState({ sidebarCollapsed: true, bottomCollapsed: true });
-    usePanelStore.setState({ inspectorCollapsed: true });
-  }, []);
-
   useEffect(() => {
     function isTypingTarget(t: EventTarget | null) {
       const el = t as HTMLElement | null;
-      if (!el || typeof (el as HTMLElement).tagName !== "string") return false;
-      const tag = (el as HTMLElement).tagName.toLowerCase();
-      return (
-        tag === "input" ||
-        tag === "textarea" ||
-        tag === "select" ||
-        (el as HTMLElement).isContentEditable
-      );
+      if (!el || typeof el.tagName !== "string") return false;
+      const tag = el.tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
     }
     function onKey(e: KeyboardEvent) {
       const isMod = e.metaKey || e.ctrlKey;
@@ -69,24 +70,21 @@ export function WorkspaceShell({
       if (e.key === "Escape") {
         setPaletteOpen(false);
         setShortcutsOpen(false);
-        // Mobile: Esc also dismisses overlay drawers/sheets.
-        if (mobile) {
-          const s = usePanelStore.getState();
-          if (!s.inspectorCollapsed) s.toggle("inspector");
-          else if (!s.bottomCollapsed) s.toggle("bottom");
-        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobile]);
+  }, []);
 
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[var(--surface-0)] text-[var(--text)]">
+    // One provider above every branch: the mobile chat view and the desktop
+    // studio must share the same clips, or switching views would reload the
+    // project and lose the playhead.
+    <ProjectTimelineProvider>
       {mobile && mobileView === "chat" ? (
         <MobileChatView />
       ) : (
-        <>
+        <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[var(--surface-0)] text-[var(--text)]">
           <TopBar
             workspaceId={workspaceId}
             projectId={projectId}
@@ -94,101 +92,66 @@ export function WorkspaceShell({
             onOpenShortcuts={() => setShortcutsOpen(true)}
           />
 
-          <div className="flex flex-1 overflow-hidden">
-            <Sidebar />
-
-            {mobile ? (
-              <div className="relative min-w-0 flex-1">
-                <CenterView />
-                {!inspectorCollapsed && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label={UI_LABELS.common.fermer}
-                      onClick={() => toggle("inspector")}
-                      className="absolute inset-0 z-30 bg-black/50"
-                    />
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label={UI_LABELS.shell.panneauLateral}
-                      className="absolute top-0 right-0 bottom-0 z-40 flex w-[85vw] max-w-[340px] flex-col border-l border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
-                    >
-                      <RightPanel />
-                    </div>
-                  </>
-                )}
-                {/* Sheet below the drawer (z-20/z-10): the inspector wins when
-                both are open — no stacked-modal ambiguity. */}
-                {!bottomCollapsed && inspectorCollapsed && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label={UI_LABELS.common.fermer}
-                      onClick={() => toggle("bottom")}
-                      className="absolute inset-0 z-20 bg-black/50"
-                    />
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label={UI_LABELS.shell.panneauMontage}
-                      className="absolute inset-x-0 bottom-0 z-30 max-h-[65vh] min-h-[30vh] overflow-hidden rounded-t-2xl border-t border-[var(--line)] bg-[var(--surface-1)] shadow-2xl"
-                    >
-                      <BottomDock />
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <PanelGroup direction="vertical" className="flex-1" autoSaveId="lilium.main.v">
-                <Panel defaultSize={100 - layout.bottom} minSize={30}>
-                  <PanelGroup direction="horizontal" autoSaveId="lilium.main.h">
+          {mobile ? (
+            <MobileStudio />
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              <PanelGroup direction="vertical" className="flex-1" autoSaveId="lilium.v2.v">
+                <Panel defaultSize={100 - layout.bottom} minSize={25}>
+                  <PanelGroup direction="horizontal" autoSaveId="lilium.v2.h">
                     <Panel
-                      defaultSize={inspectorCollapsed ? 100 : layout.center}
-                      minSize={30}
-                      onResize={(size) => setLayout({ center: size })}
+                      defaultSize={layout.agent}
+                      minSize={18}
+                      maxSize={45}
+                      onResize={(size) => setLayout({ agent: size })}
+                      className="min-w-0"
                     >
-                      <CenterView />
+                      <Zone label={UI_LABELS.shell.agentColonne}>
+                        <AgentColumn />
+                      </Zone>
                     </Panel>
-                    {!inspectorCollapsed && (
-                      <>
-                        <ResizeH />
-                        <Panel
-                          defaultSize={layout.inspector}
-                          minSize={16}
-                          maxSize={50}
-                          onResize={(size) => setLayout({ inspector: size })}
-                        >
-                          <RightPanel />
-                        </Panel>
-                      </>
-                    )}
+                    <ResizeH />
+                    <Panel
+                      defaultSize={layout.assets}
+                      minSize={16}
+                      maxSize={45}
+                      onResize={(size) => setLayout({ assets: size })}
+                      className="min-w-0"
+                    >
+                      <Zone label={UI_LABELS.shell.assetsColonne}>
+                        <AssetsColumn />
+                      </Zone>
+                    </Panel>
+                    <ResizeH />
+                    <Panel defaultSize={layout.player} minSize={30} className="min-w-0">
+                      <Zone label={UI_LABELS.shell.moniteurColonne}>
+                        <PlayerMonitor />
+                      </Zone>
+                    </Panel>
                   </PanelGroup>
                 </Panel>
-                {!bottomCollapsed && (
-                  <>
-                    <ResizeV />
-                    <Panel
-                      defaultSize={layout.bottom}
-                      minSize={12}
-                      maxSize={70}
-                      onResize={(size) => setLayout({ bottom: size })}
-                    >
-                      <BottomDock />
-                    </Panel>
-                  </>
-                )}
+                <ResizeV />
+                <Panel
+                  defaultSize={layout.bottom}
+                  minSize={15}
+                  maxSize={75}
+                  onResize={(size) => setLayout({ bottom: size })}
+                >
+                  <Zone label={UI_LABELS.shell.timelineZone}>
+                    <TimelinePanel />
+                  </Zone>
+                </Panel>
               </PanelGroup>
-            )}
-          </div>
+            </div>
+          )}
 
-          {mobile && mobileView === "studio" && inspectorCollapsed && bottomCollapsed ? (
+          {mobile && mobileView === "studio" ? (
             <button
               type="button"
               onClick={() => setMobileView("chat")}
               title={UI_LABELS.mobile.retourChat}
               aria-label={UI_LABELS.shell.basculeVueMobile}
-              className="touch-44 absolute bottom-20 left-1/2 z-50 mb-[env(safe-area-inset-bottom)] flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--surface-3)] px-4 text-[13px] font-medium text-[var(--text)] shadow-2xl ring-1 ring-[var(--line-strong)] transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              className="touch-44 absolute bottom-16 left-1/2 z-50 mb-[env(safe-area-inset-bottom)] flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--surface-3)] px-4 text-[13px] font-medium text-[var(--text)] shadow-2xl ring-1 ring-[var(--line-strong)] transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             >
               <MessageCircle size={16} />
               {UI_LABELS.mobile.chat}
@@ -196,24 +159,62 @@ export function WorkspaceShell({
           ) : null}
 
           <StatusBar />
-        </>
+        </div>
       )}
+
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+    </ProjectTimelineProvider>
+  );
+}
+
+/**
+ * Phones cannot show four zones at once, so the studio stacks monitor +
+ * timeline and keeps the agent one tap away. The timeline context is shared
+ * with the chat view through the provider above.
+ */
+function MobileStudio() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-[3]">
+        <PlayerMonitor />
+      </div>
+      <div className="min-h-0 flex-[4] border-t border-[var(--line)]">
+        <TimelinePanel />
+      </div>
     </div>
+  );
+}
+
+/** Thin frame so every zone announces itself and keeps the panel background. */
+function Zone({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section
+      aria-label={label}
+      className="h-full min-h-0 min-w-0 overflow-hidden bg-[var(--surface-1)]"
+    >
+      {children}
+    </section>
   );
 }
 
 function ResizeH() {
   return (
-    <PanelResizeHandle className="group relative w-px bg-[var(--line)] transition-colors data-[resize-handle-state=hover]:bg-[var(--accent)] data-[resize-handle-state=drag]:bg-[var(--accent)]">
+    <PanelResizeHandle
+      aria-label={UI_LABELS.shell.zoneRedimensionnable}
+      className="group relative w-px shrink-0 bg-[var(--line)] transition-colors data-[resize-handle-state=hover]:bg-[var(--accent)] data-[resize-handle-state=drag]:bg-[var(--accent)]"
+    >
       <div className="absolute inset-y-0 -left-1 -right-1" />
     </PanelResizeHandle>
   );
 }
+
 function ResizeV() {
   return (
-    <PanelResizeHandle className="group relative h-px bg-[var(--line)] transition-colors data-[resize-handle-state=hover]:bg-[var(--accent)] data-[resize-handle-state=drag]:bg-[var(--accent)]">
+    <PanelResizeHandle
+      aria-label={UI_LABELS.shell.zoneRedimensionnable}
+      className="group relative h-px shrink-0 bg-[var(--line)] transition-colors data-[resize-handle-state=hover]:bg-[var(--accent)] data-[resize-handle-state=drag]:bg-[var(--accent)]"
+    >
       <div className="absolute inset-x-0 -top-1 -bottom-1" />
     </PanelResizeHandle>
   );

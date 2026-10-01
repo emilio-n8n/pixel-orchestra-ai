@@ -11,9 +11,15 @@ interface PanelStore {
   toggle: (which: "bottom" | "inspector") => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  /** Dev drawer: plugin count + raw event stream in the status bar. */
   devMode: boolean;
   setDevMode: (v: boolean) => void;
-  layout: { center: number; inspector: number; bottom: number };
+  /**
+   * Studio V2 zone sizes, in percent of the relevant panel group.
+   * `agent` + `assets` + `player` fill the top row; `bottom` is the timeline
+   * share of the vertical split.
+   */
+  layout: { agent: number; assets: number; player: number; bottom: number };
   setLayout: (l: Partial<PanelStore["layout"]>) => void;
   /** Mobile-only: ChatGPT-like chat home vs full studio view. */
   mobileView: "chat" | "studio";
@@ -36,7 +42,7 @@ export const usePanelStore = create<PanelStore>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       devMode: false,
       setDevMode: (v) => set({ devMode: v }),
-      layout: { center: 74, inspector: 26, bottom: 32 },
+      layout: { agent: 25, assets: 25, player: 50, bottom: 38 },
       setLayout: (l) => set((s) => ({ layout: { ...s.layout, ...l } })),
       mobileView: "chat",
       setMobileView: (mobileView) => set({ mobileView }),

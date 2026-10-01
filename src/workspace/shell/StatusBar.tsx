@@ -1,36 +1,27 @@
-import { Cloud, PanelBottom, PanelRight, Terminal } from "lucide-react";
+import { Cloud, Terminal } from "lucide-react";
 import { useKernel, useKernelEvents } from "@/kernel/react";
 import { usePanelStore } from "@/stores/panels";
-import { useIsMobile } from "@/lib/ui/useIsMobile";
 import { StatusPill } from "@/components/ui/status-pill";
 import { UI_LABELS } from "@/lib/ui/labels";
+import { useProjectTimeline } from "@/plugins/ui-timeline/ProjectTimelineProvider";
 
 /**
  * Calm production status bar. Technical internals (plugin count, executors,
  * raw event stream) live behind the developer drawer instead of being shown
  * permanently.
+ *
+ * Studio V2 removed the panel show/hide toggles: all four zones are always
+ * on screen, so there is nothing left to collapse — only the dev drawer.
  */
 export function StatusBar() {
   const { host, scheduler } = useKernel();
   const events = useKernelEvents(24);
   const last = events[events.length - 1];
-  const toggle = usePanelStore((s) => s.toggle);
-  const mobile = useIsMobile();
-  // Mobile drawers are mutually exclusive (inspector wins): opening one
-  // closes the other so the toggle never appears dead.
-  function toggleExclusive(which: "bottom" | "inspector") {
-    const s = usePanelStore.getState();
-    const opening = which === "bottom" ? s.bottomCollapsed : s.inspectorCollapsed;
-    toggle(which);
-    if (mobile && opening) {
-      if (which === "bottom" && !s.inspectorCollapsed) s.toggle("inspector");
-      if (which === "inspector" && !s.bottomCollapsed) s.toggle("bottom");
-    }
-  }
-  const bottomCollapsed = usePanelStore((s) => s.bottomCollapsed);
-  const inspectorCollapsed = usePanelStore((s) => s.inspectorCollapsed);
   const devMode = usePanelStore((s) => s.devMode);
   const setDevMode = usePanelStore((s) => s.setDevMode);
+  // The provider is only mounted inside the studio shell; the bar renders
+  // below it, so the context is always available here.
+  const { clips, totalMs, selectedClipId } = useProjectTimeline();
 
   const runningJobs = events.filter(
     (e) => e.type === "JobQueued" || e.type === "JobStarted",
@@ -63,7 +54,10 @@ export function StatusBar() {
       <div className="flex h-8 items-center justify-between gap-2 px-2 text-[11px] text-[var(--text-dim)] sm:px-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <StatusPill tone="done">{UI_LABELS.shell.studioPret}</StatusPill>
-          <span className="hidden items-center gap-1.5 sm:flex">
+          <span className="mono hidden items-center gap-1.5 sm:flex">
+            {UI_LABELS.timeline.plans(clips.length)} · {Math.round(totalMs / 1000)}s
+          </span>
+          <span className="hidden items-center gap-1.5 lg:flex">
             <Cloud size={12} /> {UI_LABELS.shell.renduCloud}
           </span>
           <span className="hidden items-center gap-1.5 lg:flex">
@@ -77,56 +71,28 @@ export function StatusBar() {
           ) : (
             <span className="hidden sm:inline">{UI_LABELS.shell.aucuneTache}</span>
           )}
+          {selectedClipId ? (
+            <span className="hidden truncate text-[var(--text-dim)] md:inline">
+              {UI_LABELS.shell.planSelectionne}
+            </span>
+          ) : null}
           {devMode && last ? (
             <span className="mono hidden text-[10.5px] opacity-70 md:inline">{last.type}</span>
           ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
-          <IconToggle
-            label={UI_LABELS.shell.basculeTimeline}
-            on={!bottomCollapsed}
-            onClick={() => toggleExclusive("bottom")}
-            icon={<PanelBottom size={13} />}
-          />
-          <IconToggle
-            label={UI_LABELS.shell.basculePanneau}
-            on={!inspectorCollapsed}
-            onClick={() => toggleExclusive("inspector")}
-            icon={<PanelRight size={13} />}
-          />
-          <IconToggle
-            label={UI_LABELS.shell.modeDev}
-            on={devMode}
+          <button
             onClick={() => setDevMode(!devMode)}
-            icon={<Terminal size={13} />}
-          />
+            title={UI_LABELS.shell.modeDev}
+            aria-label={UI_LABELS.shell.modeDev}
+            aria-pressed={devMode}
+            className={`ghost-btn h-7 w-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${devMode ? "text-[var(--text)]" : "text-[var(--text-dim)] opacity-60"}`}
+          >
+            <Terminal size={13} />
+          </button>
         </div>
       </div>
     </div>
-  );
-}
-
-function IconToggle({
-  label,
-  on,
-  onClick,
-  icon,
-}: {
-  label: string;
-  on: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={on}
-      className={`ghost-btn h-7 w-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${on ? "text-[var(--text)]" : "text-[var(--text-dim)] opacity-60"}`}
-    >
-      {icon}
-    </button>
   );
 }

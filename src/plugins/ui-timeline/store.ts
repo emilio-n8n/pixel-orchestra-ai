@@ -85,7 +85,9 @@ export interface SubtitleStyle {
 
 /** Resolve meta.style → full style with Inspector-identical defaults. */
 export function resolveSubtitleStyle(meta?: Record<string, unknown> | null): SubtitleStyle {
-  const s = (meta?.style ?? {}) as Partial<SubtitleStyle>;
+  // Read through an index signature: styles parsed from JSONB have no declared
+  // index signature, so a typed cast would need re-narrowing on every field.
+  const s = (meta?.style ?? {}) as { [k: string]: unknown };
   const position = s.position === "top" || s.position === "center" ? s.position : "bottom";
   return {
     font: typeof s.font === "string" && s.font.length > 0 ? s.font : DEFAULT_SUBTITLE_STYLE.font,
