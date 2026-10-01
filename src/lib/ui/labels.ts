@@ -151,15 +151,123 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? "Fichier";
 }
 
+/**
+ * Canonical 7-row NLE track model (Manus Studio V2). Order matters: this is
+ * the visual top → bottom order of the timeline, and the single source for
+ * label + color of every row. `tracks` lists the legacy Supabase `track`
+ * values a row owns, so existing data keeps rendering in the right place.
+ */
+export interface TrackRow {
+  /** Stable row id — also the DOM key and the drag/drop track id. */
+  id: string;
+  /** Legacy `timeline_clips.track` values owned by this row. */
+  tracks: string[];
+  label: string;
+  /** Short label for the 88px track-header gutter. */
+  short: string;
+  /** CSS custom property holding the row color (never a raw hex). */
+  colorVar: string;
+  /** Audio rows get a real waveform + the ducking badge. */
+  audio: boolean;
+  /** Video rows get the frame-by-frame thumbnail ribbon. */
+  video: boolean;
+}
+
+export const TRACK_ROWS: readonly TrackRow[] = [
+  {
+    id: "titles",
+    tracks: ["Subtitles"],
+    label: "Titres · Textes · Sous-titres",
+    short: "Titres",
+    colorVar: "--track-text",
+    audio: false,
+    video: false,
+  },
+  {
+    id: "stickers",
+    tracks: ["Stickers"],
+    label: "Stickers · Callouts · Emojis",
+    short: "Stickers",
+    colorVar: "--track-sticker",
+    audio: false,
+    video: false,
+  },
+  {
+    id: "dynamic",
+    tracks: ["Video 3"],
+    label: "Composants dynamiques · Scripting",
+    short: "Dynamique",
+    colorVar: "--track-dynamic",
+    audio: false,
+    video: true,
+  },
+  {
+    id: "video",
+    tracks: ["Video", "Video 2"],
+    label: "Vidéo · A-Roll & B-Roll",
+    short: "Vidéo",
+    colorVar: "--track-film",
+    audio: false,
+    video: true,
+  },
+  {
+    id: "voice",
+    tracks: ["Audio"],
+    label: "Voix · Dialogues",
+    short: "Voix",
+    colorVar: "--track-voice",
+    audio: true,
+    video: false,
+  },
+  {
+    id: "sfx",
+    tracks: ["SFX"],
+    label: "Bruitages (SFX)",
+    short: "SFX",
+    colorVar: "--track-sfx",
+    audio: true,
+    video: false,
+  },
+  {
+    id: "music",
+    tracks: ["Music"],
+    label: "Musique de fond",
+    short: "Musique",
+    colorVar: "--track-music",
+    audio: true,
+    video: false,
+  },
+] as const;
+
+/** Every legacy track name owned by a row → the row that renders it. */
+const TRACK_ROW_BY_NAME = new Map<string, TrackRow>(
+  TRACK_ROWS.flatMap((row) => row.tracks.map((t) => [t, row] as const)),
+);
+
+/** Row that renders a legacy track name, or undefined for unknown names. */
+export function trackRowOf(track: string): TrackRow | undefined {
+  return TRACK_ROW_BY_NAME.get(track);
+}
+
+/** The legacy track name a row writes to when a clip is dropped on it. */
+export function defaultTrackOf(rowId: string): string | undefined {
+  return TRACK_ROWS.find((r) => r.id === rowId)?.tracks[0];
+}
+
 export const TRACK_LABELS: Record<string, string> = {
-  Video: "Vidéo 1",
+  Video: "Vidéo",
   "Video 2": "Vidéo 2",
-  "Video 3": "Vidéo 3",
-  Audio: "Audio",
+  "Video 3": "Dynamique",
+  Audio: "Voix",
   Music: "Musique",
-  SFX: "Effets",
-  Subtitles: "Texte",
+  SFX: "SFX",
+  Subtitles: "Titres",
+  Stickers: "Stickers",
 };
+
+/** Audio rows that auto-duck the music bed (E.1 auto-ducking). */
+export const DUCKING_SOURCE_TRACKS = ["Audio", "SFX"] as const;
+export const DUCKING_TARGET_TRACK = "Music";
 
 /* ------------------------------------------------------------------ */
 /* Export timeline — FR copy, single source.                          */
@@ -489,8 +597,64 @@ export const UI_LABELS = {
     prises: (n: number) => `${n} prise${n > 1 ? "s" : ""}`,
     priseBadge: (label: string) => `Prise ${label}`,
     duree: (s: string) => `${s}s`,
+    /* --- onglets de la colonne Assets (spec C) --- */
+    ongletMedia: "Media",
+    ongletTexte: "Text",
+    ongletTransitions: "Transitions",
+    ongletTranscript: "Transcript",
+    dossierDepose: (n: number) => `${n} fichier${n > 1 ? "s" : ""} importé${n > 1 ? "s" : ""}`,
+    categorizeParType: "Catégorisé automatiquement par type (vidéo · audio · photo)",
+    glisserVersTimeline: "Glissez un asset sur une piste de la timeline",
+    texteTitre: "Titre animé",
+    texteLowerThird: "Tier inférieur",
+    texteSousTitre: "Sous-titre",
+    texteCaller: "Callout",
+    transitionDuree: "Durée",
+    transitionInseree: (label: string) => `Transition « ${label} » insérée`,
+    transitionCible: "Sélectionnez deux plans consécutifs sur la même piste",
+    transcriptVide: "Aucune transcription pour l'instant.",
+    transcriptAide:
+      "Demandez à l'Agent de transcrire la narration, puis cliquez sur une ligne pour vous y déplacer.",
+    transcriptEnCours: (name: string) => `Lecture à ${name}`,
+    /* --- prompt de l'agent (spec D.3) --- */
+    invitePlaceholder: "Ask Manus to edit your video...",
+    attacherFichier: "Joindre un rush",
+    dicteeVocale: "Dictée vocale",
+    dicteeActive: "Dictée en cours…",
+    dicteeIndispo: "Dictée vocale indisponible dans ce navigateur",
+    /* --- checklist d'actions (spec D.2) --- */
+    actionsExecutees: "Actions exécutées",
+    actionAsset: "Aperçu de l'asset",
   },
   timeline: {
+    /* --- barre d'outils (spec B.1) --- */
+    outilSelecteur: "Outil Sélecteur",
+    outilCiseaux: "Outil Ciseaux",
+    outilSupprimer: "Supprimer le plan",
+    zoomTimeline: "Zoom de la timeline",
+    zoomAvant: "Zoomer",
+    zoomArriere: "Dézoomer",
+    zoomReinit: "Réinitialiser le zoom",
+    scissorAide: "C — couper le plan sélectionné ou tous les plans sous la tête de lecture",
+    splitEffectue: (n: number) => `${n} plan${n > 1 ? "s" : ""} coupé${n > 1 ? "s" : ""}`,
+    splitAucun: "Aucun plan à couper ici — placez la tête de lecture sur un plan.",
+    undo: "Annuler (⌘Z)",
+    redo: "Rétablir (⇧⌘Z)",
+    undoIndisponible: "Rien à annuler",
+    redoIndisponible: "Rien à rétablir",
+    /* --- lecture / audio --- */
+    pisteVideo: "Piste Vidéo",
+    audioDucking: "Atténuation automatique de la musique sous la voix",
+    waveform: "Forme d'onde",
+    miniatures: "Miniatures",
+    /* --- bibliothèque SFX --- */
+    sfxTitre: "Bruitages",
+    sfxAide: "Cliquez pour générer et poser sur la piste SFX.",
+    sfxPose: (label: string) => `« ${label} » ajouté sur la piste SFX`,
+    /* --- auto-ducking --- */
+    duckingApplique: (db: number, n: number) =>
+      `Musique atténuée de ${db} dB sous ${n} segment${n > 1 ? "s" : ""} audio`,
+    duckingVide: "Aucune voix ni bruitage à atténuer pour l'instant.",
     sansProjet: "Aucun projet ouvert.",
     sansProjetAide: "Ouvrez un projet pour monter votre film.",
     lecture: "Lecture",
@@ -569,6 +733,24 @@ export const UI_LABELS = {
     basculeTimeline: "Afficher / masquer la timeline",
     basculePanneau: "Afficher / masquer le panneau IA",
     modeDev: "Mode développeur",
+    aucunProjet: "Aucun projet",
+    nouveauProjet: "Nouveau projet",
+    projets: "Projets",
+    changerProjet: "Changer de projet",
+    renommerProjet: "Renommer le projet",
+    /* --- studio v2 : header + 4 zones --- */
+    agent: "Agent",
+    agentColonne: "Colonne Agent",
+    assets: "Assets",
+    assetsColonne: "Colonne Assets",
+    moniteur: "Moniteur",
+    moniteurColonne: "Colonne Moniteur",
+    timelineZone: "Timeline",
+    exportEnCours: "Rendu en cours…",
+    syncOk: "Synchronisé",
+    syncSync: "Synchronisation…",
+    syncErreur: "Hors ligne",
+    zoneRedimensionnable: "Redimensionner la zone",
   },
   inspector: {
     piste: "Piste",
@@ -717,6 +899,9 @@ export const UI_LABELS = {
     lecture: "Lecture / pause de l’aperçu",
     supprimer: "Supprimer le plan sélectionné",
     compacter: "Supprimer + compacter (ripple)",
+    nudge: "Décaler le plan de 100 ms",
+    nudgeRapide: "Décaler le plan de 1 s",
+    envoyerInvite: "Envoyer l’invite (⇧Entrée = nouvelle ligne)",
     fermer: "Fermer / désélectionner",
     aide: "Afficher cette aide",
   },

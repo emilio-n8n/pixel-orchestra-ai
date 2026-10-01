@@ -97,14 +97,24 @@
   --status-err: oklch(0.68 0.2 25);
   --status-idle: oklch(0.55 0.01 260);
 
-  /* Track colors (timeline) */
-  --track-video: oklch(0.6 0.14 250);
+  /* NLE track palette — the 7 timeline rows, top → bottom.
+     Single source for the track colors: never hardcode a hex in JSX,
+     always read these through the --track-* custom properties. */
+  --track-text: oklch(0.67 0.19 300); /* violet — titres, textes, sous-titres */
+  --track-sticker: oklch(0.83 0.15 78); /* pêche — stickers, callouts, emojis */
+  --track-dynamic: oklch(0.73 0.13 215); /* bleu ciel — composants dynamiques */
+  --track-script: oklch(0.74 0.15 158); /* vert — scripting / code */
+  --track-film: oklch(0.5 0.15 256); /* bleu foncé — vidéo A-Roll / B-Roll */
+  --track-voice: oklch(0.76 0.11 228); /* bleu clair — voix, dialogues */
+  --track-sfx: oklch(0.73 0.16 52); /* orange — bruitages courts */
+  --track-music: oklch(0.79 0.13 152); /* vert pastel — musique de fond */
+
+  /* Legacy track colors (pre-7-row model) — kept for --chart-* fallbacks
+     and the older Inspector swatches. */
+  --track-video: var(--track-film);
   --track-image: oklch(0.65 0.14 190);
   --track-audio: oklch(0.68 0.14 155);
-  --track-voice: oklch(0.7 0.14 45);
-  --track-music: oklch(0.65 0.16 300);
-  --track-sfx: oklch(0.68 0.14 20);
-  --track-subtitle: oklch(0.72 0.06 260);
+  --track-subtitle: var(--track-text);
 
   /* shadcn compatibility (map to studio tokens) */
   --background: var(--surface-1);
@@ -125,10 +135,10 @@
   --border: var(--line);
   --input: var(--line);
   --ring: var(--accent);
-  --chart-1: var(--track-video);
-  --chart-2: var(--track-audio);
+  --chart-1: var(--track-film);
+  --chart-2: var(--track-voice);
   --chart-3: var(--track-music);
-  --chart-4: var(--track-voice);
+  --chart-4: var(--track-dynamic);
   --chart-5: var(--track-sfx);
   --sidebar: var(--rail);
   --sidebar-foreground: var(--text-muted);

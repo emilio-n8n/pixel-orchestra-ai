@@ -77,6 +77,34 @@ export type CapabilityAdded = EventBase & {
 export type WorkspaceChanged = EventBase & { type: "WorkspaceChanged"; workspaceId: string };
 export type ProjectOpened = EventBase & { type: "ProjectOpened"; projectId: string };
 
+/* --- Timeline ↔ Agent bridge (spec E.3, bi-directional) --------------- */
+/* Manual timeline edits emit these so the agent always knows what the      */
+/* user did; the agent's edits land in the DB and come back through the     */
+/* realtime channel, which is the single write path.                        */
+
+export type TimelineClipEdited = EventBase & {
+  type: "TimelineClipEdited";
+  clipId: string;
+  track: string;
+  action: "move" | "trim" | "split" | "delete" | "volume";
+  start_ms?: number;
+  duration_ms?: number;
+  /** dB for the `volume` action. */
+  gainDb?: number;
+};
+export type TimelineSelectionChanged = EventBase & {
+  type: "TimelineSelectionChanged";
+  clipId: string | null;
+  track?: string;
+};
+export type TimelineSeeked = EventBase & { type: "TimelineSeeked"; t_ms: number };
+export type TimelineDuckingApplied = EventBase & {
+  type: "TimelineDuckingApplied";
+  clipIds: string[];
+  attenuationDb: number;
+  sourceTracks: string[];
+};
+
 export type PluginActivated = EventBase & { type: "PluginActivated"; pluginId: string };
 export type PluginError = EventBase & { type: "PluginError"; pluginId: string; error: string };
 
@@ -102,6 +130,10 @@ export type LiliumEvent =
   | CapabilityAdded
   | WorkspaceChanged
   | ProjectOpened
+  | TimelineClipEdited
+  | TimelineSelectionChanged
+  | TimelineSeeked
+  | TimelineDuckingApplied
   | PluginActivated
   | PluginError
   | CustomEvent;
