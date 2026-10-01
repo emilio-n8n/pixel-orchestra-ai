@@ -6,7 +6,7 @@
  * The title writes straight to the workspace store, so no round-trip.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Check, ChevronDown, Pencil, Plus } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -23,7 +23,17 @@ export function ProjectPicker({
   projectId?: string;
 }) {
   const navigate = useNavigate();
-  const projects = useWorkspaceStore((s) => s.projectsIn(workspaceId ?? ""));
+  // Select the raw array and derive, never select a fresh array. zustand v5
+  // compares snapshots with Object.is, so a selector like
+  // `(s) => s.projectsIn(wsId)` — which .filter()s and therefore allocates on
+  // every call — makes useSyncExternalStore see a different snapshot on every
+  // check and re-render forever. React reports that as "Maximum update depth
+  // exceeded" (#185) and the studio never paints.
+  const allProjects = useWorkspaceStore((s) => s.projects);
+  const projects = useMemo(
+    () => allProjects.filter((p) => p.workspaceId === workspaceId),
+    [allProjects, workspaceId],
+  );
   const project = useWorkspaceStore((s) => (projectId ? s.getProject(projectId) : undefined));
   const renameProject = useWorkspaceStore((s) => s.renameProject);
   const createProject = useWorkspaceStore((s) => s.createProject);
